@@ -59,7 +59,7 @@ export default function AdminPublicationEditorPage() {
   const publicationLoading = !isCreateMode && publicationData === undefined
 
   // Fetch users from Convex
-  const usersData = useUsers()
+  const usersData = useUsers({ limit: 1000 })
   const users: any[] = usersData || []
 
   // Mutations

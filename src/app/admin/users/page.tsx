@@ -49,7 +49,7 @@ export default function UsersPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog()
 
   // Fetch users from Convex
-  const usersData = useUsers()
+  const usersData = useUsers({ limit: 1000 })
   const users = (usersData || []) as User[]
   const deleteUserMutation = useDeleteUser()
 

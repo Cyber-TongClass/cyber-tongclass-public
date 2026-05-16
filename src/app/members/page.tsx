@@ -55,7 +55,7 @@ export default function MembersPage() {
   const [selectedTag, setSelectedTag] = React.useState<string>("all")
 
   // Fetch users from Convex
-  const usersData = useUsers()
+  const usersData = useUsers({ limit: 1000 })
   const usersFromConvex = usersData || []
   const users: User[] = usersFromConvex.map((u) => ({
     ...u,

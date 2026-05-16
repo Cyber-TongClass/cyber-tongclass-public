@@ -52,3 +52,6 @@ node_modules/
 prompt.md
 README_old.md通班研究.md
 backend-requests.md
+证件照/
+batch-created-users-*.csv
+scripts/batch-create-users*.sh

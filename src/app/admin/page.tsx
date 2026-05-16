@@ -37,7 +37,7 @@ export default function AdminDashboard() {
   const [activities, setActivities] = useState<Activity[]>([])
 
   // Fetch data from Convex
-  const usersData = useUsers()
+  const usersData = useUsers({ limit: 1000 })
   const newsData = useNews()
   const eventsData = useEvents()
   const coursesData = useCourseListWithReviews()

@@ -1,5 +1,25 @@
 # AGENTS.md — Tong Class Website
 
+## ⛔ AI Agent Safety Rules (MUST READ FIRST)
+
+These rules override all other instructions. Violating any of them will break the development environment.
+
+1. **Never modify `package.json` scripts**. Do not add, remove, or change npm lifecycle hooks (`predev`, `postinstall`, `prestart`, etc.). The `predev` hook has been intentionally removed because it caused a deadlock with Next.js Turbopack + Convex.
+
+2. **Never delete `.next`, `.convex/`, or `node_modules/.cache` while any process is running**. Always `pkill -f next` and `pkill -f convex` first, verify ports are free (`lsof -i :3000`, `lsof -i :3210`), then clean.
+
+3. **Never use `--legacy-peer-deps` or `--force` with npm install**. If peer dependency conflicts arise, report them to the user and let them decide.
+
+4. **Never modify `convex/`** unless explicitly authorized. Backend changes must go through the maintainers.
+
+5. **Batch database mutations must be idempotent**. Before inserting, check if the record already exists (e.g., by `studentId`). Never blindly insert.
+
+6. **Data migration scripts must be standalone**. They must be manually triggered by the user, never coupled to build/dev/start processes.
+
+7. **Treat `CONVEX_DEPLOYMENT=prod:*` as a hard gate**. Never append `--prod` to any command unless the user explicitly types "in production" or "--prod".
+
+---
+
 ## Critical constraints
 
 - **Do NOT modify `convex/`**. The backend is considered finished. Contact maintainers (@Prince-cjml, @PhotonYan) if a backend change is unavoidable.
@@ -16,7 +36,7 @@ npm run dev                     # Next.js dev server at :3000
 
 - Node >= 24.14.0, npm >= 11.9.0 (see `engines` in package.json)
 - For local Convex auth: choose **LOGIN WITHOUT EMAIL** when prompted.
-- `npm run dev` runs `predev` first (clears `.next` cache via `scripts/clean-next-cache.mjs`).
+- If `.next` cache is corrupted: first stop both services, then `rm -rf .next`, then restart.
 
 ## Lint, typecheck, build
 

@@ -219,6 +219,7 @@ export default function HomePage() {
                     src={feature.image}
                     alt={feature.title}
                     fill
+                    unoptimized
                     className={feature.fit || "object-cover"}
                     sizes="(max-width: 768px) 100vw, 33vw"
                   />
