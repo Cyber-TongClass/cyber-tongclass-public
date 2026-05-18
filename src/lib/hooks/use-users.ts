@@ -5,7 +5,7 @@ import { api } from "@/../convex/_generated/api"
 import type { CohortValue } from "@/lib/cohort"
 
 // Users hooks
-export function useUsers(args?: { skip?: number; limit?: number; organization?: "pku" | "thu"; cohort?: CohortValue }) {
+export function useUsers(args?: { skip?: number; limit?: number; organization?: "pku" | "thu"; cohort?: CohortValue; classMembersOnly?: boolean }) {
   return useQuery(api.users.list, args || {})
 }
 
@@ -21,12 +21,12 @@ export function useUserByStudentId(studentId: string) {
   return useQuery(api.users.getByStudentId, { studentId })
 }
 
-export function useUsersCount(organization?: "pku" | "thu") {
-  return useQuery(api.users.count, { organization })
+export function useUsersCount(organization?: "pku" | "thu", classMembersOnly?: boolean) {
+  return useQuery(api.users.count, { organization, classMembersOnly })
 }
 
-export function useSearchUsers(query: string) {
-  return useQuery(api.users.search, { query })
+export function useSearchUsers(query: string, classMembersOnly?: boolean) {
+  return useQuery(api.users.search, { query, classMembersOnly })
 }
 
 export function useCreateUser() {

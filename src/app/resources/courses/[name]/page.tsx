@@ -183,7 +183,7 @@ export default function CourseDetailPage() {
   const [formState, setFormState] = React.useState<ReviewFormState>(() => createEmptyForm(currentYear))
 
   const coursesData = useCourses()
-  const courses: Course[] = coursesData || []
+  const courses: Course[] = React.useMemo(() => (coursesData || []) as Course[], [coursesData])
   const usersData = useUsers({ limit: 1000 })
   const courseData = useCourseByName(courseName)
   const fallbackCourse = React.useMemo(() => {
@@ -199,7 +199,7 @@ export default function CourseDetailPage() {
   }, [courseName, courses])
   const course: Course | null = courseData || fallbackCourse || null
   const reviewsData = useCourseReviews(course?.name || courseName)
-  const reviews: CourseReview[] = reviewsData || []
+  const reviews = React.useMemo(() => (reviewsData || []) as unknown as CourseReview[], [reviewsData])
   const usersById = React.useMemo(() => {
     const entries = (usersData || []).map((user) => [String(user._id), user] as const)
     return new Map(entries)

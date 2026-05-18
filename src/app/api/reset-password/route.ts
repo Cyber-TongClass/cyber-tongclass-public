@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { api } from "@/../convex/_generated/api"
+import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { verifyPasswordResetProof } from "@/lib/server/verification"
+
+const updatePasswordByUserIdRef = makeFunctionReference<"mutation">("users:updatePasswordByUserId")
 
 export async function POST(request: NextRequest) {
     try {
@@ -23,7 +25,7 @@ export async function POST(request: NextRequest) {
         }
 
         const client = getConvexHttpClient()
-        await client.mutation(api.users.updatePasswordByUserId, {
+        await client.mutation(updatePasswordByUserIdRef, {
             userId: payload.userId,
             newPassword,
         } as any)

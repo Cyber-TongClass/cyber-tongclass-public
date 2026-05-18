@@ -30,12 +30,28 @@ function normalizeSearch(value?: string) {
   return value?.trim().toLowerCase() || ""
 }
 
-async function getActorOrThrow(ctx: any, actorId: Id<"users"> | undefined) {
-  if (!actorId) {
+async function sha256Hex(input: string) {
+  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
+  const enc = new TextEncoder().encode(input)
+  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
+  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
+}
+
+async function getActorOrThrow(ctx: any, sessionToken: string | undefined) {
+  if (!sessionToken) {
     throw new Error("请先登录")
   }
 
-  const actor = await ctx.db.get(actorId)
+  const tokenHash = await sha256Hex(sessionToken)
+  const session = await ctx.db
+    .query("authSessions")
+    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
+    .first()
+  if (!session || session.revokedAt || session.expiresAt <= Date.now()) {
+    throw new Error("请先登录")
+  }
+
+  const actor = await ctx.db.get(session.userId)
   if (!actor) {
     throw new Error("用户不存在")
   }
@@ -126,9 +142,11 @@ function mapReplyForClient(reply: any, post: any, usersMap: Map<string, any>, al
 
 export const list = query({
   args: {
+    sessionToken: v.string(),
     search: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await getActorOrThrow(ctx, args.sessionToken)
     const posts = await ctx.db.query("treeholePosts").order("desc").collect()
     const replies = await ctx.db.query("treeholeReplies").collect()
     const repliesByPost = new Map<string, any[]>()
@@ -166,9 +184,11 @@ export const list = query({
 
 export const getById = query({
   args: {
+    sessionToken: v.string(),
     id: v.id("treeholePosts"),
   },
   handler: async (ctx, args) => {
+    await getActorOrThrow(ctx, args.sessionToken)
     const post = await ctx.db.get(args.id)
     if (!post) return null
 
@@ -187,11 +207,12 @@ export const getById = query({
 
 export const listAdmin = query({
   args: {
-    actorId: v.id("users"),
+    sessionToken: v.string(),
+    actorId: v.optional(v.id("users")),
     search: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await getActorOrThrow(ctx, args.actorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
     if (!canModerate(actor)) {
       throw new Error("无权访问树洞管理")
     }
@@ -239,11 +260,12 @@ export const listAdmin = query({
 
 export const getByIdAdmin = query({
   args: {
-    actorId: v.id("users"),
+    sessionToken: v.string(),
+    actorId: v.optional(v.id("users")),
     id: v.id("treeholePosts"),
   },
   handler: async (ctx, args) => {
-    const actor = await getActorOrThrow(ctx, args.actorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
     if (!canModerate(actor)) {
       throw new Error("无权访问树洞管理")
     }
@@ -278,13 +300,14 @@ export const getByIdAdmin = query({
 
 export const createPost = mutation({
   args: {
+    sessionToken: v.string(),
     title: v.string(),
     content: v.string(),
     isAnonymous: v.optional(v.boolean()),
-    authorId: v.id("users"),
+    authorId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    await getActorOrThrow(ctx, args.authorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
 
     const title = args.title.trim()
     const content = args.content.trim()
@@ -297,7 +320,7 @@ export const createPost = mutation({
       title,
       content,
       isAnonymous: args.isAnonymous ?? false,
-      authorId: args.authorId,
+      authorId: actor._id,
       createdAt: now,
       updatedAt: now,
     })
@@ -306,13 +329,14 @@ export const createPost = mutation({
 
 export const createReply = mutation({
   args: {
+    sessionToken: v.string(),
     postId: v.id("treeholePosts"),
     content: v.string(),
     isAnonymous: v.optional(v.boolean()),
-    authorId: v.id("users"),
+    authorId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    await getActorOrThrow(ctx, args.authorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
 
     const post = await ctx.db.get(args.postId)
     if (!post) {
@@ -329,7 +353,7 @@ export const createReply = mutation({
       postId: args.postId,
       content,
       isAnonymous: args.isAnonymous ?? false,
-      authorId: args.authorId,
+      authorId: actor._id,
       createdAt: now,
       updatedAt: now,
     })
@@ -338,11 +362,12 @@ export const createReply = mutation({
 
 export const removePost = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("treeholePosts"),
-    actorId: v.id("users"),
+    actorId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const actor = await getActorOrThrow(ctx, args.actorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
     const post = await ctx.db.get(args.id)
     if (!post) {
       throw new Error("帖子不存在")
@@ -359,11 +384,12 @@ export const removePost = mutation({
 
 export const removeReply = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("treeholeReplies"),
-    actorId: v.id("users"),
+    actorId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const actor = await getActorOrThrow(ctx, args.actorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
     const reply = await ctx.db.get(args.id)
     if (!reply) {
       throw new Error("回复不存在")

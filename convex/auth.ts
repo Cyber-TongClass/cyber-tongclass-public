@@ -8,6 +8,13 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
+const sha256Hex = async (input: string) => {
+  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
+  const enc = new TextEncoder().encode(input)
+  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
+  return Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, "0")).join("")
+}
+
 // Check if student ID is allowed to register
 export const isStudentIdAllowed = query({
   args: { studentId: v.string() },
@@ -36,6 +43,26 @@ export const currentUser = query({
       .first()
 
     return user
+  },
+})
+
+export const currentUserBySession = query({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (!args.sessionToken) return null
+
+    const tokenHash = await sha256Hex(args.sessionToken)
+    const session = await ctx.db
+      .query("authSessions")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+      .first()
+
+    if (!session || session.revokedAt || session.expiresAt <= Date.now()) {
+      return null
+    }
+
+    const user = await ctx.db.get(session.userId)
+    return user || null
   },
 })
 
@@ -103,8 +130,20 @@ export const isSuperAdmin = query({
 
 // Sign out
 export const signOut = mutation({
-  args: {},
-  handler: async () => {
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (args.sessionToken) {
+      const tokenHash = await sha256Hex(args.sessionToken)
+      const session = await ctx.db
+        .query("authSessions")
+        .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+        .first()
+
+      if (session && !session.revokedAt) {
+        await ctx.db.patch(session._id, { revokedAt: Date.now() })
+      }
+    }
+
     return { success: true }
   },
 })

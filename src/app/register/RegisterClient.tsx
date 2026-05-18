@@ -72,15 +72,14 @@ export default function RegisterClient() {
     const [newInterest, setNewInterest] = useState("")
     const [links, setLinks] = useState<UserLink[]>([])
 
-    const getExpectedEmailValue = () => {
+    const effectiveEmail = useMemo(() => {
         const normalizedStudentId = studentId.trim().toLowerCase()
         if (!normalizedStudentId) return ""
 
         return `${normalizedStudentId}${emailDomain}`
-    }
+    }, [studentId, emailDomain])
 
     const getExpectedEmailHint = () => `${studentId || "your_student_id"}${emailDomain}`
-    const effectiveEmail = useMemo(() => getExpectedEmailValue(), [studentId, emailDomain])
 
     useEffect(() => {
         if (resendSecondsRemaining <= 0) return
@@ -331,7 +330,7 @@ export default function RegisterClient() {
     }
 
     const handleSubmit = async () => {
-        if (!englishName.trim() || !chineseName.trim() || !username.trim()) {
+        if (!cohort || !englishName.trim() || !chineseName.trim() || !username.trim()) {
             setError("Please fill in required fields")
             return
         }

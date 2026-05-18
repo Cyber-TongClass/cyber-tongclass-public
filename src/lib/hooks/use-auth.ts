@@ -1,70 +1,67 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
+import { useCallback, useMemo, useSyncExternalStore } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery, useMutation } from "convex/react"
-import { api } from "../../../convex/_generated/api"
+import { makeFunctionReference } from "convex/server"
 import type { UserRole } from "@/types"
+
+const TONGCLASS_SESSION_TOKEN_KEY = "tongclass_session_token"
+const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
+const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
+const currentUserBySessionRef = makeFunctionReference<"query">("auth:currentUserBySession")
+const simpleLoginRef = makeFunctionReference<"mutation">("users:simpleLogin")
+const signOutRef = makeFunctionReference<"mutation">("auth:signOut")
+
+function readStoredSessionToken() {
+  if (typeof window === "undefined") return null
+  return window.localStorage.getItem(TONGCLASS_SESSION_TOKEN_KEY)
+}
+
+function subscribeStoredSessionToken(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {}
+
+  window.addEventListener("storage", onStoreChange)
+  window.addEventListener(TONGCLASS_AUTH_STORAGE_EVENT, onStoreChange)
+  return () => {
+    window.removeEventListener("storage", onStoreChange)
+    window.removeEventListener(TONGCLASS_AUTH_STORAGE_EVENT, onStoreChange)
+  }
+}
+
+function notifyStoredSessionTokenChanged() {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new Event(TONGCLASS_AUTH_STORAGE_EVENT))
+}
 
 export function useAuth() {
   const router = useRouter()
-  const [storedEmail, setStoredEmail] = useState<string | null>(null)
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [queryTimedOut, setQueryTimedOut] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [isPending, startTransition] = useTransition()
-  
-  // Initialize from localStorage on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const email = localStorage.getItem("tongclass_user_email")
-      setStoredEmail(email)
-      setIsInitialized(true)
-    }
-  }, [])
-  
-  // Query user by email from localStorage
-  const userData = useQuery(
-    api.users.getByEmail,
-    storedEmail ? { email: storedEmail } : "skip"
+  const storedSessionToken = useSyncExternalStore(
+    subscribeStoredSessionToken,
+    readStoredSessionToken,
+    () => null
   )
 
   // Also query Convex session-backed current user (server-side identity)
-  const sessionUser = useQuery(api.auth.currentUser)
+  const sessionUser = useQuery(currentUserRef)
+  const tokenUser = useQuery(
+    currentUserBySessionRef,
+    storedSessionToken ? { sessionToken: storedSessionToken } : "skip"
+  )
 
-  useEffect(() => {
-    if (!isInitialized || storedEmail === null || userData !== undefined) {
-      setQueryTimedOut(false)
-      return
-    }
-
-    const timer = window.setTimeout(() => {
-      setQueryTimedOut(true)
-    }, 4000)
-
-    return () => window.clearTimeout(timer)
-  }, [isInitialized, storedEmail, userData])
-  
-  // Force refetch when refreshKey changes
-  useEffect(() => {
-    if (refreshKey > 0 && storedEmail) {
-      // Trigger a re-render to refresh the query
-      setRefreshKey(0)
-    }
-  }, [refreshKey, storedEmail])
-  
-  // Prefer session-backed user if present; otherwise fall back to localStorage lookup.
-  const isUserQueryPending = storedEmail !== null && userData === undefined && !queryTimedOut
-  const currentUser = sessionUser ?? (storedEmail && !isUserQueryPending ? userData || null : null)
+  // Prefer Convex identity if present; otherwise use the signed local session token.
+  const isUserQueryPending = storedSessionToken !== null && tokenUser === undefined
+  const currentUser = sessionUser ?? (storedSessionToken && !isUserQueryPending ? tokenUser || null : null)
   
   // Get user role
   const currentRole = currentUser?.role ?? null
   
   // Convert to loading state
-  const isLoading = !isInitialized || isUserQueryPending || isPending
+  const isLoading = (sessionUser === undefined && !storedSessionToken) || isUserQueryPending
 
   // Login mutation
-  const loginMutation = useMutation(api.users.simpleLogin)
+  const loginMutation = useMutation(simpleLoginRef)
+  const signOutMutation = useMutation(signOutRef)
 
   const login = useCallback(async (identifier: string, password: string) => {
     try {
@@ -73,15 +70,10 @@ export function useAuth() {
         password: password 
       })
       
-      if (result && "email" in result && result.email) {
-        // Store email in localStorage for session persistence
+      if (result && "email" in result && result.email && "sessionToken" in result && result.sessionToken) {
+        localStorage.setItem(TONGCLASS_SESSION_TOKEN_KEY, result.sessionToken)
         localStorage.setItem("tongclass_user_email", result.email)
-        
-        // Update state
-        startTransition(() => {
-          setStoredEmail(result.email!)
-          setRefreshKey(k => k + 1)
-        })
+        notifyStoredSessionTokenChanged()
         
         return { ok: true, user: result }
       }
@@ -93,12 +85,21 @@ export function useAuth() {
   }, [loginMutation])
 
   const logout = useCallback(async (redirectTo?: unknown) => {
+    const sessionToken = localStorage.getItem(TONGCLASS_SESSION_TOKEN_KEY)
+    if (sessionToken) {
+      try {
+        await signOutMutation({ sessionToken })
+      } catch {
+        // Local cleanup should still happen if the network request fails.
+      }
+    }
     localStorage.removeItem("tongclass_user_email")
     localStorage.removeItem("tongclass_user_id")
-    setStoredEmail(null)
+    localStorage.removeItem(TONGCLASS_SESSION_TOKEN_KEY)
+    notifyStoredSessionTokenChanged()
     router.push(typeof redirectTo === "string" ? redirectTo : "/")
     router.refresh()
-  }, [router])
+  }, [router, signOutMutation])
 
   // Determine admin status from user data
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_admin"
