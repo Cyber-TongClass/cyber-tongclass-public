@@ -39,6 +39,7 @@ export interface User {
   orcidUrl?: string
   avatar?: string
   realPhoto?: string
+  isClassMember?: boolean
   isEmailVerified?: boolean
   lastVerificationRequestedAt?: number
   approvedContributions?: number

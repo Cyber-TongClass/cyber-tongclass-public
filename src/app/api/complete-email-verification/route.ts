@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { api } from "@/../convex/_generated/api"
+import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { normalizeEmail, verifyEmailVerificationProof } from "@/lib/server/verification"
+
+const getUserById = makeFunctionReference<"query">("users:getById")
+const markEmailVerified = makeFunctionReference<"mutation">("users:markEmailVerified")
 
 export async function POST(request: NextRequest) {
     try {
@@ -19,13 +22,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, message: "Verification proof is invalid or expired." }, { status: 400 })
         }
 
-        const client = getConvexHttpClient()
-        const user = await client.query(api.users.getById, { id: userId } as any)
+        const client = getConvexHttpClient() as any
+        const user = await client.query(getUserById, { id: userId } as any)
         if (!user || normalizeEmail(user.email) !== email) {
             return NextResponse.json({ ok: false, message: "User/email mismatch." }, { status: 400 })
         }
 
-        await client.mutation(api.users.markEmailVerified, { userId: user._id } as any)
+        await client.mutation(markEmailVerified, { userId: user._id } as any)
         return NextResponse.json({ ok: true })
     } catch (error) {
         console.error("complete-email-verification error", error)

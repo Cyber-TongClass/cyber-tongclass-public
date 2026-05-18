@@ -68,12 +68,12 @@ Note: type signatures in code are authoritative. This section summarizes common 
 - `updateRole`, `updateProfileMarkdown`, `remove` (mutations) — admin/owner operations
 - `simpleLogin` (mutation)
   - args: { email, password }
-  - behavior: simplified local login for development; returns success + userId + role
+  - behavior: simplified local login for development; returns success + userId + role + sessionToken
 - `count`, `search` (queries)
 
 ### Module: `auth`
 - `isStudentIdAllowed` (query) — checks registration whitelist in `authConfig`
-- `currentUser`, `getUserByEmail`, `currentUserRole`, `isAdmin`, `isSuperAdmin`, `signOut` — lightweight auth-related queries/mutations used by the app
+- `currentUser`, `currentUserBySession`, `getUserByEmail`, `currentUserRole`, `isAdmin`, `isSuperAdmin`, `signOut` — lightweight auth-related queries/mutations used by the app
 
 ### Module: `emailVerifications`
 - `create` (mutation)
@@ -109,6 +109,39 @@ Note: type signatures in code are authoritative. This section summarizes common 
 ### Utility modules
 - `seed` (mutation): create seed data (development)
 - `addCredentials` (mutation): helper to add initial credentials
+
+### TechDay modules
+
+TechDay is implemented as a Convex-native event platform under `convex/techday/*`. Client components should use the wrapper hooks in `src/lib/api.ts` and should not call generated Convex functions directly from pages.
+
+- `techday/auth`
+  - Queries: `me`, `getReviewerInvite`
+  - Mutations: `syncInternalUser`, `registerAuthor`, `registerVolunteer`, `registerReviewer`, `login`, `logout`, `changePassword`
+  - Behavior: internal TongClass users are synced through the main session token; external authors, volunteers, and reviewers use TechDay-scoped credentials and sessions only.
+  - Public volunteer registration creates a pending account. An administrator must enable it before reimbursement workflows are available.
+- `techday/submissions`
+  - Queries: `listPublic`, `getPublic`, `listMine`, `listManage`, `exportRows`
+  - Mutations: `createMine`, `updateMine`, `deleteMine`, `updateManage`, `deleteManage`, `renumberAll`, `updateVotes`
+  - Behavior: authors manage only their own submissions; public responses expose only approved display fields. Private contact fields, storage ids, and non-archived paper/poster material require owner/admin access.
+- `techday/files`
+  - Mutations: `generateUploadUrl`, `finalizePosterUpload`, `finalizeReimbursementAttachment`
+  - Queries: `getPosterUrl`, `getReimbursementAttachmentUrl`
+  - Behavior: uploaded files are stored in Convex storage and attached to TechDay records after permission checks.
+- `techday/reimbursements`
+  - Queries: `listMine`, `listManage`, `exportRows`
+  - Mutations: `createMine`, `updateMine`, `deleteMine`, `review`
+- `techday/awards`
+  - Queries: `listAwards`, `listAwardSubmissions`
+  - Mutations: `createAward`, `updateAward`, `deleteAward`, `upsertRecommendation`, `deleteRecommendation`, `assignAwards`
+- `techday/posts`
+  - Queries: `listPublished`, `getBySlug`, `listManage`
+  - Mutations: `create`, `update`, `remove`, `publish`
+- `techday/directories`
+  - Queries: `listOrganizations`, `listDirections`, `listRoleTemplates`, `getSettings`
+  - Mutations: `createOrganization`, `updateOrganization`, `createDirection`, `updateDirection`, `deleteDirection`, `createRoleTemplate`, `updateRoleTemplate`, `deleteRoleTemplate`, `updateSettings`
+- `techday/admin`
+  - Queries: `listUsers`, `exportUsers`, `listReviewerInvites`
+  - Mutations: `updateUser`, `deleteUser`, `createReviewerInvite`, `updateReviewerInvite`, `deleteReviewerInvite`, `createMigrationMap`
 
 ---
 
@@ -201,8 +234,9 @@ Key hooks (examples):
 
 - Authentication
   - `useCurrentUser()` → returns `useQuery(api.auth.currentUser)`
+  - `useCurrentUserBySession()` → returns the authenticated user for the stored `tongclass_session_token`
   - `useSignUp()` → returns a callback that calls `api.users.create` (sign up)
-  - `useSignIn()` → calls `api.users.simpleLogin` and returns `{ success, userId, email, role }`
+  - `useSignIn()` → calls `api.users.simpleLogin` and returns `{ success, userId, email, role, sessionToken }`
   - `useSimpleLogin()` → raw mutation for development login
 
 - Users
@@ -213,6 +247,21 @@ Key hooks (examples):
 
 - News / Events / Publications / Courses / CourseReviews
   - Hooks mapped to the module functions: `useNews`, `useCreateNews`, `useEvents`, `usePublications`, `useCourses`, `useCourseReviews`, etc.
+
+- TechDay
+  - `useTechDayCurrent()`, `useSyncTechDayInternalUser()`, `useTechDayLogin()`, `useTechDayLogout()`
+  - `useTechDayPublicSubmissions()`, `useTechDaySubmission()`, `useTechDayMySubmissions()`, `useCreateTechDaySubmission()`, `useUpdateTechDaySubmission()`
+  - `useTechDayManageSubmissions()`, `useTechDayUpdateManagedSubmission()`, `useExportTechDaySubmissions()`
+  - `useTechDayReimbursements()`, `useTechDayManageReimbursements()`, `useReviewTechDayReimbursement()`
+  - `useTechDayAwards()`, `useTechDayAwardSubmissions()`, `useAssignTechDayAwards()`
+  - `useTechDayPublishedPosts()`, `useTechDayPostBySlug()`, `useManageTechDayPosts()`
+  - `useTechDayOrganizations()`, `useTechDayDirections()`, `useTechDaySettings()`, `useUpdateTechDaySettings()`
+  - `useTechDayUsers()`, `useUpdateTechDayUser()`, `useTechDayReviewerInvites()`
+
+- Intranet
+  - Treehole and feedback hooks automatically attach the stored `tongclass_session_token`.
+  - Convex functions in `treehole` and `feedback` validate `authSessions` server-side and ignore client-supplied author ids for new content.
+  - TechDay-only sessions are not accepted by intranet functions.
 
 - Verification helpers
   - The frontend calls the Next API routes above (`/api/request-verification`, `/api/verify-token`, `/api/reset-password`, `/api/complete-email-verification`) directly via `fetch`.

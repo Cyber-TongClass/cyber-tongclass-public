@@ -1,8 +1,7 @@
 "use client"
 
-import { FileText, Link as LinkIcon, MessageSquare } from "lucide-react"
+import { CalendarDays, FileText, Link as LinkIcon, MessageSquare } from "lucide-react"
 import { IntranetSectionCard } from "@/components/intranet/intranet-section-card"
-import { INTRANET_WPS_URL } from "@/lib/intranet"
 
 const intranetSections = [
   {
@@ -23,6 +22,12 @@ const intranetSections = [
     icon: LinkIcon,
     href: "/intranet/wps",
   },
+  {
+    title: "TechDay 科技节平台",
+    description: "科技节成果展示、投稿管理、评奖、报销和外部作者/志愿者注册入口。内部成员可直接使用通班账号进入。",
+    icon: CalendarDays,
+    href: "/techday",
+  },
 ]
 
 export default function IntranetPage() {
@@ -42,7 +47,7 @@ export default function IntranetPage() {
 
       <section className="bg-[hsl(211,30%,97%)] py-16 md:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {intranetSections.map((section) => (
               <IntranetSectionCard
                 key={section.title}

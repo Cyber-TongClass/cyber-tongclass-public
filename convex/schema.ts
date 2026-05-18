@@ -37,6 +37,7 @@ export default defineSchema({
     orcidUrl: v.optional(v.string()),
     avatar: v.optional(v.string()),
     realPhoto: v.optional(v.string()),
+    isClassMember: v.optional(v.boolean()),
     isEmailVerified: v.boolean(),
     lastVerificationRequestedAt: v.optional(v.number()),
     // Track approvals for moderation reputation
@@ -207,6 +208,17 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"]),
 
+  authSessions: defineTable({
+    userId: v.id("users"),
+    tokenHash: v.string(),
+    issuedAt: v.number(),
+    expiresAt: v.number(),
+    revokedAt: v.optional(v.number()),
+    lastSeenAt: v.optional(v.number()),
+  })
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_user", ["userId"]),
+
   emailVerifications: defineTable({
     tokenHash: v.string(),
     codeHash: v.optional(v.string()),
@@ -223,4 +235,274 @@ export default defineSchema({
     .index("by_sentTo", ["sentTo"])
     .index("by_ip", ["ip"])
     .index("by_createdAt", ["createdAt"]),
+
+  techDayUsers: defineTable({
+    email: v.string(),
+    name: v.string(),
+    school: v.optional(v.string()),
+    college: v.optional(v.string()),
+    grade: v.optional(v.string()),
+    studentId: v.optional(v.string()),
+    role: v.union(v.literal("author"), v.literal("volunteer"), v.literal("reviewer"), v.literal("admin")),
+    mainUserId: v.optional(v.id("users")),
+    organizationId: v.optional(v.id("techDayOrganizations")),
+    roleTemplateId: v.optional(v.id("techDayRoleTemplates")),
+    volunteerTracks: v.optional(v.array(v.string())),
+    assignedTracks: v.optional(v.array(v.string())),
+    availabilitySlots: v.optional(v.array(v.string())),
+    voteCounterOptIn: v.optional(v.boolean()),
+    reviewerDirectionId: v.optional(v.id("techDayDirections")),
+    reviewerInviteId: v.optional(v.id("techDayReviewerInvites")),
+    canPublishNews: v.optional(v.boolean()),
+    canSubmitPapers: v.optional(v.boolean()),
+    status: v.union(v.literal("active"), v.literal("pending"), v.literal("disabled")),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_studentId", ["studentId"])
+    .index("by_role", ["role"])
+    .index("by_mainUser", ["mainUserId"])
+    .index("by_roleTemplate", ["roleTemplateId"])
+    .index("by_reviewerDirection", ["reviewerDirectionId"])
+    .index("by_reviewerInvite", ["reviewerInviteId"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDayCredentials: defineTable({
+    userId: v.id("techDayUsers"),
+    passwordHash: v.string(),
+    salt: v.string(),
+    legacyHash: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  techDaySessions: defineTable({
+    userId: v.id("techDayUsers"),
+    tokenHash: v.string(),
+    issuedAt: v.number(),
+    expiresAt: v.number(),
+    revokedAt: v.optional(v.number()),
+    lastSeenAt: v.optional(v.number()),
+  })
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_user", ["userId"]),
+
+  techDayOrganizations: defineTable({
+    name: v.string(),
+    responsibility: v.string(),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDayRoleTemplates: defineTable({
+    name: v.string(),
+    canEditVoteData: v.boolean(),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDayDirections: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDaySettings: defineTable({
+    key: v.string(),
+    showVoteData: v.boolean(),
+    voteSortEnabled: v.boolean(),
+    voteEditRoleTemplateId: v.optional(v.id("techDayRoleTemplates")),
+    visibleAwardIds: v.optional(v.array(v.id("techDayAwards"))),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_key", ["key"]),
+
+  techDaySubmissions: defineTable({
+    sequenceNo: v.optional(v.number()),
+    title: v.string(),
+    abstract: v.string(),
+    contact: v.optional(v.string()),
+    contactEmail: v.optional(v.string()),
+    venue: v.optional(v.string()),
+    track: v.optional(v.union(v.literal("poster"), v.literal("demo"))),
+    topic: v.optional(v.string()),
+    reviewStatus: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
+    status: v.optional(v.string()),
+    publicationStatus: v.optional(v.union(v.literal("accepted"), v.literal("published"))),
+    archiveConsent: v.optional(v.boolean()),
+    directionId: v.optional(v.id("techDayDirections")),
+    authorId: v.optional(v.id("techDayUsers")),
+    mainUserId: v.optional(v.id("users")),
+    authors: v.optional(v.any()),
+    year: v.optional(v.number()),
+    voteInnovation: v.optional(v.number()),
+    voteImpact: v.optional(v.number()),
+    voteFeasibility: v.optional(v.number()),
+    paperUrl: v.optional(v.string()),
+    posterStorageId: v.optional(v.id("_storage")),
+    posterFileName: v.optional(v.string()),
+    posterMimeType: v.optional(v.string()),
+    posterSize: v.optional(v.number()),
+    legacyPosterPath: v.optional(v.string()),
+    awardText: v.optional(v.string()),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_author_createdAt", ["authorId", "createdAt"])
+    .index("by_track_status_year_updatedAt", ["track", "reviewStatus", "year", "updatedAt"])
+    .index("by_track_status_direction_year_updatedAt", ["track", "reviewStatus", "directionId", "year", "updatedAt"])
+    .index("by_track_status_year_sequenceNo", ["track", "reviewStatus", "year", "sequenceNo"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDaySubmissionVoteLogs: defineTable({
+    submissionId: v.id("techDaySubmissions"),
+    userId: v.id("techDayUsers"),
+    fieldName: v.union(v.literal("voteInnovation"), v.literal("voteImpact"), v.literal("voteFeasibility")),
+    oldValue: v.optional(v.number()),
+    newValue: v.optional(v.number()),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_submission_createdAt", ["submissionId", "createdAt"])
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDayReimbursements: defineTable({
+    projectName: v.string(),
+    organization: v.string(),
+    content: v.string(),
+    quantity: v.optional(v.number()),
+    amount: v.number(),
+    invoiceCompany: v.string(),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"), v.literal("waiting_more")),
+    adminNote: v.optional(v.string()),
+    applicantId: v.id("techDayUsers"),
+    submitterId: v.optional(v.id("techDayUsers")),
+    submittedAt: v.optional(v.number()),
+    reviewerId: v.optional(v.id("techDayUsers")),
+    reviewerNameSnapshot: v.optional(v.string()),
+    reviewedAt: v.optional(v.number()),
+    attachmentStorageId: v.optional(v.id("_storage")),
+    attachmentFileName: v.optional(v.string()),
+    attachmentMimeType: v.optional(v.string()),
+    attachmentSize: v.optional(v.number()),
+    legacyFilePath: v.optional(v.string()),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_applicant_createdAt", ["applicantId", "createdAt"])
+    .index("by_status_createdAt", ["status", "createdAt"])
+    .index("by_organization_createdAt", ["organization", "createdAt"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDayReviewerInvites: defineTable({
+    code: v.string(),
+    presetDirectionId: v.optional(v.id("techDayDirections")),
+    reviewerName: v.optional(v.string()),
+    reviewerEmail: v.optional(v.string()),
+    reviewerDirectionId: v.optional(v.id("techDayDirections")),
+    isUsed: v.boolean(),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_code", ["code"])
+    .index("by_isUsed", ["isUsed"])
+    .index("by_presetDirection", ["presetDirectionId"])
+    .index("by_reviewerDirection", ["reviewerDirectionId"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDayAwards: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    color: v.optional(v.string()),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDaySubmissionAwards: defineTable({
+    submissionId: v.id("techDaySubmissions"),
+    awardId: v.id("techDayAwards"),
+    assignedById: v.optional(v.id("techDayUsers")),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_submission", ["submissionId"])
+    .index("by_award", ["awardId"])
+    .index("by_submission_award", ["submissionId", "awardId"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDayReviewRecommendations: defineTable({
+    submissionId: v.id("techDaySubmissions"),
+    reviewerId: v.id("techDayUsers"),
+    reason: v.string(),
+    confidence: v.optional(v.number()),
+    legacyId: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_submission", ["submissionId"])
+    .index("by_reviewer", ["reviewerId"])
+    .index("by_submission_reviewer", ["submissionId", "reviewerId"])
+    .index("by_legacyId", ["legacyId"]),
+
+  techDayPosts: defineTable({
+    slug: v.string(),
+    title: v.string(),
+    date: v.string(),
+    category: v.optional(v.string()),
+    summary: v.string(),
+    tags: v.array(v.string()),
+    visibility: v.array(v.union(
+      v.literal("public"),
+      v.literal("authenticated"),
+      v.literal("volunteer"),
+      v.literal("author"),
+      v.literal("reviewer"),
+      v.literal("admin")
+    )),
+    authorName: v.optional(v.string()),
+    authorId: v.optional(v.id("techDayUsers")),
+    published: v.boolean(),
+    content: v.string(),
+    legacySlug: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_published_date", ["published", "date"])
+    .index("by_author", ["authorId"])
+    .index("by_category", ["category"]),
+
+  techDayMigrationMap: defineTable({
+    sourceTable: v.string(),
+    sourceId: v.string(),
+    targetTable: v.string(),
+    targetId: v.string(),
+    checksum: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_source", ["sourceTable", "sourceId"])
+    .index("by_target", ["targetTable", "targetId"]),
 })

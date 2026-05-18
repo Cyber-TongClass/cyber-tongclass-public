@@ -6,12 +6,28 @@ function getDisplayName(user: any) {
   return user?.chineseName?.trim() || user?.englishName?.trim() || user?.username || "用户"
 }
 
-async function getActorOrThrow(ctx: any, actorId: Id<"users"> | undefined) {
-  if (!actorId) {
+async function sha256Hex(input: string) {
+  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
+  const enc = new TextEncoder().encode(input)
+  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
+  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
+}
+
+async function getActorOrThrow(ctx: any, sessionToken: string | undefined) {
+  if (!sessionToken) {
     throw new Error("请先登录")
   }
 
-  const actor = await ctx.db.get(actorId)
+  const tokenHash = await sha256Hex(sessionToken)
+  const session = await ctx.db
+    .query("authSessions")
+    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
+    .first()
+  if (!session || session.revokedAt || session.expiresAt <= Date.now()) {
+    throw new Error("请先登录")
+  }
+
+  const actor = await ctx.db.get(session.userId)
   if (!actor) {
     throw new Error("用户不存在")
   }
@@ -51,7 +67,11 @@ function formatMonthString(timestamp: number) {
 }
 
 export const list = query({
-  handler: async (ctx) => {
+  args: {
+    sessionToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await getActorOrThrow(ctx, args.sessionToken)
     const entries = await ctx.db.query("feedbackEntries").order("desc").collect()
     const usersMap = await getUsersMap(ctx, entries.map((entry) => entry.authorId))
 
@@ -67,11 +87,12 @@ export const list = query({
 
 export const listAdmin = query({
   args: {
-    actorId: v.id("users"),
+    sessionToken: v.string(),
+    actorId: v.optional(v.id("users")),
     search: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await getActorOrThrow(ctx, args.actorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
     assertAdmin(actor)
 
     const entries = await ctx.db.query("feedbackEntries").order("desc").collect()
@@ -103,11 +124,12 @@ export const listAdmin = query({
 
 export const exportMonthlyForAdmin = query({
   args: {
-    actorId: v.id("users"),
+    sessionToken: v.string(),
+    actorId: v.optional(v.id("users")),
     month: v.string(),
   },
   handler: async (ctx, args) => {
-    const actor = await getActorOrThrow(ctx, args.actorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
     assertAdmin(actor)
 
     const entries = await ctx.db.query("feedbackEntries").order("desc").collect()
@@ -131,13 +153,14 @@ export const exportMonthlyForAdmin = query({
 
 export const create = mutation({
   args: {
+    sessionToken: v.string(),
     title: v.string(),
     content: v.string(),
     isAnonymous: v.optional(v.boolean()),
-    authorId: v.id("users"),
+    authorId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    await getActorOrThrow(ctx, args.authorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
 
     const title = args.title.trim()
     const content = args.content.trim()
@@ -150,7 +173,7 @@ export const create = mutation({
       title,
       content,
       isAnonymous: args.isAnonymous ?? false,
-      authorId: args.authorId,
+      authorId: actor._id,
       createdAt: now,
       updatedAt: now,
     })
@@ -159,11 +182,12 @@ export const create = mutation({
 
 export const remove = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("feedbackEntries"),
-    actorId: v.id("users"),
+    actorId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const actor = await getActorOrThrow(ctx, args.actorId)
+    const actor = await getActorOrThrow(ctx, args.sessionToken)
     const entry = await ctx.db.get(args.id)
     if (!entry) {
       throw new Error("反馈不存在")

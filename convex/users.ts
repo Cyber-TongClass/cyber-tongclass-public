@@ -6,6 +6,7 @@ const normalizeUsername = (username: string) => username.trim().toLowerCase()
 const normalizeStudentId = (studentId: string) => studentId.trim()
 const PROFILE_MARKDOWN_MAX_LENGTH = 20_000
 const PASSWORD_MIN_LENGTH = 8
+const AUTH_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30
 
 const normalizeProfileMarkdown = (value: string) => value.replace(/\r\n/g, "\n").trim()
 const normalizeOptionalString = (value?: string) => {
@@ -88,6 +89,8 @@ const pickDefined = <T extends Record<string, any>>(input: T) => {
     return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<T>
 }
 
+const isVisibleClassMember = (user: { isClassMember?: boolean }) => user.isClassMember !== false
+
 const generateSalt = (len = 16) => {
     const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
     const arr = cryptoImpl.getRandomValues(new Uint8Array(len)) as Uint8Array
@@ -99,6 +102,18 @@ const sha256Hex = async (input: string) => {
     const enc = new TextEncoder().encode(input)
     const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
     return Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, "0")).join("")
+}
+
+const createAuthSession = async (ctx: any, userId: any) => {
+    const token = generateSalt(32)
+    const now = Date.now()
+    await ctx.db.insert("authSessions", {
+        userId,
+        tokenHash: await sha256Hex(token),
+        issuedAt: now,
+        expiresAt: now + AUTH_SESSION_TTL_MS,
+    })
+    return token
 }
 
 const verifyPassword = async (password: string, credential: { passwordHash: string; salt?: string }) => {
@@ -121,6 +136,7 @@ export const list = query({
         limit: v.optional(v.number()),
         organization: v.optional(v.union(v.literal("pku"), v.literal("thu"))),
         cohort: v.optional(v.union(v.number(), v.literal("mascot"))),
+        classMembersOnly: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
         let usersQuery = ctx.db.query("users")
@@ -134,9 +150,10 @@ export const list = query({
         }
 
         const allUsers = await usersQuery.order("desc").collect()
+        const visibleUsers = args.classMembersOnly ? allUsers.filter(isVisibleClassMember) : allUsers
         const skip = args.skip || 0
         const limit = args.limit || 50
-        return allUsers.slice(skip, skip + limit)
+        return visibleUsers.slice(skip, skip + limit)
     },
 })
 
@@ -203,6 +220,7 @@ export const create = mutation({
         orcidUrl: v.optional(v.string()),
         avatar: v.optional(v.string()),
         realPhoto: v.optional(v.string()),
+        isClassMember: v.optional(v.boolean()),
         isEmailVerified: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
@@ -260,6 +278,7 @@ export const create = mutation({
             orcidUrl: args.orcidUrl,
             avatar: args.avatar,
             realPhoto: args.realPhoto,
+            isClassMember: args.isClassMember ?? true,
             isEmailVerified: args.isEmailVerified ?? false,
             createdAt: now,
             updatedAt: now,
@@ -316,6 +335,7 @@ export const update = mutation({
         orcidUrl: v.optional(v.string()),
         avatar: v.optional(v.string()),
         realPhoto: v.optional(v.string()),
+        isClassMember: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
         const { id, ...updates } = args
@@ -660,16 +680,17 @@ export const remove = mutation({
 })
 
 export const getByProfileSlug = query({
-    args: { slug: v.string() },
+    args: { slug: v.string(), includeHidden: v.optional(v.boolean()) },
     handler: async (ctx, args) => {
         const slug = args.slug.trim()
         const normalizedSlug = slug.toLowerCase()
         if (!slug) return null
 
         const users = await ctx.db.query("users").collect()
+        const visibleUsers = args.includeHidden ? users : users.filter(isVisibleClassMember)
         return (
-            users.find((user) => user.username?.toLowerCase() === normalizedSlug) ||
-            users.find((user) => String(user._id) === slug) ||
+            visibleUsers.find((user) => user.username?.toLowerCase() === normalizedSlug) ||
+            visibleUsers.find((user) => String(user._id) === slug) ||
             null
         )
     },
@@ -721,6 +742,7 @@ export const simpleLogin = mutation({
             userId: user._id,
             email: user.email,
             role: user.role,
+            sessionToken: await createAuthSession(ctx, user._id),
         }
     },
 })
@@ -729,6 +751,7 @@ export const simpleLogin = mutation({
 export const count = query({
     args: {
         organization: v.optional(v.union(v.literal("pku"), v.literal("thu"))),
+        classMembersOnly: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
         let usersQuery = ctx.db.query("users")
@@ -738,13 +761,14 @@ export const count = query({
         }
 
         const users = await usersQuery.collect()
+        if (args.classMembersOnly) return users.filter(isVisibleClassMember).length
         return users.length
     },
 })
 
 // Search users by name
 export const search = query({
-    args: { query: v.string() },
+    args: { query: v.string(), classMembersOnly: v.optional(v.boolean()) },
     handler: async (ctx, args) => {
         const keyword = args.query.trim()
 
@@ -753,7 +777,8 @@ export const search = query({
         // collect a reasonable subset and filter in JS here. This is acceptable
         // for small datasets; consider adding a searchIndex for production scale.
         const allUsers = await ctx.db.query("users").collect()
-        const users = allUsers
+        const visibleUsers = args.classMembersOnly ? allUsers.filter(isVisibleClassMember) : allUsers
+        const users = visibleUsers
             .filter((u) => {
                 const name = (u.englishName || "").toString()
                 const uname = (u.username || "").toString()

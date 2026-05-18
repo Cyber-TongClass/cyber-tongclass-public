@@ -11,12 +11,13 @@ export function AppShell({
 }) {
   const pathname = usePathname()
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/")
+  const isTechDayRoute = pathname === "/techday" || pathname.startsWith("/techday/")
 
   return (
     <div className="min-h-screen flex flex-col">
-      {!isAdminRoute && <Navbar />}
+      {!isAdminRoute && !isTechDayRoute && <Navbar />}
       <main className="flex-1">{children}</main>
-      {!isAdminRoute && <Footer />}
+      {!isAdminRoute && !isTechDayRoute && <Footer />}
     </div>
   )
 }

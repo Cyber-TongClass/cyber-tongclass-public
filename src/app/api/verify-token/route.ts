@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { api } from "@/../convex/_generated/api"
+import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { normalizeEmail, sha256Hex, signEmailVerificationProof, signPasswordResetProof } from "@/lib/server/verification"
 
 type Purpose = "email_verification" | "password_reset"
 const PURPOSE_SET = new Set<Purpose>(["email_verification", "password_reset"])
+const consumeVerificationRef = makeFunctionReference<"mutation">("emailVerifications:consume")
+const markEmailVerifiedRef = makeFunctionReference<"mutation">("users:markEmailVerified")
+const getUserByEmailRef = makeFunctionReference<"query">("users:getByEmail")
 
 export async function POST(request: NextRequest) {
     try {
@@ -20,7 +23,7 @@ export async function POST(request: NextRequest) {
 
         const client = getConvexHttpClient()
 
-        const consume = await client.mutation(api.emailVerifications.consume, {
+        const consume = await client.mutation(consumeVerificationRef, {
             purpose,
             tokenHash: token ? sha256Hex(token) : undefined,
             codeHash: code ? sha256Hex(code) : undefined,
@@ -34,7 +37,7 @@ export async function POST(request: NextRequest) {
 
         if (purpose === "email_verification") {
             if (consume.userId) {
-                await client.mutation(api.users.markEmailVerified, { userId: consume.userId } as any)
+                await client.mutation(markEmailVerifiedRef, { userId: consume.userId } as any)
             }
 
             return NextResponse.json({
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest) {
 
         let targetUserId = consume.userId as string | undefined
         if (!targetUserId && consume.sentTo) {
-            const user = await client.query(api.users.getByEmail, { email: consume.sentTo } as any)
+            const user = await client.query(getUserByEmailRef, { email: consume.sentTo } as any)
             targetUserId = user?._id
         }
 

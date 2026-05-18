@@ -29,7 +29,7 @@ function SearchContent() {
 
   // Fetch data from Convex
   const newsData = useNews({})
-  const usersData = useUsers({})
+  const usersData = useUsers({ classMembersOnly: true })
   const publicationsData = usePublications({})
   const eventsData = useEvents({})
   const coursesData = useCourses({})

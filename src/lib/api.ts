@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useMemo, useSyncExternalStore } from "react"
 import { useQuery, useMutation } from "convex/react"
+import { makeFunctionReference } from "convex/server"
 import { api } from "../../convex/_generated/api"
 import type { UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
@@ -33,22 +34,90 @@ const toIdArg = (input: IdLike) => {
   return { id: input as any }
 }
 
+const techdayApi = api as any
+const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
+const currentUserRoleRef = makeFunctionReference<"query">("auth:currentUserRole")
+const isAdminRef = makeFunctionReference<"query">("auth:isAdmin")
+const isSuperAdminRef = makeFunctionReference<"query">("auth:isSuperAdmin")
+const TECHDAY_AUTH_STORAGE_EVENT = "techday-auth-storage"
+const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
+
+export type TechDayActorArgs = {
+  mainSessionToken?: string
+  techDaySessionToken?: string
+}
+
+export function getTechDayStoredActorArgs(): TechDayActorArgs {
+  if (typeof window === "undefined") return {}
+  return {
+    mainSessionToken: window.localStorage.getItem("tongclass_session_token") || undefined,
+    techDaySessionToken: window.localStorage.getItem("techday_session_token") || undefined,
+  }
+}
+
+export function getTongClassStoredSessionToken() {
+  if (typeof window === "undefined") return null
+  return window.localStorage.getItem("tongclass_session_token")
+}
+
+export function useTongClassSessionToken() {
+  return useSyncExternalStore(subscribeTechDayActorArgs, () => getTongClassStoredSessionToken() || "", () => "")
+}
+
+function getTechDayActorSnapshot() {
+  const args = getTechDayStoredActorArgs()
+  return JSON.stringify([
+    args.mainSessionToken || "",
+    args.techDaySessionToken || "",
+  ])
+}
+
+function subscribeTechDayActorArgs(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {}
+
+  window.addEventListener("storage", onStoreChange)
+  window.addEventListener(TECHDAY_AUTH_STORAGE_EVENT, onStoreChange)
+  window.addEventListener(TONGCLASS_AUTH_STORAGE_EVENT, onStoreChange)
+  return () => {
+    window.removeEventListener("storage", onStoreChange)
+    window.removeEventListener(TECHDAY_AUTH_STORAGE_EVENT, onStoreChange)
+    window.removeEventListener(TONGCLASS_AUTH_STORAGE_EVENT, onStoreChange)
+  }
+}
+
+export function notifyTechDayActorStorageChanged() {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new Event(TECHDAY_AUTH_STORAGE_EVENT))
+}
+
+export function useTechDayActorArgs() {
+  const snapshot = useSyncExternalStore(subscribeTechDayActorArgs, getTechDayActorSnapshot, () => "[\"\",\"\"]")
+
+  return useMemo(() => {
+    const [mainSessionToken, techDaySessionToken] = JSON.parse(snapshot) as [string, string]
+    return {
+      mainSessionToken: mainSessionToken || undefined,
+      techDaySessionToken: techDaySessionToken || undefined,
+    }
+  }, [snapshot])
+}
+
 // ==================== 认证相关 ====================
 
 export function useCurrentUser() {
-  return useQuery(api.auth.currentUser)
+  return useQuery(currentUserRef)
 }
 
 export function useCurrentUserRole() {
-  return useQuery(api.auth.currentUserRole)
+  return useQuery(currentUserRoleRef)
 }
 
 export function useIsAdmin() {
-  return useQuery(api.auth.isAdmin)
+  return useQuery(isAdminRef)
 }
 
 export function useIsSuperAdmin() {
-  return useQuery(api.auth.isSuperAdmin)
+  return useQuery(isSuperAdminRef)
 }
 
 type SignUpInput = {
@@ -134,7 +203,7 @@ export function useSignIn() {
 
 // ==================== 用户相关 ====================
 
-export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number; limit?: number }) {
+export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number; limit?: number; classMembersOnly?: boolean }) {
   return useQuery(api.users.list, args || {})
 }
 
@@ -143,7 +212,7 @@ export function useUserById(id?: string | null) {
 }
 
 export function useUserByProfileSlug(slug?: string | null) {
-  const users = useUsers({ limit: 1000 })
+  const users = useUsers({ limit: 1000, classMembersOnly: true })
   const normalizedSlug = slug?.trim().toLowerCase()
 
   if (!slug) return null
@@ -185,7 +254,7 @@ export function useSimpleLogin() {
   return useMutation(api.users.simpleLogin)
 }
 
-export function useUsersCount(args?: { organization?: "pku" | "thu" }) {
+export function useUsersCount(args?: { organization?: "pku" | "thu"; classMembersOnly?: boolean }) {
   return useQuery(api.users.count, args || {})
 }
 
@@ -223,67 +292,104 @@ export function useNewsCount(args?: { category?: string }) {
 // ==================== 内网相关 ====================
 
 export function useTreeholePosts(args?: { search?: string }) {
-  return useQuery(api.treehole.list, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.treehole.list, sessionToken ? ({ sessionToken, ...(args || {}) } as any) : "skip")
 }
 
 export function useTreeholePostById(id?: string | null) {
-  return useQuery(api.treehole.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.treehole.getById, id && sessionToken ? ({ sessionToken, id: id as any } as any) : "skip")
 }
 
 export function useAdminTreeholePosts(args?: { actorId?: string | null; search?: string }) {
+  const sessionToken = useTongClassSessionToken()
   return useQuery(
     api.treehole.listAdmin,
-    args?.actorId ? ({ actorId: args.actorId as any, search: args.search } as any) : "skip"
+    sessionToken ? ({ sessionToken, actorId: args?.actorId as any, search: args?.search } as any) : "skip"
   )
 }
 
 export function useAdminTreeholePostById(id?: string | null, actorId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
   return useQuery(
     api.treehole.getByIdAdmin,
-    id && actorId ? ({ id: id as any, actorId: actorId as any } as any) : "skip"
+    id && sessionToken ? ({ sessionToken, id: id as any, actorId: actorId as any } as any) : "skip"
   )
 }
 
 export function useCreateTreeholePost() {
-  return useMutation(api.treehole.createPost)
+  const create = useMutation(api.treehole.createPost)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useCreateTreeholeReply() {
-  return useMutation(api.treehole.createReply)
+  const create = useMutation(api.treehole.createReply)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useDeleteTreeholePost() {
-  return useMutation(api.treehole.removePost)
+  const remove = useMutation(api.treehole.removePost)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...args, sessionToken } as any)
+  }, [remove])
 }
 
 export function useDeleteTreeholeReply() {
-  return useMutation(api.treehole.removeReply)
+  const remove = useMutation(api.treehole.removeReply)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...args, sessionToken } as any)
+  }, [remove])
 }
 
 export function useFeedbackEntries() {
-  return useQuery(api.feedback.list)
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.feedback.list, sessionToken ? { sessionToken } : "skip")
 }
 
 export function useAdminFeedbackEntries(args?: { actorId?: string | null; search?: string }) {
+  const sessionToken = useTongClassSessionToken()
   return useQuery(
     api.feedback.listAdmin,
-    args?.actorId ? ({ actorId: args.actorId as any, search: args.search } as any) : "skip"
+    sessionToken ? ({ sessionToken, actorId: args?.actorId as any, search: args?.search } as any) : "skip"
   )
 }
 
 export function useMonthlyFeedbackExport(month?: string | null, actorId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
   return useQuery(
     api.feedback.exportMonthlyForAdmin,
-    month && actorId ? ({ month, actorId: actorId as any } as any) : "skip"
+    month && sessionToken ? ({ sessionToken, month, actorId: actorId as any } as any) : "skip"
   )
 }
 
 export function useCreateFeedbackEntry() {
-  return useMutation(api.feedback.create)
+  const create = useMutation(api.feedback.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useDeleteFeedbackEntry() {
-  return useMutation(api.feedback.remove)
+  const remove = useMutation(api.feedback.remove)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...args, sessionToken } as any)
+  }, [remove])
 }
 
 // ==================== 活动相关 ====================
@@ -453,4 +559,319 @@ export function useCommonReviewTags() {
 
 export function useGetUserByEmail(email: string) {
   return useQuery(api.auth.getUserByEmail, email ? { email } : "skip")
+}
+
+// ==================== TechDay 相关 ====================
+
+export function useTechDayCurrentPrincipal(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.auth.me, args || {})
+}
+
+export function useSyncInternalTechDayUser() {
+  return useMutation(techdayApi.techday.auth.syncInternalUser)
+}
+
+export function useTechDayInternalVolunteerApplication(args?: TechDayActorArgs | null) {
+  return useQuery(techdayApi.techday.auth.getInternalVolunteerApplication, args === null ? "skip" : args || {})
+}
+
+export function useApplyInternalTechDayVolunteer() {
+  return useMutation(techdayApi.techday.auth.applyInternalVolunteer)
+}
+
+export function useTechDayLogin() {
+  return useMutation(techdayApi.techday.auth.login)
+}
+
+export function useTechDayLogout() {
+  return useMutation(techdayApi.techday.auth.logout)
+}
+
+export function useRegisterTechDayAuthor() {
+  return useMutation(techdayApi.techday.auth.registerAuthor)
+}
+
+export function useRegisterTechDayVolunteer() {
+  return useMutation(techdayApi.techday.auth.registerVolunteer)
+}
+
+export function useGetTechDayReviewerInvite(code?: string | null) {
+  return useQuery(techdayApi.techday.auth.getReviewerInvite, code ? { code } : "skip")
+}
+
+export function useRegisterTechDayReviewer() {
+  return useMutation(techdayApi.techday.auth.registerReviewer)
+}
+
+export function useChangeTechDayPassword() {
+  return useMutation(techdayApi.techday.auth.changePassword)
+}
+
+export function useTechDayOrganizations() {
+  return useQuery(techdayApi.techday.directories.listOrganizations, {})
+}
+
+export function useTechDayDirections() {
+  return useQuery(techdayApi.techday.directories.listDirections, {})
+}
+
+export function useTechDayRoleTemplates(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.directories.listRoleTemplates, args || {})
+}
+
+export function useCreateTechDayOrganization() {
+  return useMutation(techdayApi.techday.directories.createOrganization)
+}
+
+export function useUpdateTechDayOrganization() {
+  return useMutation(techdayApi.techday.directories.updateOrganization)
+}
+
+export function useDeleteTechDayOrganization() {
+  return useMutation(techdayApi.techday.directories.deleteOrganization)
+}
+
+export function useCreateTechDayDirection() {
+  return useMutation(techdayApi.techday.directories.createDirection)
+}
+
+export function useUpdateTechDayDirection() {
+  return useMutation(techdayApi.techday.directories.updateDirection)
+}
+
+export function useDeleteTechDayDirection() {
+  return useMutation(techdayApi.techday.directories.deleteDirection)
+}
+
+export function useCreateTechDayRoleTemplate() {
+  return useMutation(techdayApi.techday.directories.createRoleTemplate)
+}
+
+export function useUpdateTechDayRoleTemplate() {
+  return useMutation(techdayApi.techday.directories.updateRoleTemplate)
+}
+
+export function useDeleteTechDayRoleTemplate() {
+  return useMutation(techdayApi.techday.directories.deleteRoleTemplate)
+}
+
+export function useTechDaySettings(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.directories.getSettings, args || {})
+}
+
+export function useUpdateTechDaySettings() {
+  return useMutation(techdayApi.techday.directories.updateSettings)
+}
+
+export function useTechDayPublicSubmissions(args?: {
+  track?: "poster" | "demo"
+  directionId?: string
+  year?: number
+  sort?: "voteInnovation" | "voteImpact" | "voteFeasibility"
+}) {
+  return useQuery(techdayApi.techday.submissions.listPublic, (args || {}) as any)
+}
+
+export function useTechDaySubmissionById(id?: string | null, args?: TechDayActorArgs) {
+  return useQuery(
+    techdayApi.techday.submissions.getById,
+    id ? ({ ...(args || {}), id: id as any } as any) : "skip"
+  )
+}
+
+export function useMyTechDaySubmissions(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.submissions.listMine, args || {})
+}
+
+export function useCreateTechDaySubmission() {
+  return useMutation(techdayApi.techday.submissions.create)
+}
+
+export function useUpdateTechDaySubmission() {
+  return useMutation(techdayApi.techday.submissions.updateMine)
+}
+
+export function useDeleteTechDaySubmission() {
+  return useMutation(techdayApi.techday.submissions.removeMine)
+}
+
+export function useAdminTechDaySubmissions(args?: TechDayActorArgs & {
+  track?: "poster" | "demo"
+  reviewStatus?: "pending" | "approved" | "rejected"
+  year?: number
+}) {
+  return useQuery(techdayApi.techday.submissions.listAdmin, (args || {}) as any)
+}
+
+export function useExportTechDaySubmissions(args?: (TechDayActorArgs & {
+  track?: "poster" | "demo"
+  directionId?: string
+  year?: number
+}) | null) {
+  return useQuery(techdayApi.techday.submissions.exportRows, args === null ? "skip" : (args || {}) as any)
+}
+
+export function useAdminUpdateTechDaySubmission() {
+  return useMutation(techdayApi.techday.submissions.adminUpdate)
+}
+
+export function useAdminDeleteTechDaySubmission() {
+  return useMutation(techdayApi.techday.submissions.adminDelete)
+}
+
+export function useRenumberTechDaySubmissions() {
+  return useMutation(techdayApi.techday.submissions.renumber)
+}
+
+export function useUpdateTechDayVotes() {
+  return useMutation(techdayApi.techday.submissions.updateVotes)
+}
+
+export function useTechDayReimbursements(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.reimbursements.list, args || {})
+}
+
+export function useExportTechDayReimbursements(args?: TechDayActorArgs | null) {
+  return useQuery(techdayApi.techday.reimbursements.exportRows, args === null ? "skip" : args || {})
+}
+
+export function useCreateTechDayReimbursement() {
+  return useMutation(techdayApi.techday.reimbursements.create)
+}
+
+export function useUpdateTechDayReimbursement() {
+  return useMutation(techdayApi.techday.reimbursements.update)
+}
+
+export function useDeleteTechDayReimbursement() {
+  return useMutation(techdayApi.techday.reimbursements.remove)
+}
+
+export function useReviewTechDayReimbursement() {
+  return useMutation(techdayApi.techday.reimbursements.review)
+}
+
+export function useTechDayAwards(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.awards.listAwards, args || {})
+}
+
+export function useCreateTechDayAward() {
+  return useMutation(techdayApi.techday.awards.createAward)
+}
+
+export function useUpdateTechDayAward() {
+  return useMutation(techdayApi.techday.awards.updateAward)
+}
+
+export function useDeleteTechDayAward() {
+  return useMutation(techdayApi.techday.awards.deleteAward)
+}
+
+export function useTechDayAwardSubmissions(args?: TechDayActorArgs & {
+  directionIds?: string[]
+  status?: string[]
+  sortBy?: "sequence" | "id"
+  sortOrder?: "asc" | "desc"
+  track?: "poster" | "demo"
+  year?: number
+}) {
+  return useQuery(techdayApi.techday.awards.listAwardSubmissions, (args || {}) as any)
+}
+
+export function useUpsertTechDayRecommendation() {
+  return useMutation(techdayApi.techday.awards.upsertRecommendation)
+}
+
+export function useDeleteTechDayRecommendation() {
+  return useMutation(techdayApi.techday.awards.deleteRecommendation)
+}
+
+export function useAssignTechDayAwards() {
+  return useMutation(techdayApi.techday.awards.assignAwards)
+}
+
+export function useTechDayPosts(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.posts.listPublished, args || {})
+}
+
+export function useTechDayPostBySlug(slug?: string | null, args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.posts.getBySlug, slug ? ({ ...(args || {}), slug } as any) : "skip")
+}
+
+export function useManageTechDayPosts(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.posts.listManage, args || {})
+}
+
+export function useExportTechDayPosts(args?: TechDayActorArgs | null) {
+  return useQuery(techdayApi.techday.posts.exportRows, args === null ? "skip" : args || {})
+}
+
+export function useCreateTechDayPost() {
+  return useMutation(techdayApi.techday.posts.create)
+}
+
+export function useUpdateTechDayPost() {
+  return useMutation(techdayApi.techday.posts.update)
+}
+
+export function useDeleteTechDayPost() {
+  return useMutation(techdayApi.techday.posts.remove)
+}
+
+export function usePublishTechDayPost() {
+  return useMutation(techdayApi.techday.posts.publish)
+}
+
+export function useGenerateTechDayUploadUrl() {
+  return useMutation(techdayApi.techday.files.generateUploadUrl)
+}
+
+export function useFinalizeTechDayPoster() {
+  return useMutation(techdayApi.techday.files.finalizePoster)
+}
+
+export function useTechDayPosterUrl(submissionId?: string | null, args?: TechDayActorArgs) {
+  return useQuery(
+    techdayApi.techday.files.getPosterUrl,
+    submissionId ? ({ ...(args || {}), submissionId: submissionId as any } as any) : "skip"
+  )
+}
+
+export function useFinalizeTechDayReimbursementAttachment() {
+  return useMutation(techdayApi.techday.files.finalizeReimbursementAttachment)
+}
+
+export function useTechDayReimbursementAttachmentUrl(reimbursementId?: string | null, args?: TechDayActorArgs) {
+  return useQuery(
+    techdayApi.techday.files.getReimbursementAttachmentUrl,
+    reimbursementId ? ({ ...(args || {}), reimbursementId: reimbursementId as any } as any) : "skip"
+  )
+}
+
+export function useAdminTechDayUsers(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.admin.listUsers, args || {})
+}
+
+export function useExportTechDayUsers(args?: TechDayActorArgs | null) {
+  return useQuery(techdayApi.techday.admin.exportUsers, args === null ? "skip" : args || {})
+}
+
+export function useUpdateTechDayUser() {
+  return useMutation(techdayApi.techday.admin.updateUser)
+}
+
+export function useDeleteTechDayUser() {
+  return useMutation(techdayApi.techday.admin.deleteUser)
+}
+
+export function useTechDayReviewerInvites(args?: TechDayActorArgs) {
+  return useQuery(techdayApi.techday.admin.listReviewerInvites, args || {})
+}
+
+export function useCreateTechDayReviewerInvite() {
+  return useMutation(techdayApi.techday.admin.createReviewerInvite)
+}
+
+export function useDeleteTechDayReviewerInvite() {
+  return useMutation(techdayApi.techday.admin.deleteReviewerInvite)
 }

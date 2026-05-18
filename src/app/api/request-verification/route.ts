@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { api } from "@/../convex/_generated/api"
+import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { sendVerificationEmail } from "@/lib/server/mailer"
 import { generateVerificationCode, generateVerificationToken, normalizeEmail, sha256Hex } from "@/lib/server/verification"
@@ -30,6 +30,10 @@ const COOLDOWN_MS = 60_000
 const WINDOW_MS = 60 * 60_000
 const MAX_EMAIL_PER_WINDOW = 5
 const MAX_IP_PER_WINDOW = 20
+const getRecentStatsRef = makeFunctionReference<"query">("emailVerifications:getRecentStats")
+const getUserByEmailRef = makeFunctionReference<"query">("users:getByEmail")
+const createEmailVerificationRef = makeFunctionReference<"mutation">("emailVerifications:create")
+const touchVerificationRequestRef = makeFunctionReference<"mutation">("users:touchVerificationRequest")
 
 export async function POST(request: NextRequest) {
     try {
@@ -46,7 +50,7 @@ export async function POST(request: NextRequest) {
         const userAgent = request.headers.get("user-agent") || ""
         const client = getConvexHttpClient()
 
-        const stats = await client.query(api.emailVerifications.getRecentStats, {
+        const stats = await client.query(getRecentStatsRef, {
             email,
             ip,
             withinMs: WINDOW_MS,
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const maybeUser = await client.query(api.users.getByEmail, { email } as any)
+        const maybeUser = await client.query(getUserByEmailRef, { email } as any)
         if (purpose === "email_verification" && maybeUser?.isEmailVerified) {
             return NextResponse.json({ ok: true, message: "Email is already verified." })
         }
@@ -100,7 +104,7 @@ export async function POST(request: NextRequest) {
             ? Number(process.env.EMAIL_TOKEN_EXPIRY_MIN || 15)
             : Number(process.env.EMAIL_VERIFY_EXPIRY_MIN || 30)
 
-        await client.mutation(api.emailVerifications.create, {
+        await client.mutation(createEmailVerificationRef, {
             tokenHash,
             codeHash,
             purpose,
@@ -112,7 +116,7 @@ export async function POST(request: NextRequest) {
         } as any)
 
         if (maybeUser?._id) {
-            await client.mutation(api.users.touchVerificationRequest, { userId: maybeUser._id } as any)
+            await client.mutation(touchVerificationRequestRef, { userId: maybeUser._id } as any)
         }
 
         const siteUrl = getSiteUrl()

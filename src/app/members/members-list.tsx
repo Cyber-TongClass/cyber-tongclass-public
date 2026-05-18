@@ -31,7 +31,7 @@ export function MembersList() {
   const [selectedCohort, setSelectedCohort] = useState<string>("all")
 
   // Fetch users from Convex
-  const usersData = useUsers({ limit: 1000 })
+  const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const users = usersData || []
 
   // Filter users by role (member, admin, super_admin)
