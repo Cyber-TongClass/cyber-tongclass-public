@@ -77,7 +77,7 @@ export default function CourseDirectoryPage() {
   const filteredCourses = courses
     .filter((course) => course.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
-      const desc = sortOrder === "desc" ? -1 : 1
+      const desc = sortOrder === "desc" ? 1 : -1
       if (sortBy === "rating") {
         if (b.averageRating !== a.averageRating) return (b.averageRating - a.averageRating) * desc
         return a.createdAt - b.createdAt

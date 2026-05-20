@@ -52,7 +52,14 @@ export default function HomePage() {
   return (
     <div className="flex flex-col">
       <section className="relative w-full h-[360px] md:h-[480px] overflow-hidden border-b border-slate-200 bg-slate-950">
-        {featuredSlides.length === 0 ? (
+        {!newsItems ? (
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center">
+            <div className="text-center text-white/60">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80 mb-3" />
+              <p className="text-sm">加载中...</p>
+            </div>
+          </div>
+        ) : featuredSlides.length === 0 ? (
           <div className="absolute inset-0">
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800" />
             <div className="container-custom relative h-full flex items-center">
@@ -291,7 +298,7 @@ export default function HomePage() {
                     <Link key={pub._id} href={`/publications/${pub._id}`}>
                       <div className="group bg-white px-4 py-3 shadow-sm hover:bg-slate-50 transition-colors duration-200">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-bold uppercase text-white bg-primary px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-bold uppercase text-primary">
                             {pub.venue}
                           </span>
                           <span className="text-xs text-slate-400">{pub.year}</span>
