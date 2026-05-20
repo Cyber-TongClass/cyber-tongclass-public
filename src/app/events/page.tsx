@@ -108,15 +108,21 @@ export default function EventsPage() {
     return result
   }, [events, searchQuery, selectedType])
 
+  // List view: only show future events (today and after)
+  const futureEvents = React.useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+    return filteredEvents.filter((event) => event.date >= today)
+  }, [filteredEvents])
+
   const groupedEvents = React.useMemo(() => {
     const groups: Record<string, Event[]> = {}
-    filteredEvents.forEach((event) => {
+    futureEvents.forEach((event) => {
       const key = event.date.substring(0, 7)
       if (!groups[key]) groups[key] = []
       groups[key].push(event)
     })
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [filteredEvents])
+  }, [futureEvents])
 
   const eventsByDate = React.useMemo(() => {
     const map = new Map<string, Event[]>()
@@ -219,14 +225,14 @@ export default function EventsPage() {
             </div>
           </div>
 
-          <div className="mt-4 text-sm text-slate-600">共 {filteredEvents.length} 个活动</div>
+          <div className="mt-4 text-sm text-slate-600">共 {futureEvents.length} 个近期活动</div>
         </div>
       </section>
 
       <section className="bg-[hsl(211,30%,97%)] py-16 md:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {viewMode === "list" ? (
-          filteredEvents.length === 0 ? (
+          futureEvents.length === 0 ? (
             <div className="text-center py-16">
               <CalendarDays className="h-12 w-12 text-slate-400 mx-auto mb-4" />
               <h3 className="text-lg font-extrabold text-slate-900 mb-2">未找到相关活动</h3>

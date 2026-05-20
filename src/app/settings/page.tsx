@@ -495,7 +495,7 @@ export default function SettingsPage() {
               <Label htmlFor="currentPassword">Current Password</Label>
               <Input
                 id="currentPassword"
-                type="text"
+                type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
               />
@@ -504,7 +504,7 @@ export default function SettingsPage() {
               <Label htmlFor="newPassword">New Password</Label>
               <Input
                 id="newPassword"
-                type="text"
+                type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
@@ -513,7 +513,7 @@ export default function SettingsPage() {
               <Label htmlFor="confirmPassword">Confirm New Password</Label>
               <Input
                 id="confirmPassword"
-                type="text"
+                type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />

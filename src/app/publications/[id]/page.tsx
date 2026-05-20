@@ -3,9 +3,8 @@
 import * as React from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ArrowLeft, ExternalLink, User, Calendar, BookOpen, FileText, Share2 } from "lucide-react"
+import { ArrowLeft, ExternalLink, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { usePublicationById } from "@/lib/api"
 import type { Publication } from "@/types"
 
@@ -89,76 +88,63 @@ export default function PublicationDetailPage() {
           </div>
         </div>
       )}
-      <div className="container-custom py-16 md:py-24">
-        <Button variant="ghost" asChild className="mb-6 -ml-3 gap-2">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
+        <Button variant="ghost" asChild className="mb-8 -ml-3 gap-2">
           <Link href="/publications">
             <ArrowLeft className="h-4 w-4" />
             返回成果列表
           </Link>
         </Button>
 
-        <article className="max-w-4xl mx-auto">
-          <header className="mb-8">
+        <article>
+          <header className="mb-10">
             <div className="flex items-center gap-2 mb-4">
-              <span className="px-3 py-1 text-sm font-medium rounded-full bg-[hsl(211,40%,97%)] text-primary border border-primary/10">
+              <span className="text-xs font-bold uppercase tracking-wider text-[hsl(211,60%,35%)]">
                 {publication.category}
               </span>
               {publication.subCategory && (
-                <span className="px-3 py-1 text-sm font-medium rounded-full bg-slate-100 text-slate-600">
-                  {publication.subCategory}
-                </span>
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-xs text-slate-500">
+                    {publication.subCategory}
+                  </span>
+                </>
               )}
             </div>
 
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-slate-900 mb-6">{publication.title}</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight mb-5">{publication.title}</h1>
 
-            <div className="flex items-start gap-2 mb-4">
-              <User className="h-5 w-5 text-slate-600 mt-0.5" />
-              <div className="text-lg text-slate-900">
-                <AuthorsList authors={publication.authors} />
-              </div>
-            </div>
+            <p className="text-base text-slate-600 mb-4">
+              <AuthorsList authors={publication.authors} />
+            </p>
 
-            <div className="flex flex-wrap items-center gap-4 text-slate-600 pb-6 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                <span className="font-medium text-primary">{publication.venue}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                <span>{publication.year}</span>
-              </div>
-
-              <div className="flex items-center gap-2 ml-auto">
-                {publication.url && (
-                  <Button asChild>
-                    <a href={publication.url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      查看原文
-                    </a>
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" className="gap-1.5" onClick={handleShare}>
-                  <Share2 className="h-4 w-4" />
-                  分享
-                </Button>
-              </div>
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <span className="font-bold text-primary">{publication.venue}</span>
+              <span className="text-slate-400">{publication.year}</span>
             </div>
           </header>
 
-          <Card className="border-0 shadow-sm mb-8">
-            <CardHeader>
-              <CardTitle className="text-xl flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Abstract
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-slate-600 leading-relaxed">{publication.abstract}</p>
-            </CardContent>
-          </Card>
+          <div className="flex flex-wrap gap-2 mb-10">
+            {publication.url && (
+              <Button asChild size="sm">
+                <a href={publication.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4 mr-1.5" />
+                  查看原文
+                </a>
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleShare}>
+              <Share2 className="h-4 w-4" />
+              分享
+            </Button>
+          </div>
 
-          <div className="mt-8 flex justify-between">
+          <div className="border-t border-slate-200 pt-8">
+            <h2 className="text-sm font-extrabold uppercase tracking-widest text-slate-400 mb-4">Abstract</h2>
+            <div className="text-slate-700 leading-relaxed">{publication.abstract}</div>
+          </div>
+
+          <div className="mt-12">
             <Button variant="outline" asChild>
               <Link href="/publications">
                 <ArrowLeft className="h-4 w-4 mr-2" />

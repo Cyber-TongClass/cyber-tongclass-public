@@ -20,7 +20,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
@@ -175,9 +174,9 @@ export default function MyPublicationsPage() {
                       <TableCell className="font-medium max-w-[320px] truncate">{publication.title}</TableCell>
                       <TableCell className="max-w-[260px] truncate text-gray-600">{publication.authors.join(", ")}</TableCell>
                       <TableCell>
-                        <Badge className="bg-slate-100 text-slate-800">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[hsl(211,60%,35%)]">
                           {categoryLabelMap.get(publication.category) || publication.category}
-                        </Badge>
+                        </span>
                       </TableCell>
                       <TableCell className="text-gray-600">{publication.venue}</TableCell>
                       <TableCell>{publication.year}</TableCell>

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { 
   GraduationCap, 
   Users, 
@@ -300,30 +301,32 @@ export default function AboutPage() {
             <div className="max-w-4xl">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">周边产品</h2>
               <p className="text-slate-500 mb-8">
-                通班周边产品正在设计中，敬请期待！如有好的建议，欢迎联系我们。
+                通班文创持续更新中，由宣传部设计制作，已陆续推出多种周边产品。如有好的建议，欢迎联系我们。
               </p>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300 text-center">
-                  <div className="w-16 h-16 bg-slate-50 flex items-center justify-center mx-auto mb-4 group-hover:bg-primary/10 transition-colors">
-                    <Award className="h-8 w-8 text-primary/60" />
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[
+                  { name: "文化衫", src: "/wenchuang/IMG_1255.JPG" },
+                  { name: "帆布袋", src: "/wenchuang/IMG_1257.JPG" },
+                  { name: "马克杯", src: "/wenchuang/IMG_1258.JPG" },
+                  { name: "棒球帽", src: "/wenchuang/IMG_1075.JPG" },
+                  { name: "卡套", src: "/wenchuang/IMG_1077.JPG" },
+                  { name: "徽章", src: "/wenchuang/IMG_0048.JPG" },
+                ].map((item) => (
+                  <div key={item.name} className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
+                    <div className="aspect-square bg-slate-100 relative">
+                      <Image
+                        src={item.src}
+                        alt={item.name}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        sizes="(max-width: 640px) 50vw, 33vw"
+                      />
+                    </div>
+                    <div className="px-4 py-3 text-center">
+                      <h4 className="font-extrabold text-slate-900">{item.name}</h4>
+                    </div>
                   </div>
-                  <h4 className="font-extrabold text-slate-900">文化衫</h4>
-                  <p className="text-sm text-slate-400 mt-1">即将上线</p>
-                </div>
-                <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300 text-center">
-                  <div className="w-16 h-16 bg-slate-50 flex items-center justify-center mx-auto mb-4 group-hover:bg-primary/10 transition-colors">
-                    <GraduationCap className="h-8 w-8 text-primary/60" />
-                  </div>
-                  <h4 className="font-extrabold text-slate-900">学位服</h4>
-                  <p className="text-sm text-slate-400 mt-1">即将上线</p>
-                </div>
-                <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300 text-center">
-                  <div className="w-16 h-16 bg-slate-50 flex items-center justify-center mx-auto mb-4 group-hover:bg-primary/10 transition-colors">
-                    <BookOpen className="h-8 w-8 text-primary/60" />
-                  </div>
-                  <h4 className="font-extrabold text-slate-900">笔记本</h4>
-                  <p className="text-sm text-slate-400 mt-1">即将上线</p>
-                </div>
+                ))}
               </div>
             </div>
           </TabsContent>

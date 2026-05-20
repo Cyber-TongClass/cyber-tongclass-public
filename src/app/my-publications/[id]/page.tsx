@@ -349,11 +349,12 @@ export default function MyPublicationEditorPage() {
                   <Label htmlFor="venue">会议/期刊</Label>
                   <Input
                     id="venue"
-                    placeholder="会议/期刊简称 (全称) , 例如: ICML (International Conference on Machine Learning)"
+                    placeholder="简称 (全称)，如 ICML (International Conference on Machine Learning)"
                     value={formData.venue}
                     onChange={(event) => setFormData((previous) => ({ ...previous, venue: event.target.value }))}
                     required
                   />
+                  <p className="text-[11px] text-slate-400">请统一使用英文括号 <code>()</code>，为兼容老数据已有中文括号会自动替换。</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="year">年份</Label>

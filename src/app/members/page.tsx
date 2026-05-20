@@ -19,6 +19,20 @@ import { RESEARCH_DIRECTIONS, getResearchDirectionLabel } from "@/lib/research-d
 import type { User } from "@/types"
 import { compareCohorts, getCohortClassLabel, getCohortLabel, getYearCohortOptions, parseCohortValue } from "@/lib/cohort"
 
+// Group by cohort
+function groupByCohort(users: User[]): Array<{cohort: string|number, label: string, users: User[]}> {
+  const groups: Array<{cohort: string|number, label: string, users: User[]}> = []
+  for (const user of users) {
+    const last = groups[groups.length - 1]
+    if (last && last.cohort === user.cohort) {
+      last.users.push(user)
+    } else {
+      groups.push({ cohort: user.cohort, label: getCohortLabel(user.cohort), users: [user] })
+    }
+  }
+  return groups
+}
+
 // 排序函数：学校 → 年级（新→旧）→ 拼音
 function sortUsers(users: User[]) {
   const orgOrder = { pku: 0, thu: 1 }
@@ -228,8 +242,18 @@ export default function MembersPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredUsers.map((user) => (
+          <div className="space-y-10">
+            {groupByCohort(filteredUsers).map((group) => (
+              <div key={String(group.cohort)}>
+                <div className="text-6xl md:text-7xl font-extrabold text-slate-300 leading-none select-none mb-1">
+                  {typeof group.cohort === "number" ? group.cohort : "Mascot"}
+                </div>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <span className="text-xs text-slate-400 whitespace-nowrap">{group.users.length} 人</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {group.users.map((user) => (
               <Link key={user._id} href={`/members/${getProfileSlug(user)}`}>
                 <Card className="group h-full bg-white shadow-sm hover:bg-slate-50 border-l-[3px] border-transparent hover:border-primary transition-all duration-200 rounded-none border-0">
                   <CardContent className="p-6">
@@ -290,6 +314,9 @@ export default function MembersPage() {
                 </Card>
               </Link>
             ))}
+          </div>
+        </div>
+      ))}
           </div>
         )}
         </div>

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { BookOpen, Search, Star, MessageSquare, Plus, ChevronRight } from "lucide-react"
+import { BookOpen, Search, MessageSquare, Plus, ChevronRight, ArrowUpDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,6 +29,7 @@ export default function CourseDirectoryPage() {
   const { isAuthenticated, isLoading } = useAuth()
   const [searchQuery, setSearchQuery] = React.useState("")
   const [sortBy, setSortBy] = React.useState("rating")
+  const [sortOrder, setSortOrder] = React.useState<"desc"|"asc">("desc")
 
   // Fetch courses from Convex
   const coursesData = useCourses()
@@ -76,15 +77,16 @@ export default function CourseDirectoryPage() {
   const filteredCourses = courses
     .filter((course) => course.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
+      const desc = sortOrder === "desc" ? -1 : 1
       if (sortBy === "rating") {
-        if (b.averageRating !== a.averageRating) return b.averageRating - a.averageRating
+        if (b.averageRating !== a.averageRating) return (b.averageRating - a.averageRating) * desc
         return a.createdAt - b.createdAt
       }
       if (sortBy === "reviews") {
-        if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount
+        if (b.reviewCount !== a.reviewCount) return (b.reviewCount - a.reviewCount) * desc
         return a.createdAt - b.createdAt
       }
-      return a.name.localeCompare(b.name, "zh-CN")
+      return a.name.localeCompare(b.name, "zh-CN") * desc
     })
 
   const tongClassCourses = filteredCourses.filter((course) => course.isTongClassCourse)
@@ -98,7 +100,7 @@ export default function CourseDirectoryPage() {
           <div className="mb-4 relative">
             <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight">课程测评</h1>
           </div>
-          <p className="text-lg text-white/70 max-w-2xl relative relative">通班内部的课程测评系统，汇集了历年来同学们的课程评价与反馈。欢迎同学们积极分享自己的课程体验，提交测评或按要求创建课程，但请不要将此网页内的内部资源分享到公开渠道哦～</p>
+          <p className="text-lg text-white/70 max-w-2xl relative">通班内部的课程测评系统，汇集了历年来同学们的课程评价与反馈。欢迎同学们积极分享自己的课程体验，提交测评或按要求创建课程，但请不要将此网页内的内部资源分享到公开渠道哦～</p>
         </div>
       </section>
 
@@ -126,6 +128,10 @@ export default function CourseDirectoryPage() {
                 <SelectItem value="name">按名称</SelectItem>
               </SelectContent>
             </Select>
+
+            <Button variant="outline" size="icon" onClick={() => setSortOrder(o => o === "desc" ? "asc" : "desc")} title={sortOrder === "desc" ? "降序" : "升序"}>
+              <ArrowUpDown className="h-4 w-4" />
+            </Button>
 
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               {isAuthenticated ? (
@@ -236,29 +242,26 @@ export default function CourseDirectoryPage() {
 }
 
 function CourseListCard({ course }: { course: Course }) {
+  const r = course.averageRating ?? 0
+  const colorClass = r === 0 ? "bg-slate-300" : r >= 8 ? "bg-green-600" : r >= 6 ? "bg-amber-500" : "bg-red-500"
+
   return (
     <Link href={`/courses/${encodeURIComponent(course.name)}`} className="block h-full">
-      <Card className="group h-full border-slate-200/50 transition-shadow duration-300 hover:-translate-y-1 hover:shadow-md cursor-pointer">
-        <CardContent className="flex min-h-[188px] flex-col p-6">
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <h3 className="line-clamp-2 text-lg font-extrabold leading-7 text-slate-900 transition-colors group-hover:text-primary">
+      <Card className="group h-full border-0 shadow-sm hover:shadow-md transition-shadow duration-300 cursor-pointer">
+        <CardContent className="flex items-center gap-4 px-4 py-3">
+          <div className={`w-10 h-10 shrink-0 rounded flex items-center justify-center text-white font-extrabold text-lg ${colorClass}`}>
+            {r.toFixed(1)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-extrabold text-slate-900 line-clamp-2 leading-snug group-hover:text-primary transition-colors">
               {course.name}
             </h3>
-            <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-slate-600 transition-colors group-hover:text-primary" />
+            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+              <MessageSquare className="h-3 w-3" />
+              {course.reviewCount} 条评测
+            </p>
           </div>
-
-          <div className="mt-auto space-y-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-              <span className="font-medium text-slate-900">{course.averageRating.toFixed(1)}</span>
-              <span>综合评分</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <MessageSquare className="h-4 w-4" />
-              <span className="font-medium text-slate-900">{course.reviewCount}</span>
-              <span>条评测</span>
-            </div>
-          </div>
+          <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-primary transition-colors" />
         </CardContent>
       </Card>
     </Link>
