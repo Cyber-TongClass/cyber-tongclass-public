@@ -305,12 +305,12 @@ export default function AboutPage() {
               </p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {[
-                  { name: "文化衫", src: "/wenchuang/IMG_1255.JPG" },
-                  { name: "帆布袋", src: "/wenchuang/IMG_1257.JPG" },
-                  { name: "马克杯", src: "/wenchuang/IMG_1258.JPG" },
-                  { name: "棒球帽", src: "/wenchuang/IMG_1075.JPG" },
-                  { name: "卡套", src: "/wenchuang/IMG_1077.JPG" },
-                  { name: "徽章", src: "/wenchuang/IMG_0048.JPG" },
+                  { name: "文化衫", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1255.JPG" },
+                  { name: "帆布袋", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1257.JPG" },
+                  { name: "马克杯", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1258.JPG" },
+                  { name: "棒球帽", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1075.JPG" },
+                  { name: "卡套", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1077.JPG" },
+                  { name: "徽章", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_0048.JPG" },
                 ].map((item) => (
                   <div key={item.name} className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
                     <div className="aspect-square bg-slate-100 relative">
