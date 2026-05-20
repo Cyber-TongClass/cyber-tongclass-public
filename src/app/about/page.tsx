@@ -46,10 +46,11 @@ export default function AboutPage() {
           <TabsList className="flex w-full border-b border-slate-200 bg-transparent h-auto p-0">
             <TabsTrigger value="introduction" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">项目介绍</TabsTrigger>
             <TabsTrigger value="accounts" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">官方账号</TabsTrigger>
-            <TabsTrigger value="campus" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">校园生活</TabsTrigger>
             <TabsTrigger value="council" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">学生组织</TabsTrigger>
             <TabsTrigger value="merchandise" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">周边</TabsTrigger>
             <TabsTrigger value="contact" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">联系</TabsTrigger>
+            <TabsTrigger value="changelog" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">更新日志</TabsTrigger>
+            <TabsTrigger value="credits" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">致谢</TabsTrigger>
           </TabsList>
 
           {/* Introduction */}
@@ -158,64 +159,6 @@ export default function AboutPage() {
                   <h3 className="text-lg font-extrabold text-slate-900 mb-2">微信视频号</h3>
                   <p className="text-slate-500 text-sm mb-2">观看通班精彩影音内容</p>
                   <p className="text-sm font-medium text-slate-900">视频号：PKU通班</p>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Campus Life */}
-          <TabsContent value="campus" className="mt-8">
-            <div className="max-w-4xl">
-              <h2 className="text-2xl font-extrabold text-slate-900 mb-6">校园生活</h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
-                  <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
-                    <GraduationCap className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-extrabold text-slate-900 mb-4">北大校区</h3>
-                  <ul className="space-y-3 text-sm text-slate-600">
-                    <li className="flex items-start gap-2">
-                      <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary" />
-                      <span>燕园校区：北京大学校本部，北大通班隶属元培学院，配备现代化教学楼和实验室</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Clock className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary" />
-                      <span>学习时间：周一至周五课程，周末可预约实验室</span>
-                    </li>
-                  </ul>
-                </div>
-                <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
-                  <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
-                    <GraduationCap className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-extrabold text-slate-900 mb-3">清华校区</h3>
-                  <ul className="space-y-3 text-sm text-slate-600">
-                    <li className="flex items-start gap-2">
-                      <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary" />
-                      <span>清华大学校内，由自动化系负责教学安排</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Clock className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary" />
-                      <span>课程安排：与北大通班联合教学，定期交流访问</span>
-                    </li>
-                  </ul>
-                </div>
-                <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300 md:col-span-2">
-                  <h3 className="text-lg font-extrabold text-slate-900 mb-4">学生活动</h3>
-                  <div className="grid sm:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-xl bg-[hsl(211,40%,97%)]">
-                      <h4 className="font-extrabold text-slate-900 mb-1">学术沙龙</h4>
-                      <p className="text-sm text-slate-500">不定期举办 Tong Zhi Talk，分享最新研究成果</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-[hsl(211,40%,97%)]">
-                      <h4 className="font-extrabold text-slate-900 mb-1">体育活动</h4>
-                      <p className="text-sm text-slate-500">一年一度的AI杯羽毛球赛</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-[hsl(211,40%,97%)]">
-                      <h4 className="font-extrabold text-slate-900 mb-1">团建活动</h4>
-                      <p className="text-sm text-slate-500">春秋季出游、节日聚会</p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -395,6 +338,59 @@ export default function AboutPage() {
                       </a>
                     </li>
                   </ul>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Changelog */}
+          <TabsContent value="changelog" className="mt-8">
+            <div className="max-w-4xl">
+              <h2 className="text-2xl font-extrabold text-slate-900 mb-6">更新日志</h2>
+              <div className="space-y-4">
+                {[
+                  { date: "2026-05", text: "前端视觉全面升级：深蓝 Hero、酒红与靛蓝配色、直角卡片、年份水印、册别分组与半遮挡数字等" },
+                  { date: "2026-05", text: "成果页面重构：移除 Latest/Archive 切换，改为按年份侧栏展示；论文详情页去胶囊化" },
+                  { date: "2026-05", text: "课程测评卡片紧凑化，新增评分色块（绿/黄/红/灰），支持升序排序" },
+                  { date: "2026-05", text: "成员页按届别分组，大水印年份数字 + 横线分隔" },
+                  { date: "2026-05", text: "活动列表仅显示近期活动，日历保留全部" },
+                  { date: "2026-05", text: "树洞默认匿名；密码字段改为暗码" },
+                  { date: "2026-05", text: "新增自学资源链接页、文创周边展示页" },
+                ].map((entry) => (
+                  <div key={entry.text} className="flex gap-4">
+                    <span className="text-xs font-bold text-slate-400 w-16 shrink-0 mt-0.5">{entry.date}</span>
+                    <p className="text-sm text-slate-600">{entry.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Credits */}
+          <TabsContent value="credits" className="mt-8">
+            <div className="max-w-4xl">
+              <h2 className="text-2xl font-extrabold text-slate-900 mb-6">致谢</h2>
+              <p className="text-slate-600 mb-8">
+                本网站由通班学术部开发与维护。感谢每一位参与者和贡献者的努力与奉献。
+              </p>
+
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 mb-3">核心开发者</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {["陈应涵", "田希尧", "严绍恒", "杨天琢", "曾姜月", "张峻硕"].map((name) => (
+                      <span key={name} className="px-3 py-1 text-sm font-medium bg-primary text-white">{name}</span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 mb-3">开发者</h3>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 text-sm font-medium bg-primary text-white">通班学术部</span>
+                    {["郭柯言", "崔续衡", "赵思齐", "代易瓒", "魏欣元", "刘昌宁", "杨恩华", "陈勇整", "蔡博丞"].map((name) => (
+                      <span key={name} className="px-3 py-1 text-sm font-medium bg-[hsl(211,50%,93%)] text-primary">{name}</span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
