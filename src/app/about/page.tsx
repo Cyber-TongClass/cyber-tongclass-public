@@ -305,12 +305,12 @@ export default function AboutPage() {
               </p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {[
-                  { name: "文化衫", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1255.JPG" },
-                  { name: "帆布袋", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1257.JPG" },
-                  { name: "马克杯", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1258.JPG" },
-                  { name: "棒球帽", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1075.JPG" },
-                  { name: "卡套", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_1077.JPG" },
-                  { name: "徽章", src: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/merch-images@main/IMG_0048.JPG" },
+                  { name: "马克杯", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E9%A9%AC%E5%85%8B%E6%9D%AF.jpg" },
+                  { name: "托特包", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E6%89%98%E7%89%B9%E5%8C%85.PNG" },
+                  { name: "日历", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E6%97%A5%E5%8E%86.JPG" },
+                  { name: "本子", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E6%9C%AC%E5%AD%90.JPG" },
+                  { name: "班服小熊", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E7%8F%AD%E6%9C%8D%E5%B0%8F%E7%86%8A.pic.jpg" },
+                  { name: "T恤", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E8%A1%A3%E6%9C%8D%E8%83%8C%E9%9D%A2.jpg" },
                 ].map((item) => (
                   <div key={item.name} className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
                     <div className="aspect-square bg-slate-100 relative">
@@ -318,6 +318,7 @@ export default function AboutPage() {
                         src={item.src}
                         alt={item.name}
                         fill
+                        unoptimized
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
                         sizes="(max-width: 640px) 50vw, 33vw"
                       />
