@@ -114,7 +114,7 @@ export default function AboutPage() {
                     </div>
                     <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">前沿课程体系</h3>
                     <p className="text-left text-slate-600 leading-relaxed text-sm">
-                      打破了传统学科边界，为本科生量身定制了与世界前沿接轨的专属培养方案，覆盖了通用视觉、自然语言、认知推理、机器人、机器学习和多智能体等六大AI核心领域，同时注重AI与其他学科的交叉融合。
+                      打破了传统学科边界，为本科生量身定制了与世界前沿接轨的专属培养方案，覆盖了通用视觉、自然语言、认知推理、具身智能、机器学习和多智能体等六大AI核心领域，同时注重AI与其他学科的交叉融合。
                     </p>
                   </div>
                   <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
@@ -123,7 +123,7 @@ export default function AboutPage() {
                     </div>
                     <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">顶尖科研实践</h3>
                     <p className="text-left text-slate-600 leading-relaxed text-sm">
-                      构建从人工智能初级研讨班、人工智能系统实践到毕业设计的完整科研训练路径，聚焦 AI 领域，着力培养创新型、复合型通才。
+                      构建从人工智能初级研讨班、人工智能引论、人工智能系统实践到毕业设计的完整科研训练路径，聚焦 AI 领域，着力培养创新型、复合型通才。
                     </p>
                   </div>
                 </div>
@@ -162,15 +162,7 @@ export default function AboutPage() {
                   </div>
                   <h3 className="text-lg font-extrabold text-slate-900 mb-2">微信公众号</h3>
                   <p className="text-slate-500 text-sm mb-2">关注获取最新动态、通知公告和活动信息</p>
-                  <p className="text-sm font-medium text-slate-900">公众号：PKU通班</p>
-                </div>
-                <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
-                  <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
-                    <BookOpen className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-extrabold text-slate-900 mb-2">小红书</h3>
-                  <p className="text-slate-500 text-sm mb-2">关注获取最新动态、活动照片和日常分享</p>
-                  <p className="text-sm font-medium text-slate-900">PKU通班 · ID: pkutongclass</p>
+                  <p className="text-sm font-medium text-slate-900">公众号：PKU通班 / THU通班</p>
                 </div>
                 <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
                   <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
@@ -179,6 +171,14 @@ export default function AboutPage() {
                   <h3 className="text-lg font-extrabold text-slate-900 mb-2">微信视频号</h3>
                   <p className="text-slate-500 text-sm mb-2">观看通班精彩影音内容</p>
                   <p className="text-sm font-medium text-slate-900">视频号：PKU通班</p>
+                </div>
+                <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+                  <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+                    <BookOpen className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-extrabold text-slate-900 mb-2">小红书</h3>
+                  <p className="text-slate-500 text-sm mb-2">关注获取最新动态、活动照片和日常分享</p>
+                  <p className="text-sm font-medium text-slate-900">PKU通班 · ID: pkutongclass</p>
                 </div>
               </div>
             </div>
@@ -390,14 +390,14 @@ export default function AboutPage() {
             <div className="max-w-4xl">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">致谢</h2>
               <p className="text-slate-600 mb-8">
-                本网站由通班学术部开发与维护。感谢每一位参与者和贡献者的努力与奉献。
+                本网站由通班学术部开发与维护。感谢每一位参与者和贡献者的努力与奉献！（致谢名单按姓名字母顺序排列）
               </p>
 
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-extrabold text-slate-900 mb-3">核心开发者</h3>
                   <div className="flex flex-wrap gap-2">
-                    {["陈应涵", "田希尧", "严绍恒", "杨天琢", "曾姜月", "张峻硕"].map((name) => (
+                    {["陈应涵", "田希尧", "严绍恒", "曾姜月", "张峻硕"].map((name) => (
                       <span key={name} className="px-3 py-1 text-sm font-medium bg-primary text-white">{name}</span>
                     ))}
                   </div>
@@ -406,7 +406,7 @@ export default function AboutPage() {
                   <h3 className="text-lg font-extrabold text-slate-900 mb-3">开发者</h3>
                   <div className="flex flex-wrap gap-2">
                     <span className="px-3 py-1 text-sm font-medium bg-primary text-white">通班学术部</span>
-                    {["郭柯言", "崔续衡", "赵思齐", "代易瓒", "魏欣元", "刘昌宁", "杨恩华", "陈勇整", "蔡博丞"].map((name) => (
+                    {["蔡博丞", "陈勇整", "崔续衡", "代易瓒", "郭柯言", "刘昌宁", "魏欣元", "杨恩华", "杨天琢", "赵思齐"].map((name) => (
                       <span key={name} className="px-3 py-1 text-sm font-medium bg-[hsl(211,50%,93%)] text-primary">{name}</span>
                     ))}
                   </div>

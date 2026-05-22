@@ -3,18 +3,55 @@ import { ArrowUpRight } from "lucide-react"
 
 const resourceLinks = [
   {
-    category: "通班推荐",
+    category: "通班严选",
     links: [
       { name: "《通班生存指南》自学推荐", url: "https://mp.weixin.qq.com/s?__biz=Mzk1Nzg0MzM0OQ==&mid=2247485296&idx=1&sn=f7c3823303c1460b97a0927ca8aa672e&chksm=c3d9558af4aedc9cc0c7e8422606cbc62ac38c581970418dff6074054612a42e5ab67e3dc003&scene=178&cur_album_id=4091076469172944898&search_click_id=#rd" },
-      { name: "机器学习 / 人工智能入门指引 — yzhu.io", url: "https://yzhu.io/s/research/getting_started/" },
+      { name: "人工智能入门指引 — 朱毅鑫老师", url: "https://yzhu.io/s/research/getting_started/" },
     ],
   },
   {
-    category: "3Blue1Brown",
+    category: "计算机入门",
     links: [
-      { name: "3Blue1Brown 官方 B 站频道", url: "https://space.bilibili.com/88461692?spm_id_from=333.337.0.0" },
-      { name: "Essence of Linear Algebra（线性代数的本质）", url: "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab" },
-      { name: "Neural Networks（神经网络）", url: "https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi" },
+      { name: "CSDIY自学指南 - 仲殷旻学长", url: "http://csdiy.wiki/" },
+      { name: "计算机系统学习推荐清单 — 游震邦学长", url: "https://www.overleaf.com/read/txqjnjxyxqqx" },
+      { name: "CS61A: Structure and Interpretation of Computer Programs", url: "https://cs61a.org/" },
+      { name: "The Missing Semester of Your CS Education", url: "https://missing.csail.mit.edu/" },
+    ],
+  },
+  {
+    category: "编程与算法入门",
+    links: [
+      { name: "CS50: Introduction to Programming with Python", url: "https://cs50.harvard.edu/python/" },
+      { name: "Python编程入门教程: A Byte of Python", url: "https://python.swaroopch.com/" },
+      { name: "The Python Tutorial官方文档", url: "https://docs.python.org/3/tutorial/" },
+      { name: "MIT 6.006: Introduction to Algorithms", url: "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" },
+      { name: "CS166: Advanced Data Structures", url: "https://web.stanford.edu/class/cs166/" },
+      { name: "LeetCode在线编程练习平台", url: "https://leetcode.cn/" },
+    ],
+  },
+  {
+    category: "数学自学资料",
+    links: [
+      { name: "高等数学讲义 - 谢彦桐助教", url: "https://darkoxie.github.io/" },
+      { name: "MIT 18.01SC: Single Variable Calculus", url: "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/" },
+      { name: "MIT 18.02SC: Multivariable Calculus", url: "https://ocw.mit.edu/courses/18-02sc-multivariable-calculus-fall-2010/" },
+      { name: "MIT 18.06 Linear Algebra (课程视频)", url: "https://www.youtube.com/playlist?list=PL49CF3715CB9EF31D" },
+      { name: "MIT 18.06 Linear Algebra (讲义)", url: "https://rksmvv.ac.in/wp-content/uploads/2021/04/Gilbert_Strang_Linear_Algebra_and_Its_Applicatio_230928_225121.pdf" },
+      { name: "Essence of Linear Algebra (3Blue1Brown)", url: "https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab" },
+    ],
+  },
+  {
+    category: "人工智能入门",
+    links: [
+      { name: "CS188: Artificial Intelligence", url: "https://inst.eecs.berkeley.edu/~cs188/archive/fa22/" },
+      { name: "MIT 6.034: Artificial Intelligence", url: "https://ocw.mit.edu/courses/6-034-artificial-intelligence-fall-2010/" },
+      { name: "CS229: Machine Learning", url: "https://www.youtube.com/playlist?list=PLoROMvodv4rMiGQp3WXShtMGgzqpfVfbU" },
+      { name: "CS230: Deep Learning", url: "https://www.youtube.com/playlist?list=PLoROMvodv4rOABXSygHTsbvUz4G_YQhOb" },
+      { name: "CS5670: Introduction to Computer Vision", url: "https://www.cs.cornell.edu/courses/cs5670/2022sp/" },
+      { name: "CS223A: Introduction to Robotics", url: "https://www.youtube.com/playlist?list=PL65CC0384A1798ADF" },
+      { name: "MIT 6.4210/6.4212: Robotic Manipulation", url: "https://manipulation.csail.mit.edu" },
+      { name: "Modern Robotics (Northwestern)", url: "https://modernrobotics.northwestern.edu/nu-gm-book-resource/" },
+      { name: "Neural Networks (3Blue1Brown)", url: "https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi" },
     ],
   },
 ]
