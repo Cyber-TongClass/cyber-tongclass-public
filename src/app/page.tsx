@@ -9,6 +9,7 @@ import { useNews, usePublications } from "@/lib/api"
 
 export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0)
+  const [activeFeature, setActiveFeature] = useState(0)
   const newsItems = useNews({ limit: 50 })
   const publications = usePublications({ limit: 50 })
   const featuredSlides = useMemo(() => {
@@ -49,6 +50,35 @@ export default function HomePage() {
     }
   }, [activeSlide, featuredSlides.length])
 
+  const features = [
+    {
+      title: "通识·通智·通用",
+      description: "交叉人文社科的「通识」、融会六大核心领域的「通智」、融入各行各业的「通用」，培养世界顶尖复合型人才",
+      image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E9%80%9A%E7%94%A8%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E5%AE%9E%E9%AA%8C%E7%8F%AD_%E9%80%9A%E8%AF%86_%E9%80%9A%E6%99%BA_%E9%80%9A%E7%94%A8/assets/tongtongtong.webp",
+      fit: "object-contain",
+    },
+    {
+      title: "前沿课程体系",
+      description: "打破了传统学科边界，为本科生量身定制了与世界前沿接轨的专属培养方案，覆盖了通用视觉、自然语言、认知推理、机器人、机器学习和多智能体等六大AI核心领域，同时注重AI与其他学科的交叉融合",
+      image: "https://www.bigai.ai/wp-content/uploads/2022/10/%E7%A0%94%E7%A9%B6-e1666601512358.png",
+    },
+    {
+      title: "顶尖科研实践",
+      description: "构建从人工智能初级研讨班、人工智能系统实践到毕业设计的完整科研训练路径，聚焦 AI 领域，着力培养创新型、复合型通才",
+      image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E9%80%9A%E7%94%A8%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E5%AE%9E%E9%AA%8C%E7%8F%AD_%E9%80%9A%E8%AF%86_%E9%80%9A%E6%99%BA_%E9%80%9A%E7%94%A8/assets/17776187945420.7835409329709796.jpg",
+    },
+    {
+      title: "立体化的学术交流网络",
+      description: "与UCLA、MIT、CMU等世界顶尖学府保持紧密交流，定期举办国际学术论坛，并有学生自主创办的\u201cTong Talk\u201d学术沙龙和以学生为主体参展的学术交流活动\u201cAI TechDay\u201d。",
+      image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E9%80%9A%E7%94%A8%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E5%AE%9E%E9%AA%8C%E7%8F%AD_%E9%80%9A%E8%AF%86_%E9%80%9A%E6%99%BA_%E9%80%9A%E7%94%A8/assets/17776187946490.7499788932747545.jpg",
+    },
+    {
+      title: "顶尖的师资力量",
+      description: "融合北大、清华人工智能领域的顶尖教研力量，汇聚 IEEE Fellow、长江学者等高水平师资，依托两校深厚的学科积淀，打造国内一流的 AI 人才培养平台",
+      image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%B8%88%E8%B5%84.jpeg",
+    },
+  ]
+
   return (
     <div className="flex flex-col">
       <section className="relative w-full h-[360px] md:h-[480px] overflow-hidden border-b border-slate-200 bg-slate-950">
@@ -69,7 +99,7 @@ export default function HomePage() {
                 </p>
                 <h1 className="text-3xl md:text-5xl font-extrabold leading-tight mb-4">欢迎来到北大通班</h1>
                 <p className="text-white/90 text-base md:text-lg mb-6">
-                  当前还没有勾选“在首页轮播展示”的已发布动态。你可以在后台新闻管理中为动态开启首页轮播。
+                  当前还没有勾选&ldquo;在首页轮播展示&rdquo;的已发布动态。你可以在后台新闻管理中为动态开启首页轮播。
                 </p>
                 <Button asChild size="lg" className="gap-2">
                   <Link href="/news">
@@ -158,7 +188,7 @@ export default function HomePage() {
           <div className="max-w-3xl mx-auto text-center space-y-6 relative">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-balance tracking-tight text-slate-900">通用人工智能实验班</h2>
             <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto">北京大学 & 清华大学</p>
-            <p className="text-slate-500">北京大学与清华大学于2021年联合创立，致力于培养具有国际视野的下一代人工智能领军人才</p>
+            <p className="text-slate-500">北京大学与清华大学于2021年联手开启，致力于培养具有国际视野的下一代人工智能领军人才</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Button asChild size="lg" className="gap-2">
                 <Link href="/about">
@@ -177,10 +207,10 @@ export default function HomePage() {
         <div className="container-custom">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
             {[
-              { label: "北清成员", value: "300+", icon: Users },
-              { label: "顶会论文", value: "40+", icon: FileText },
-              { label: "科研课题", value: "70+", icon: BookOpen },
-              { label: "奖项荣誉", value: "80+", icon: Award },
+              { label: "北清成员", value: "359", icon: Users },
+              { label: "顶会论文", value: "104", icon: FileText },
+              { label: "科研课题", value: "130", icon: BookOpen },
+              { label: "奖项荣誉", value: "169", icon: Award },
             ].map((stat) => (
               <div key={stat.label} className="text-center text-white">
                 <stat.icon className="h-8 w-8 mx-auto mb-3 opacity-80" />
@@ -192,64 +222,65 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="py-16 md:py-24">
-        <div className="container-custom">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl font-extrabold text-slate-900">项目特色</h2>
-            <p className="text-slate-500 mt-3 text-lg">跨学科培养，国际视野，创新实践</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                title: "通识·通智·通用",
-                description: "交叉人文社科的「通识」、融会六大核心领域的「通智」、融入各行各业的「通用」，培养世界顶尖复合型人才",
-                image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E9%80%9A%E7%94%A8%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E5%AE%9E%E9%AA%8C%E7%8F%AD_%E9%80%9A%E8%AF%86_%E9%80%9A%E6%99%BA_%E9%80%9A%E7%94%A8/assets/tongtongtong.webp",
-                fit: "object-contain",
-              },
-              {
-                title: "六大核心领域",
-                description: "课程涵盖计算机视觉、自然语言处理、认知推理、机器学习、机器人学、多智能体，全方向覆盖",
-                image: "https://www.bigai.ai/wp-content/uploads/2022/10/%E7%A0%94%E7%A9%B6-e1666601512358.png",
-              },
-              {
-                title: "前沿科研实践",
-                description: "深度参与 70+ 前沿课题，发表 40+ 顶会论文，斩获 80+ 奖项荣誉，成果应用于真实产业场景",
-                image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E9%80%9A%E7%94%A8%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E5%AE%9E%E9%AA%8C%E7%8F%AD_%E9%80%9A%E8%AF%86_%E9%80%9A%E6%99%BA_%E9%80%9A%E7%94%A8/assets/17776187945420.7835409329709796.jpg",
-              },
-            ].map((feature) => (
-              <div
-                key={feature.title}
-                className="overflow-hidden bg-white shadow-sm"
-              >
-                <div className="aspect-[3/2] w-full bg-slate-100 overflow-hidden relative">
+      <section className="py-16 md:py-24 bg-[hsl(25,20%,96%)] overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 mb-10">项目特色</h2>
+
+          <div className="flex flex-col lg:flex-row gap-10 items-stretch">
+            {/* Left: image panel */}
+            <div className="w-full lg:w-1/2 aspect-[4/3] lg:aspect-auto relative bg-[hsl(25,20%,96%)]">
+              {features.map((f, idx) => (
+                <div
+                  key={idx}
+                  className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${
+                    activeFeature === idx ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                  }`}
+                >
                   <Image
-                    src={feature.image}
-                    alt={feature.title}
+                    src={f.image}
+                    alt={f.title}
                     fill
                     unoptimized
-                    className={feature.fit || "object-cover"}
-                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-contain"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
                 </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-extrabold text-slate-900 mb-2">{feature.title}</h3>
-                  <p className="text-slate-600 leading-relaxed">{feature.description}</p>
+              ))}
+            </div>
+
+            {/* Right: tabs */}
+            <div className="w-full lg:w-1/2 flex flex-col gap-3">
+              {features.map((f, idx) => (
+                <div
+                  key={f.title}
+                  onMouseEnter={() => setActiveFeature(idx)}
+                  className={`group px-6 py-5 flex-1 flex flex-col justify-center cursor-pointer transition-all duration-300 bg-white shadow-sm hover:shadow-md ${
+                    activeFeature === idx
+                      ? "border-l-[3px] border-[hsl(350,55%,35%)]"
+                      : "border-l-[3px] border-transparent"
+                  }`}
+                >
+                  <span className="text-[10px] font-mono font-bold tracking-widest text-[hsl(15,20%,60%)] mb-1">
+                    {(idx + 1).toString().padStart(2, "0")}
+                  </span>
+                  <h3 className={`text-lg font-extrabold transition-all duration-300 ${activeFeature === idx ? "text-[hsl(350,55%,35%)] text-xl" : "text-slate-900"}`}>
+                    {f.title}
+                  </h3>
+                  <div className={`grid transition-all duration-300 ${activeFeature === idx ? "grid-rows-[1fr] opacity-100 mt-2" : "grid-rows-[0fr] opacity-0"}`}>
+                    <p className="overflow-hidden text-sm text-slate-600 leading-relaxed">
+                      {f.description}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="py-16 md:py-24 bg-[hsl(211,30%,97%)]">
-        <div className="container-custom">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-3xl font-extrabold text-slate-900">最新动态</h2>
-              <p className="text-slate-500 mt-1">关注通班最新资讯与学术成果</p>
-            </div>
-          </div>
+      <section className="relative py-16 md:py-24 bg-[hsl(211,30%,97%)]">
+        <div className="absolute top-0 left-0 right-0 h-16 bg-[hsl(25,20%,96%)]" />
+        <h2 className="relative z-10 text-4xl md:text-5xl font-extrabold text-slate-900 -mt-8 mb-10 container-custom">最新动态</h2>
+        <div className="container-custom relative z-10">
           <div className="grid md:grid-cols-2 gap-8">
             {/* 新闻 */}
             <div>

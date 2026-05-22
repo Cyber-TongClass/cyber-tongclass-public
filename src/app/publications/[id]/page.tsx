@@ -105,9 +105,7 @@ export default function PublicationDetailPage() {
               {publication.subCategory && (
                 <>
                   <span className="text-slate-300">·</span>
-                  <span className="text-xs text-slate-500">
-                    {publication.subCategory}
-                  </span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[hsl(211,60%,35%)]">{publication.subCategory}</span>
                 </>
               )}
             </div>

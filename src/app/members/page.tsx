@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { Search, Users as UsersIcon, GraduationCap, School } from "lucide-react"
 import { getInitials } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
@@ -259,12 +260,15 @@ export default function MembersPage() {
                   <CardContent className="p-6">
                     {/* Avatar */}
                     <div className="flex justify-center mb-4">
-                      <div className="h-20 w-20 rounded-full overflow-hidden bg-[hsl(211,40%,97%)] ring-2 ring-primary/10 group-hover:ring-primary/40 transition-all flex items-center justify-center">
+                      <div className="h-20 w-20 rounded-full overflow-hidden bg-[hsl(211,40%,97%)] ring-2 ring-primary/10 group-hover:ring-primary/40 transition-all flex items-center justify-center relative">
                         {user.realPhoto || user.avatar ? (
-                          <img
+                          <Image
                             src={(user.realPhoto || user.avatar) as string}
                             alt={user.englishName}
-                            className="h-full w-full object-cover"
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            sizes="80px"
                           />
                         ) : (
                           <span className="text-2xl font-extrabold text-primary">

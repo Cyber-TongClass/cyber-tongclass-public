@@ -62,10 +62,10 @@ export default function AboutPage() {
               <h3 className="text-2xl font-extrabold text-slate-900 mb-4">关于我们</h3>
               <div className="space-y-3 text-slate-600 leading-loose text-base mb-12">
                 <p>
-                   北京大学与清华大学联合培养人工智能创新人才项目——通用人工智能实验班（以下简称&ldquo;通班&rdquo;）于2021年启动，旨在培养具有国际视野、创新能力的人工智能领域领军人才。
+                  通用人工智能实验班（简称&ldquo;通班&rdquo;）是北京大学与清华大学于2021年联合启动的人工智能创新人才培养项目，分别设立于北大元培学院与清华自动化系，旨在回应国家人工智能战略需求，锻造通用人工智能领域的&ldquo;科技王牌军&rdquo;。
                 </p>
                 <p>
-                  项目汇聚两校优质教学资源，由顶尖学者指导，学生可在北大和清华两所顶尖学府完成学业，享受丰富的学术资源和实践机会。
+                  通班秉持&ldquo;通识、通智、通用&rdquo;的培养理念，旨在锻造兼具人文底蕴与科学精神、能够引领行业变革的世界顶尖复合型领军人才。依托两校顶尖学科资源与科研平台，通班构建了本博贯通、学研产用融合的培养体系，为国家人工智能战略需求提供坚实的人才支撑。
                 </p>
               </div>
             </div>
@@ -75,19 +75,19 @@ export default function AboutPage() {
               <div className="max-w-4xl mx-auto px-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
                   <div className="space-y-2">
-                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">300+</div>
+                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">359</div>
                     <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">北清成员</div>
                   </div>
                   <div className="space-y-2">
-                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">40+</div>
+                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">104</div>
                     <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">顶会论文</div>
                   </div>
                   <div className="space-y-2">
-                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">70+</div>
+                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">130</div>
                     <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">科研课题</div>
                   </div>
                   <div className="space-y-2">
-                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">80+</div>
+                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">169</div>
                     <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">奖项荣誉</div>
                   </div>
                 </div>
@@ -112,18 +112,38 @@ export default function AboutPage() {
                     <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
                       <BookOpen className="w-6 h-6" />
                     </div>
-                    <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">六大核心领域</h3>
+                    <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">前沿课程体系</h3>
                     <p className="text-left text-slate-600 leading-relaxed text-sm">
-                      课程涵盖计算机视觉、自然语言处理、认知推理、机器学习、机器人学、多智能体，全方向覆盖。
+                      打破了传统学科边界，为本科生量身定制了与世界前沿接轨的专属培养方案，覆盖了通用视觉、自然语言、认知推理、机器人、机器学习和多智能体等六大AI核心领域，同时注重AI与其他学科的交叉融合。
                     </p>
                   </div>
                   <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
                     <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
                       <Award className="w-6 h-6" />
                     </div>
-                    <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">前沿科研实践</h3>
+                    <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">顶尖科研实践</h3>
                     <p className="text-left text-slate-600 leading-relaxed text-sm">
-                      深度参与 70+ 前沿课题，发表 40+ 顶会论文，斩获 80+ 奖项荣誉，成果应用于真实产业场景。
+                      构建从人工智能初级研讨班、人工智能系统实践到毕业设计的完整科研训练路径，聚焦 AI 领域，着力培养创新型、复合型通才。
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-center gap-6 mt-6">
+                  <div className="w-full md:w-[calc(33.333%-1rem)] group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+                    <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">立体化的学术交流网络</h3>
+                    <p className="text-left text-slate-600 leading-relaxed text-sm">
+                     与UCLA、MIT、CMU等世界顶尖学府保持紧密交流，定期举办国际学术论坛，并与学生自主创办的Tong Talk学术沙龙和以学生为主体参展的学术交流活动AI TechDay。
+                    </p>
+                  </div>
+                  <div className="w-full md:w-[calc(33.333%-1rem)] group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+                    <div className="w-12 h-12 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+                      <Group className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">顶尖的师资力量</h3>
+                    <p className="text-left text-slate-600 leading-relaxed text-sm">
+                      融合北大、清华人工智能领域的顶尖教研力量，汇聚 IEEE Fellow、长江学者等高水平师资，依托两校深厚的学科积淀，打造国内一流的 AI 人才培养平台。
                     </p>
                   </div>
                 </div>
@@ -288,19 +308,18 @@ export default function AboutPage() {
                         <Mail className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="font-medium text-slate-900">邮箱</p>
-                        <p className="text-sm text-slate-500">待补充</p>
+<p className="font-medium text-slate-900">邮箱</p>
+                        <p className="text-sm text-slate-500">pkuypzhb@163.com</p>
                       </div>
                     </li>
-<li className="flex items-start gap-3">
+                    <li className="flex items-start gap-3">
                       <div className="w-10 h-10 bg-[hsl(211,50%,93%)] text-primary rounded-full flex items-center justify-center flex-shrink-0">
                         <MapPin className="h-5 w-5" />
                       </div>
                       <div>
                         <p className="font-medium text-slate-900">地址</p>
                         <p className="text-sm text-slate-500">
-                          北京大学燕园校区<br />
-                          清华大学校内
+                          北京大学俄文楼 100871<br />
                         </p>
                       </div>
                     </li>
