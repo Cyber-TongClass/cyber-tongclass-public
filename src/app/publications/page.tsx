@@ -223,7 +223,7 @@ export default function PublicationsPage() {
                               <span className="px-2 py-0.5 text-[11px] font-medium rounded bg-[hsl(211,50%,93%)] text-primary">
                                 {pub.category}
                               </span>
-                              {pub.subCategory && <span className="text-xs text-slate-400">{pub.subCategory}</span>}
+                              {pub.subCategory && <span className="px-2 py-0.5 text-[11px] font-medium rounded bg-[hsl(211,50%,93%)] text-primary">{pub.subCategory}</span>}
                             </div>
 
                             <h3 className="text-base font-extrabold text-slate-900 group-hover:text-primary transition-colors line-clamp-2 mb-1.5">
