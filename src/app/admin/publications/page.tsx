@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
 import {
   Table,
   TableBody,
@@ -21,23 +22,39 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
-import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye } from "lucide-react"
-import { useUsers, usePublications, useDeletePublication } from "@/lib/api"
+import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye, Save, X } from "lucide-react"
+import {
+  useUsers,
+  usePublications,
+  useDeletePublication,
+  usePublicationVenues,
+  useCreatePublicationVenue,
+  useUpdatePublicationVenue,
+} from "@/lib/api"
 import { getPublicationCategoryOptions } from "@/lib/publication-taxonomy"
-import type { Publication } from "@/types"
+import { getPublicationAuthorName } from "@/lib/publication-authors"
+import type { Publication, PublicationVenue } from "@/types"
 
 export default function AdminPublicationsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
   const [ownerFilter, setOwnerFilter] = useState<string | null>(null)
+  const [venueName, setVenueName] = useState("")
+  const [venueError, setVenueError] = useState("")
+  const [editingVenueId, setEditingVenueId] = useState<string | null>(null)
+  const [editingVenueName, setEditingVenueName] = useState("")
 
   // Fetch data from Convex
-  const publicationsData = usePublications({})
+  const publicationsData = usePublications({ limit: 1000 })
   const usersData = useUsers({})
+  const publicationVenuesData = usePublicationVenues()
   const deletePublication = useDeletePublication()
+  const createPublicationVenue = useCreatePublicationVenue()
+  const updatePublicationVenue = useUpdatePublicationVenue()
 
   const publications: Publication[] = publicationsData || []
   const users = usersData || []
+  const publicationVenues: PublicationVenue[] = publicationVenuesData || []
 
   const { confirm, ConfirmDialog } = useConfirmDialog()
 
@@ -67,7 +84,7 @@ export default function AdminPublicationsPage() {
         !query ||
         publication.title.toLowerCase().includes(query) ||
         publication.venue.toLowerCase().includes(query) ||
-        publication.authors.some((author) => author.toLowerCase().includes(query)) ||
+        publication.authors.some((author) => getPublicationAuthorName(author).toLowerCase().includes(query)) ||
         ownerName.includes(query)
       const matchesCategory = !categoryFilter || publication.category === categoryFilter
       const matchesOwner = !ownerFilter || String(publication.userId) === ownerFilter
@@ -85,6 +102,40 @@ export default function AdminPublicationsPage() {
         await deletePublication(publication._id as any)
       },
     })
+  }
+
+  const handleAddVenue = async () => {
+    const name = venueName.trim()
+    if (!name) {
+      setVenueError("请先填写会议/期刊名称")
+      return
+    }
+
+    try {
+      setVenueError("")
+      await createPublicationVenue({ name })
+      setVenueName("")
+    } catch (error) {
+      setVenueError(error instanceof Error ? error.message : "添加失败")
+    }
+  }
+
+  const handleSaveVenue = async () => {
+    if (!editingVenueId) return
+    const name = editingVenueName.trim()
+    if (!name) {
+      setVenueError("请填写新的会议/期刊名称")
+      return
+    }
+
+    try {
+      setVenueError("")
+      await updatePublicationVenue({ id: editingVenueId, name })
+      setEditingVenueId(null)
+      setEditingVenueName("")
+    } catch (error) {
+      setVenueError(error instanceof Error ? error.message : "更新失败")
+    }
   }
 
   return (
@@ -151,6 +202,85 @@ export default function AdminPublicationsPage() {
       </Card>
 
       <Card>
+        <CardContent className="space-y-4 pt-6">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">会议/期刊名称库</h2>
+            <p className="text-sm text-gray-500">
+              默认合并已有成果中的名称；超级管理员可手动添加和改名，但不提供删除入口。
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Input
+              value={venueName}
+              onChange={(event) => setVenueName(event.target.value)}
+              placeholder="新增会议/期刊名称，例如 CVPR (IEEE Conference on Computer Vision and Pattern Recognition)"
+            />
+            <Button type="button" onClick={handleAddVenue}>
+              <Plus className="mr-2 h-4 w-4" />
+              添加到库
+            </Button>
+          </div>
+          {venueError ? <p className="text-sm text-red-600">{venueError}</p> : null}
+          <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border bg-slate-50 p-3">
+            {publicationVenues.length === 0 ? (
+              <p className="text-sm text-gray-500">还没有可用名称。</p>
+            ) : (
+              publicationVenues.map((venue) => (
+                <div key={venue._id || venue.name} className="flex flex-col gap-2 rounded-md bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  {editingVenueId && venue._id === editingVenueId ? (
+                    <Input value={editingVenueName} onChange={(event) => setEditingVenueName(event.target.value)} />
+                  ) : (
+                    <div>
+                      <p className="font-medium text-slate-900">{venue.name}</p>
+                      <p className="text-xs text-slate-500">{venue.source === "manual" ? "名称库维护" : "来自已有成果"}</p>
+                    </div>
+                  )}
+                  {venue._id ? (
+                    editingVenueId === venue._id ? (
+                      <div className="flex gap-2">
+                        <Button type="button" size="sm" onClick={handleSaveVenue}>
+                          <Save className="mr-2 h-4 w-4" />
+                          保存
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingVenueId(null)
+                            setEditingVenueName("")
+                          }}
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          取消
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingVenueId(venue._id || null)
+                          setEditingVenueName(venue.name)
+                          setVenueError("")
+                        }}
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
+                        改名
+                      </Button>
+                    )
+                  ) : (
+                    <Badge variant="secondary">自动收录</Badge>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -176,7 +306,9 @@ export default function AdminPublicationsPage() {
                 filteredPublications.map((publication) => (
                   <TableRow key={publication._id}>
                     <TableCell className="font-medium max-w-[300px] truncate">{publication.title}</TableCell>
-                    <TableCell className="max-w-[220px] truncate text-gray-600">{publication.authors.join(", ")}</TableCell>
+                    <TableCell className="max-w-[220px] text-gray-600">
+                      <PublicationAuthorsList authors={publication.authors} />
+                    </TableCell>
                     <TableCell>
                       <Badge className="bg-slate-100 text-slate-800">
                         {categoryLabelMap.get(publication.category) || publication.category}

@@ -7,25 +7,36 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { PublicationAuthorEditor } from "@/components/publications/publication-author-editor"
+import { PublicationVenueInput } from "@/components/publications/publication-venue-input"
 import { ArrowLeft, Save } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { usePublicationById, useCreatePublication, useUpdatePublication } from "@/lib/api"
+import {
+  usePublicationById,
+  usePublicationVenues,
+  usePublications,
+  useCreatePublication,
+  useUpdatePublication,
+  useUsers,
+} from "@/lib/api"
+import { findSimilarPublicationTitle } from "@/lib/publication-title-match"
+import { canEditPublication } from "@/lib/publication-authors"
+import { getPublicationVenueOptions } from "@/lib/publication-venues"
 import {
   CUSTOM_PUBLICATION_CATEGORY_VALUE,
   CUSTOM_PUBLICATION_SUBCATEGORY_VALUE,
   DEFAULT_PUBLICATION_CATEGORY,
-  formatPublicationAuthors,
   getPublicationCategoryOptions,
   getPublicationSubCategoryOptions,
   isKnownPublicationCategory,
   isKnownPublicationSubCategory,
-  parsePublicationAuthors,
 } from "@/lib/publication-taxonomy"
 import type { Publication } from "@/types"
 
 type PublicationFormData = {
   title: string
-  authors: string
+  authors: string[]
+  publicationStatus: "" | "published" | "preprint"
   venue: string
   year: string
   abstract: string
@@ -35,6 +46,11 @@ type PublicationFormData = {
 }
 
 const currentYear = new Date().getFullYear()
+const PREPRINT_VENUE = "arXiv Preprint"
+
+function isPreprintVenue(venue: string) {
+  return venue.trim().toLowerCase() === PREPRINT_VENUE.toLowerCase()
+}
 
 export default function MyPublicationEditorPage() {
   const router = useRouter()
@@ -46,6 +62,11 @@ export default function MyPublicationEditorPage() {
 
   // Fetch publication from Convex
   const publicationData = usePublicationById(isCreateMode ? undefined : (publicationId as string))
+  const publicationsData = usePublications({ limit: 1000 })
+  const publications: Publication[] = publicationsData || []
+  const publicationVenuesData = usePublicationVenues() || []
+  const usersData = useUsers({ limit: 1000, classMembersOnly: true })
+  const users = usersData || []
   const createPublication = useCreatePublication()
   const updatePublicationFn = useUpdatePublication()
 
@@ -53,11 +74,14 @@ export default function MyPublicationEditorPage() {
   const [publication, setPublication] = useState<Publication | null>(null)
   const [forbidden, setForbidden] = useState(false)
   const [formError, setFormError] = useState("")
+  const [authorError, setAuthorError] = useState("")
+  const [hasInvalidTongClassAuthor, setHasInvalidTongClassAuthor] = useState(false)
   const [customCategory, setCustomCategory] = useState("")
   const [customSubCategory, setCustomSubCategory] = useState("")
   const [formData, setFormData] = useState<PublicationFormData>({
     title: "",
-    authors: "",
+    authors: [],
+    publicationStatus: "",
     venue: "",
     year: String(currentYear),
     abstract: "",
@@ -93,7 +117,7 @@ export default function MyPublicationEditorPage() {
       return
     }
 
-    if (publicationData.userId !== currentUser._id) {
+    if (!canEditPublication(publicationData, currentUser._id)) {
       setForbidden(true)
       setLoading(false)
       return
@@ -110,7 +134,8 @@ export default function MyPublicationEditorPage() {
     setCustomSubCategory(publicationSubCategory && !subCategoryIsKnown ? publicationSubCategory : "")
     setFormData({
       title: publicationData.title,
-      authors: formatPublicationAuthors(publicationData.authors),
+      authors: publicationData.authors,
+      publicationStatus: isPreprintVenue(publicationData.venue) ? "preprint" : "published",
       venue: publicationData.venue,
       year: String(publicationData.year),
       abstract: publicationData.abstract,
@@ -132,6 +157,20 @@ export default function MyPublicationEditorPage() {
     () => getPublicationSubCategoryOptions(formData.category, formData.subCategory),
     [formData.category, formData.subCategory]
   )
+
+  const similarTitleMatch = useMemo(() => {
+    if (!isCreateMode) return null
+    return findSimilarPublicationTitle(formData.title, publications)
+  }, [formData.title, isCreateMode, publications])
+
+  const venueOptions = useMemo(() => {
+    return Array.from(
+      new Set([
+        ...publicationVenuesData.map((venue: any) => venue.name),
+        ...getPublicationVenueOptions(publications),
+      ])
+    ).sort((a, b) => a.localeCompare(b))
+  }, [publicationVenuesData, publications])
 
   const handleCategoryChange = (category: string) => {
     const nextSubCategoryOptions =
@@ -156,11 +195,26 @@ export default function MyPublicationEditorPage() {
       return
     }
 
-    const parsedAuthors = parsePublicationAuthors(formData.authors)
+    if (isCreateMode && similarTitleMatch) {
+      const message = similarTitleMatch.exact
+        ? `已有一篇标题相同的成果：\n《${similarTitleMatch.publication.title}》\n\n仍要继续创建吗？`
+        : `可能已有一篇标题非常相似的成果：\n《${similarTitleMatch.publication.title}》\n\n仍要继续创建吗？`
+      if (!window.confirm(message)) {
+        return
+      }
+    }
+
+    const parsedAuthors = formData.authors.filter(Boolean)
     if (parsedAuthors.length === 0) {
-      setFormError("请至少填写一位作者。")
+      setAuthorError("请至少填写一位作者。")
       return
     }
+
+    if (hasInvalidTongClassAuthor) {
+      setAuthorError("有作者姓名匹配到通班成员，但尚未选择“是他”或“不是他”。请先确认后再保存。")
+      return
+    }
+    setAuthorError("")
 
     const parsedYear = Number(formData.year)
     if (!Number.isInteger(parsedYear) || parsedYear < 1900 || parsedYear > currentYear + 1) {
@@ -177,6 +231,20 @@ export default function MyPublicationEditorPage() {
       return
     }
 
+    if (!formData.publicationStatus) {
+      setFormError("请选择成果状态。")
+      return
+    }
+
+    const finalVenue = formData.publicationStatus === "preprint"
+      ? PREPRINT_VENUE
+      : formData.venue.trim()
+
+    if (formData.publicationStatus === "published" && !finalVenue) {
+      setFormError("请填写会议/期刊。")
+      return
+    }
+
     const finalSubCategory =
       formData.subCategory === CUSTOM_PUBLICATION_SUBCATEGORY_VALUE
         ? customSubCategory.trim()
@@ -187,7 +255,7 @@ export default function MyPublicationEditorPage() {
     const payload = {
       title: formData.title.trim(),
       authors: parsedAuthors,
-      venue: formData.venue.trim(),
+      venue: finalVenue,
       year: parsedYear,
       abstract: formData.abstract.trim(),
       url: formData.url.trim() || undefined,
@@ -277,17 +345,27 @@ export default function MyPublicationEditorPage() {
                   onChange={(event) => setFormData((previous) => ({ ...previous, title: event.target.value }))}
                   required
                 />
+                {similarTitleMatch && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    {similarTitleMatch.exact ? "已有标题相同的成果：" : "可能已有标题非常相似的成果："}
+                    <span className="font-semibold">《{similarTitleMatch.publication.title}》</span>
+                    <span className="ml-1 text-amber-700">
+                      {similarTitleMatch.publication.venue} · {similarTitleMatch.publication.year}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="authors">作者（换行或逗号分隔）</Label>
-                <Textarea
-                  id="authors"
-                  rows={4}
+                <PublicationAuthorEditor
                   value={formData.authors}
-                  onChange={(event) => setFormData((previous) => ({ ...previous, authors: event.target.value }))}
-                  placeholder={"例如：Alice Zhang\nBob Li\nCarol Wang"}
-                  required
+                  users={users}
+                  error={authorError}
+                  onValidationChange={setHasInvalidTongClassAuthor}
+                  onChange={(authors) => {
+                    setAuthorError("")
+                    setFormData((previous) => ({ ...previous, authors }))
+                  }}
                 />
               </div>
 
@@ -346,16 +424,54 @@ export default function MyPublicationEditorPage() {
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="venue">会议/期刊</Label>
-                  <Input
-                    id="venue"
-                    placeholder="简称 (全称)，如 ICML (International Conference on Machine Learning)"
-                    value={formData.venue}
-                    onChange={(event) => setFormData((previous) => ({ ...previous, venue: event.target.value }))}
-                    required
-                  />
-                  <p className="text-[11px] text-slate-400">请统一使用英文括号 <code>()</code>，为兼容老数据已有中文括号会自动替换。</p>
+                  <Label htmlFor="publicationStatus">成果状态</Label>
+                  <div id="publicationStatus" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button
+                      type="button"
+                      variant={formData.publicationStatus === "published" ? "default" : "outline"}
+                      onClick={() =>
+                        setFormData((previous) => ({
+                          ...previous,
+                          publicationStatus: "published",
+                          venue: isPreprintVenue(previous.venue) ? "" : previous.venue,
+                        }))
+                      }
+                    >
+                      已发表论文
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={formData.publicationStatus === "preprint" ? "default" : "outline"}
+                      onClick={() =>
+                        setFormData((previous) => ({
+                          ...previous,
+                          publicationStatus: "preprint",
+                          venue: PREPRINT_VENUE,
+                        }))
+                      }
+                    >
+                      Preprint
+                    </Button>
+                  </div>
                 </div>
+                {formData.publicationStatus === "published" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="venue">会议/期刊</Label>
+                    <PublicationVenueInput
+                      id="venue"
+                      placeholder="简称 (全称)，如 ICML (International Conference on Machine Learning)"
+                      value={formData.venue}
+                      venues={venueOptions}
+                      onChange={(venue) => setFormData((previous) => ({ ...previous, venue }))}
+                      required
+                    />
+                    <p className="text-[11px] text-slate-400">请统一使用英文括号 <code>()</code>，为兼容老数据已有中文括号会自动替换。</p>
+                  </div>
+                ) : formData.publicationStatus === "preprint" ? (
+                  <p className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                    Preprint 将自动记录为 <span className="font-semibold text-slate-900">{PREPRINT_VENUE}</span>。
+                  </p>
+                ) : null}
                 <div className="space-y-2">
                   <Label htmlFor="year">年份</Label>
                   <Input

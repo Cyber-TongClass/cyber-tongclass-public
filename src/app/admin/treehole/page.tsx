@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { MessageSquare, Search, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { useAdminTreeholePostById, useAdminTreeholePosts, useDeleteTreeholePost, useDeleteTreeholeReply } from "@/lib/api"
@@ -20,6 +20,8 @@ function formatTime(timestamp: number) {
 export default function AdminTreeholePage() {
   const { currentUser } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState("latest")
+  const [replySortBy, setReplySortBy] = useState("oldest")
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
   const posts = useAdminTreeholePosts({
     actorId: currentUser?._id ? String(currentUser._id) : null,
@@ -29,6 +31,20 @@ export default function AdminTreeholePage() {
   const deletePost = useDeleteTreeholePost()
   const deleteReply = useDeleteTreeholeReply()
   const { confirm, ConfirmDialog } = useConfirmDialog()
+  const sortedPosts = useMemo(() => {
+    return [...posts].sort((a: any, b: any) => {
+      if (sortBy === "score-desc") return (b.voteScore || 0) - (a.voteScore || 0)
+      if (sortBy === "replies-desc") return (b.replyCount || 0) - (a.replyCount || 0)
+      return (b.createdAt || 0) - (a.createdAt || 0)
+    })
+  }, [posts, sortBy])
+  const sortedSelectedReplies = useMemo(() => {
+    const replies = ((detail as any)?.replies || []) as any[]
+    return [...replies].sort((a: any, b: any) => {
+      if (replySortBy === "score-desc") return (b.voteScore || 0) - (a.voteScore || 0)
+      return (a.createdAt || 0) - (b.createdAt || 0)
+    })
+  }, [detail, replySortBy])
 
   const handleDeletePost = async (postId: string, title: string) => {
     if (!currentUser) return
@@ -70,14 +86,21 @@ export default function AdminTreeholePage() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索标题、内容、前台显示名或真实姓名"
-              className="pr-10"
-            />
-            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <div className="flex flex-col gap-3 md:flex-row">
+            <div className="relative flex-1">
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索编号、标题、内容、前台显示名或真实姓名"
+                className="pr-10"
+              />
+              <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            </div>
+            <select className="h-10 rounded-md border border-input bg-white px-3 text-sm" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="latest">最新发布</option>
+              <option value="score-desc">点赞数</option>
+              <option value="replies-desc">回帖数</option>
+            </select>
           </div>
         </CardContent>
       </Card>
@@ -90,10 +113,12 @@ export default function AdminTreeholePage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>编号</TableHead>
                 <TableHead>标题</TableHead>
                 <TableHead>真实发布者</TableHead>
                 <TableHead>前台显示</TableHead>
                 <TableHead>回帖数</TableHead>
+                <TableHead>点赞数</TableHead>
                 <TableHead>发布时间</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -101,17 +126,19 @@ export default function AdminTreeholePage() {
             <TableBody>
               {posts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500">
+                  <TableCell colSpan={8} className="text-center text-gray-500">
                     暂无树洞内容
                   </TableCell>
                 </TableRow>
               ) : (
-                posts.map((post: any) => (
+                sortedPosts.map((post: any) => (
                   <TableRow key={post._id}>
+                    <TableCell className="font-mono text-primary">#{post.serialLabel || "-------"}</TableCell>
                     <TableCell className="font-medium">{post.title}</TableCell>
                     <TableCell>{post.realAuthorName}</TableCell>
                     <TableCell>{post.publicAuthorName}</TableCell>
                     <TableCell>{post.replyCount}</TableCell>
+                    <TableCell>{post.voteScore || 0}</TableCell>
                     <TableCell>{formatTime(post.createdAt)}</TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button variant="outline" size="sm" onClick={() => setSelectedPostId(post._id)}>
@@ -143,6 +170,9 @@ export default function AdminTreeholePage() {
                 <div className="space-y-2">
                   <h2 className="text-2xl font-extrabold">{selectedDetail.post.title}</h2>
                   <div className="flex flex-wrap gap-3 text-sm text-slate-500">
+                    {selectedDetail.post.serialLabel ? (
+                      <span className="font-mono font-semibold text-primary">#{selectedDetail.post.serialLabel}</span>
+                    ) : null}
                     <span>真实发布者：{selectedDetail.post.realAuthorName}</span>
                     <span>前台显示：{selectedDetail.post.publicAuthorName}</span>
                     <span>组织：{formatOrganizationLabel(selectedDetail.post.authorOrganization || "")}</span>
@@ -158,11 +188,21 @@ export default function AdminTreeholePage() {
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-xl font-extrabold">全部回帖</h3>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-xl font-extrabold">全部回帖</h3>
+                <select
+                  className="h-10 rounded-md border border-input bg-white px-3 text-sm"
+                  value={replySortBy}
+                  onChange={(event) => setReplySortBy(event.target.value)}
+                >
+                  <option value="oldest">最早回复</option>
+                  <option value="score-desc">点赞数</option>
+                </select>
+              </div>
               {selectedDetail.replies.length === 0 ? (
                 <p className="text-sm text-slate-500">暂无回帖。</p>
               ) : (
-                selectedDetail.replies.map((reply: any) => (
+                sortedSelectedReplies.map((reply: any) => (
                   <div key={reply._id} className="rounded-lg border bg-white p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-2">
@@ -171,6 +211,7 @@ export default function AdminTreeholePage() {
                           <span>前台显示：{reply.publicAuthorName}</span>
                           <span>组织：{formatOrganizationLabel(reply.authorOrganization || "")}</span>
                           <span>年级：{reply.authorCohort ? getCohortLabel(reply.authorCohort) : ""}</span>
+                          <span>点赞数：{reply.voteScore || 0}</span>
                           <span>{formatTime(reply.createdAt)}</span>
                         </div>
                         <CollapsibleText text={reply.content} collapsedLength={260} />

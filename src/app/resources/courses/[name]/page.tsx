@@ -7,6 +7,7 @@ import { useParams } from "next/navigation"
 import { ArrowLeft, MessageSquare, Pencil, Plus, Star, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
+import { ContentVoteButtons } from "@/components/content-vote-buttons"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -32,6 +33,7 @@ import {
   useDeleteCourseReview,
   useUpdateCourseReview,
   useUsers,
+  useVoteCourseReview,
 } from "@/lib/api"
 import type { Course, CourseReview } from "@/types"
 
@@ -71,6 +73,7 @@ type ReviewFormState = {
 const REVIEW_SORT_OPTIONS = [
   { value: "newest", label: "最新" },
   { value: "rating", label: "评分" },
+  { value: "score-desc", label: "点赞数" },
 ] as const
 
 function getStars(rating: number) {
@@ -208,6 +211,7 @@ export default function CourseDetailPage() {
   const createReview = useCreateCourseReview()
   const updateReview = useUpdateCourseReview()
   const deleteReview = useDeleteCourseReview()
+  const voteReview = useVoteCourseReview()
 
   const userReview = React.useMemo(() => {
     if (!currentUser) return null
@@ -236,6 +240,7 @@ export default function CourseDetailPage() {
   const sortedReviews = React.useMemo(() => {
     return [...filteredReviews].sort((a, b) => {
       if (sortBy === "rating") return b.overallRating - a.overallRating
+      if (sortBy === "score-desc") return (b.voteScore || 0) - (a.voteScore || 0)
       return b.createdAt - a.createdAt
     })
   }, [filteredReviews, sortBy])
@@ -310,6 +315,10 @@ export default function CourseDetailPage() {
     } catch (error) {
       console.error("Failed to delete review:", error)
     }
+  }
+
+  const handleVoteReview = async (reviewId: string, value?: 1 | -1) => {
+    await voteReview({ id: reviewId, value })
   }
 
   const reviewAuthor = (review: CourseReview) => {
@@ -722,7 +731,7 @@ export default function CourseDetailPage() {
             <div className="space-y-1">
               <p className="text-xs text-slate-600">排序</p>
               <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
-                <SelectTrigger className="w-[120px]">
+                <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="排序" />
                 </SelectTrigger>
                 <SelectContent>
@@ -786,6 +795,12 @@ export default function CourseDetailPage() {
                       </div>
 
                       <div className="flex items-center gap-3">
+                        <ContentVoteButtons
+                          likes={review.likes}
+                          dislikes={review.dislikes}
+                          currentUserVote={review.currentUserVote}
+                          onVote={(value) => handleVoteReview(review._id, value)}
+                        />
                         {isOwnReview && (
                           <>
                             <Button variant="outline" size="icon" onClick={() => startEdit(review)}>

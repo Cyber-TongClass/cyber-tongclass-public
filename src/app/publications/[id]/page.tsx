@@ -5,23 +5,8 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ArrowLeft, ExternalLink, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
 import { usePublicationById } from "@/lib/api"
-import type { Publication } from "@/types"
-
-function AuthorsList({ authors }: { authors: string[] }) {
-  return (
-    <span>
-      {authors.map((author, index) => (
-        <span key={index}>
-          <Link href="/members" className="text-slate-900 hover:text-primary">
-            {author}
-          </Link>
-          {index < authors.length - 1 && ", "}
-        </span>
-      ))}
-    </span>
-  )
-}
 
 export default function PublicationDetailPage() {
   const params = useParams<{ id: string }>()
@@ -113,7 +98,7 @@ export default function PublicationDetailPage() {
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight mb-5">{publication.title}</h1>
 
             <p className="text-base text-slate-600 mb-4">
-              <AuthorsList authors={publication.authors} />
+              <PublicationAuthorsList authors={publication.authors} />
             </p>
 
             <div className="flex flex-wrap items-center gap-4 text-sm">

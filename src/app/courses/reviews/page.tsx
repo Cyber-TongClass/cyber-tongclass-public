@@ -9,12 +9,14 @@ import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTr
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { useAllCourseReviews, useCreateCourseReview } from "@/lib/api"
+import { useAllCourseReviews, useCreateCourseReview, useVoteCourseReview } from "@/lib/api"
+import { ContentVoteButtons } from "@/components/content-vote-buttons"
 import { Star, Plus, Search } from "lucide-react"
 
 export default function CourseReviewsPage() {
   const { isAuthenticated, isLoading } = useAuth()
   const allReviews = useAllCourseReviews({ status: "approved" }) || []
+  const voteReview = useVoteCourseReview()
   const [mode, setMode] = React.useState("latest") // latest | top
   const [query, setQuery] = React.useState("")
   const [selectedInstructor, setSelectedInstructor] = React.useState<string | "">("")
@@ -41,8 +43,10 @@ export default function CourseReviewsPage() {
     let list = [...allReviews]
     if (mode === "latest") {
       list.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0))
-    } else {
+    } else if (mode === "top") {
       list.sort((a: any, b: any) => (b.overallRating || 0) - (a.overallRating || 0))
+    } else if (mode === "score-desc") {
+      list.sort((a: any, b: any) => (b.voteScore || 0) - (a.voteScore || 0))
     }
 
     if (query.trim()) {
@@ -67,6 +71,10 @@ export default function CourseReviewsPage() {
 
     return list
   }, [allReviews, mode, query, selectedInstructor, selectedTag])
+
+  const handleVoteReview = async (reviewId: string, value?: 1 | -1) => {
+    await voteReview({ id: reviewId, value })
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -103,7 +111,8 @@ export default function CourseReviewsPage() {
           <div>
             <select className="h-9 rounded-md border px-2" value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="latest">最新</option>
-              <option value="top">热门</option>
+              <option value="top">评分最高</option>
+              <option value="score-desc">点赞数</option>
             </select>
           </div>
           <div>
@@ -132,8 +141,17 @@ export default function CourseReviewsPage() {
                       <div className="text-lg font-extrabold">{r.courseName} · {r.instructor}</div>
                       <div className="text-sm text-slate-600">评分: {r.overallRating} · {new Date(r.createdAt).toLocaleString()}</div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <Star className="h-4 w-4 text-amber-500" /> {r.overallRating}
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <Star className="h-4 w-4 text-amber-500" /> {r.overallRating}
+                      </div>
+                      <ContentVoteButtons
+                        likes={r.likes}
+                        dislikes={r.dislikes}
+                        currentUserVote={r.currentUserVote}
+                        disabled={!isAuthenticated || isLoading}
+                        onVote={(value) => handleVoteReview(r._id, value)}
+                      />
                     </div>
                   </CardTitle>
                 </CardHeader>

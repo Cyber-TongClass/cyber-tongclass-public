@@ -1,10 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ArrowLeft, MessageSquare, Search, Send, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { useCreateTreeholePost, useDeleteTreeholePost, useTreeholePosts } from "@/lib/api"
+import {
+  useCreateTreeholePost,
+  useDeleteTreeholePost,
+  useEnsureTreeholeSerialNumbers,
+  useTreeholePosts,
+  useVoteTreeholePost,
+} from "@/lib/api"
+import { ContentVoteButtons } from "@/components/content-vote-buttons"
 import { CollapsibleText } from "@/components/intranet/collapsible-text"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,13 +30,31 @@ export default function TreeholePage() {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [isAnonymous, setIsAnonymous] = useState(true)
+  const [sortBy, setSortBy] = useState("latest")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   const posts = useTreeholePosts({ search: searchQuery.trim() || undefined }) || []
   const createPost = useCreateTreeholePost()
   const deletePost = useDeleteTreeholePost()
+  const ensureSerialNumbers = useEnsureTreeholeSerialNumbers()
+  const votePost = useVoteTreeholePost()
   const { confirm, ConfirmDialog } = useConfirmDialog()
+
+  useEffect(() => {
+    if (!currentUser) return
+    void ensureSerialNumbers().catch((serialError) => {
+      console.error("Failed to ensure treehole serial numbers:", serialError)
+    })
+  }, [currentUser, ensureSerialNumbers])
+
+  const sortedPosts = useMemo(() => {
+    return [...posts].sort((a: any, b: any) => {
+      if (sortBy === "score-desc") return (b.voteScore || 0) - (a.voteScore || 0)
+      if (sortBy === "replies-desc") return (b.replyCount || 0) - (a.replyCount || 0)
+      return (b.createdAt || 0) - (a.createdAt || 0)
+    })
+  }, [posts, sortBy])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,6 +91,10 @@ export default function TreeholePage() {
         await deletePost({ id: postId as any, actorId: currentUser._id as any } as any)
       },
     })
+  }
+
+  const handleVotePost = async (postId: string, value?: 1 | -1) => {
+    await votePost({ id: postId, value })
   }
 
   return (
@@ -126,25 +155,36 @@ export default function TreeholePage() {
 
         <Card>
           <CardContent className="pt-6">
-            <div className="relative">
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索标题、作者或帖子内容"
-                className="pr-10"
-              />
-              <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <div className="flex flex-col gap-3 md:flex-row">
+              <div className="relative flex-1">
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索编号、标题、作者或帖子内容"
+                  className="pr-10"
+                />
+                <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </div>
+              <select
+                className="h-10 rounded-md border border-input bg-white px-3 text-sm"
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+              >
+                <option value="latest">最新发布</option>
+                <option value="score-desc">点赞数</option>
+                <option value="replies-desc">回帖数</option>
+              </select>
             </div>
           </CardContent>
         </Card>
 
         <div className="space-y-4">
-          {posts.length === 0 ? (
+          {sortedPosts.length === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-sm text-slate-500">还没有符合条件的帖子，来发第一条吧。</CardContent>
             </Card>
           ) : (
-            posts.map((post: any) => {
+            sortedPosts.map((post: any) => {
               const canDelete = !!currentUser && (String(post.authorId) === String(currentUser._id) || isAdmin)
 
               return (
@@ -156,22 +196,31 @@ export default function TreeholePage() {
                           <CardTitle className="text-2xl hover:text-primary transition-colors">{post.title}</CardTitle>
                         </Link>
                         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                          {post.serialLabel ? <span className="font-mono font-semibold text-primary">#{post.serialLabel}</span> : null}
                           <span>{post.publicAuthorName}</span>
                           <span>{formatTime(post.createdAt)}</span>
                           <span>{post.replyCount} 条回帖</span>
                         </div>
                       </div>
-                      {canDelete ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="text-slate-500 hover:text-red-600"
-                          onClick={() => handleDelete(post._id, post.title)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      ) : null}
+                      <div className="flex items-center gap-2">
+                        <ContentVoteButtons
+                          likes={post.likes}
+                          dislikes={post.dislikes}
+                          currentUserVote={post.currentUserVote}
+                          onVote={(value) => handleVotePost(post._id, value)}
+                        />
+                        {canDelete ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-slate-500 hover:text-red-600"
+                            onClick={() => handleDelete(post._id, post.title)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">

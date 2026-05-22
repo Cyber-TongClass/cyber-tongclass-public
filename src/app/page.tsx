@@ -69,7 +69,7 @@ export default function HomePage() {
     },
     {
       title: "立体化的学术交流网络",
-      description: "与UCLA、MIT、CMU等世界顶尖学府保持紧密交流，定期举办国际学术论坛，并有学生自主创办的\u201cTong Talk\u201d学术沙龙和以学生为主体参展的学术交流活动\u201cAI TechDay\u201d。",
+      description: "与MIT、CMU、Harvard、UCLA等世界顶尖学府保持紧密交流，定期举办国际学术论坛，并有学生自主创办的\u201cTong Talk\u201d学术沙龙和以学生为主体参展的学术交流活动\u201cAI TechDay\u201d。",
       image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E9%80%9A%E7%94%A8%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E5%AE%9E%E9%AA%8C%E7%8F%AD_%E9%80%9A%E8%AF%86_%E9%80%9A%E6%99%BA_%E9%80%9A%E7%94%A8/assets/17776187946490.7499788932747545.jpg",
     },
     {

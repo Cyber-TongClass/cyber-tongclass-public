@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
+import { ensurePublicationVenue } from "./publicationVenues"
 
 // Get all publications with pagination
 export const list = query({
@@ -82,6 +83,7 @@ export const create = mutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
+    await ensurePublicationVenue(ctx, venue, userId)
 
     return publicationId
   },
@@ -112,6 +114,9 @@ export const update = mutation({
       ...updates,
       updatedAt: Date.now(),
     })
+    if (updates.venue !== undefined) {
+      await ensurePublicationVenue(ctx, updates.venue, publication.userId)
+    }
 
     return id
   },

@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { usePublications } from "@/lib/api"
+import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
+import { getPublicationAuthorName } from "@/lib/publication-authors"
 import type { Publication } from "@/types"
 
 const VENUE_BADGE_MAP: Record<string, string> = {
@@ -53,22 +55,14 @@ function venueBadge(v: string) {
   return VENUE_BADGE_MAP[v.toLowerCase()] ?? "bg-slate-100 text-slate-700"
 }
 
-function AuthorsList({ authors }: { authors: string[] }) {
-  return (
-    <span>
-      {authors.map((author, index) => (
-        <span key={index}>
-          <span>{author}</span>
-          {index < authors.length - 1 && ", "}
-        </span>
-      ))}
-    </span>
-  )
+function isPreprintPublication(pub: Publication) {
+  return pub.venue.trim().toLowerCase() === "arxiv preprint"
 }
 
 export default function PublicationsPage() {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedCategory, setSelectedCategory] = React.useState("all")
+  const [publicationKind, setPublicationKind] = React.useState<"published" | "preprint">("published")
   const [sortBy, setSortBy] = React.useState<"year" | "title">("year")
   const [sortOrder, setSortOrder] = React.useState<"desc" | "asc">("desc")
 
@@ -83,10 +77,14 @@ export default function PublicationsPage() {
   const filteredPublications = React.useMemo(() => {
     let result = [...publications]
 
+    result = result.filter((pub) =>
+      publicationKind === "preprint" ? isPreprintPublication(pub) : !isPreprintPublication(pub)
+    )
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       result = result.filter(
-        (pub) => pub.title.toLowerCase().includes(query) || pub.authors.some((author) => author.toLowerCase().includes(query))
+        (pub) => pub.title.toLowerCase().includes(query) || pub.authors.some((author) => getPublicationAuthorName(author).toLowerCase().includes(query))
       )
     }
 
@@ -102,7 +100,7 @@ export default function PublicationsPage() {
     })
 
     return result
-  }, [publications, searchQuery, selectedCategory, sortBy, sortOrder])
+  }, [publicationKind, publications, searchQuery, selectedCategory, sortBy, sortOrder])
 
   const groupedByYear = React.useMemo(() => {
     const groups: Record<number, Publication[]> = {}
@@ -140,6 +138,16 @@ export default function PublicationsPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <Select value={publicationKind} onValueChange={(v) => setPublicationKind(v as "published" | "preprint")}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="成果类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="published">已发表论文</SelectItem>
+                  <SelectItem value="preprint">Preprint</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="选择领域" />
@@ -158,7 +166,7 @@ export default function PublicationsPage() {
                   <SelectValue placeholder="排序方式" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="year">按年份</SelectItem>
+                  <SelectItem value="year">按发布时间</SelectItem>
                   <SelectItem value="title">按标题</SelectItem>
                 </SelectContent>
               </Select>
@@ -173,12 +181,13 @@ export default function PublicationsPage() {
                 </SelectContent>
               </Select>
 
-              {(selectedCategory !== "all" || searchQuery) && (
+              {(selectedCategory !== "all" || searchQuery || publicationKind !== "published") && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
                     setSelectedCategory("all")
+                    setPublicationKind("published")
                     setSearchQuery("")
                   }}
                 >
@@ -188,7 +197,9 @@ export default function PublicationsPage() {
             </div>
           </div>
 
-          <div className="mt-4 text-sm text-slate-600">共 {filteredPublications.length} 篇论文</div>
+          <div className="mt-4 text-sm text-slate-600">
+            共 {filteredPublications.length} 篇{publicationKind === "preprint" ? " Preprint" : "已发表论文"}
+          </div>
         </div>
       </section>
 
@@ -212,8 +223,7 @@ export default function PublicationsPage() {
                 {/* Paper list */}
                 <div className="space-y-4">
                   {(pubs as Publication[]).map((pub) => (
-                    <Link key={pub._id} href={`/publications/${pub._id}`}>
-                      <div className="group bg-white p-5 shadow-sm hover:bg-slate-50 border-l-[3px] border-transparent hover:border-primary transition-all duration-200">
+                    <div key={pub._id} className="group bg-white p-5 shadow-sm hover:bg-slate-50 border-l-[3px] border-transparent hover:border-primary transition-all duration-200">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
@@ -226,19 +236,31 @@ export default function PublicationsPage() {
                               {pub.subCategory && <span className="px-2 py-0.5 text-[11px] font-medium rounded bg-[hsl(211,50%,93%)] text-primary">{pub.subCategory}</span>}
                             </div>
 
-                            <h3 className="text-base font-extrabold text-slate-900 group-hover:text-primary transition-colors line-clamp-2 mb-1.5">
-                              {pub.title}
-                            </h3>
+                            <Link href={`/publications/${pub._id}`} className="block">
+                              <h3 className="text-base font-extrabold text-slate-900 group-hover:text-primary transition-colors line-clamp-2 mb-1.5">
+                                {pub.title}
+                              </h3>
+                            </Link>
 
                             <p className="text-sm text-slate-500">
-                              <AuthorsList authors={pub.authors} />
+                              <PublicationAuthorsList authors={pub.authors} />
                             </p>
                           </div>
 
-                          {pub.url && <ExternalLink className="h-4 w-4 text-slate-400 group-hover:text-primary transition-colors flex-shrink-0 mt-1" />}
+                          {pub.url && (
+                            <a
+                              href={pub.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`打开 ${pub.title} 的项目链接`}
+                              title="打开项目链接"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-[hsl(211,50%,93%)] hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          )}
                         </div>
-                      </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               </div>

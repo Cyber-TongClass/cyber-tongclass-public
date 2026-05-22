@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { getVoteSummaryMap } from "./contentVotes"
 
 type ReviewStatus = "pending" | "approved" | "rejected"
 
@@ -48,8 +49,34 @@ function parseLegacySemester(value?: string) {
   return { year, term: term as "spring" | "fall" }
 }
 
-function normalizeReviewForClient(review: any) {
+async function sha256Hex(input: string) {
+  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
+  const enc = new TextEncoder().encode(input)
+  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
+  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
+}
+
+async function getActorIdFromSession(ctx: any, sessionToken?: string) {
+  if (!sessionToken) return undefined
+
+  const tokenHash = await sha256Hex(sessionToken)
+  const session = await ctx.db
+    .query("authSessions")
+    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
+    .first()
+  if (!session || session.revokedAt || session.expiresAt <= Date.now()) return undefined
+
+  const actor = await ctx.db.get(session.userId)
+  return actor?._id
+}
+
+function getEmptyVoteSummary() {
+  return { likes: 0, dislikes: 0, score: 0, currentUserVote: undefined }
+}
+
+function normalizeReviewForClient(review: any, voteSummary?: any) {
   const legacySemester = parseLegacySemester(review.semester)
+  const summary = voteSummary || getEmptyVoteSummary()
 
   return {
     ...review,
@@ -57,6 +84,10 @@ function normalizeReviewForClient(review: any) {
     semesterYear: review.semesterYear ?? legacySemester.year ?? new Date(review.createdAt || Date.now()).getFullYear(),
     semesterTerm: review.semesterTerm ?? legacySemester.term ?? "spring",
     overallRating: getReviewRating(review),
+    likes: summary.likes,
+    dislikes: summary.dislikes,
+    voteScore: summary.score,
+    currentUserVote: summary.currentUserVote,
   }
 }
 
@@ -97,6 +128,7 @@ export const listByCourse = query({
     instructor: v.optional(v.string()),
     semesterYear: v.optional(v.number()),
     semesterTerm: v.optional(v.union(v.literal("spring"), v.literal("fall"))),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let reviews = await ctx.db.query("courseReviews").order("desc").collect()
@@ -116,7 +148,10 @@ export const listByCourse = query({
       reviews = reviews.filter((review) => review.semesterTerm === args.semesterTerm)
     }
 
-    return reviews
+    const actorId = await getActorIdFromSession(ctx, args.sessionToken)
+    const voteSummaries = await getVoteSummaryMap(ctx, "courseReview", reviews.map((review) => String(review._id)), actorId)
+
+    return reviews.map((review) => normalizeReviewForClient(review, voteSummaries.get(String(review._id))))
   },
 })
 
@@ -124,6 +159,7 @@ export const listByCourseAll = query({
   args: {
     courseName: v.optional(v.string()),
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let reviews = await ctx.db.query("courseReviews").order("desc").collect()
@@ -136,7 +172,10 @@ export const listByCourseAll = query({
       reviews = reviews.filter((review) => review.status === args.status)
     }
 
-    return reviews.map(normalizeReviewForClient)
+    const actorId = await getActorIdFromSession(ctx, args.sessionToken)
+    const voteSummaries = await getVoteSummaryMap(ctx, "courseReview", reviews.map((review) => String(review._id)), actorId)
+
+    return reviews.map((review) => normalizeReviewForClient(review, voteSummaries.get(String(review._id))))
   },
 })
 

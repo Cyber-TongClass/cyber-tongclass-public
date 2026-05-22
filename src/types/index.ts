@@ -63,6 +63,13 @@ export interface Publication {
   updatedAt: number
 }
 
+export interface PublicationVenue {
+  _id?: string
+  name: string
+  source: "manual" | "publication"
+  updatedAt?: number
+}
+
 // Course review types
 export interface CourseReview {
   _id: string
@@ -85,6 +92,10 @@ export interface CourseReview {
   status: 'pending' | 'approved' | 'rejected'
   tags?: string[]
   active?: boolean
+  likes?: number
+  dislikes?: number
+  voteScore?: number
+  currentUserVote?: 1 | -1
   createdAt: number
   updatedAt: number
 }
@@ -137,6 +148,8 @@ export interface Event {
 
 export interface TreeholePostSummary {
   _id: string
+  serialNumber?: number
+  serialLabel?: string
   title: string
   content: string
   isAnonymous: boolean
@@ -145,6 +158,10 @@ export interface TreeholePostSummary {
   realAuthorName: string
   anonymousAlias?: string
   replyCount: number
+  likes?: number
+  dislikes?: number
+  voteScore?: number
+  currentUserVote?: 1 | -1
   createdAt: number
   updatedAt: number
 }
@@ -158,6 +175,10 @@ export interface TreeholeReply {
   publicAuthorName: string
   realAuthorName: string
   anonymousAlias?: string
+  likes?: number
+  dislikes?: number
+  voteScore?: number
+  currentUserVote?: 1 | -1
   createdAt: number
   updatedAt: number
 }

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
 import {
   Table,
   TableBody,
@@ -23,8 +24,9 @@ import {
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { usePublicationsByUser, useDeletePublication } from "@/lib/api"
+import { usePublications, useDeletePublication } from "@/lib/api"
 import { getPublicationCategoryOptions } from "@/lib/publication-taxonomy"
+import { canEditPublication, getPublicationAuthorName, publicationBelongsToUser } from "@/lib/publication-authors"
 import type { Publication } from "@/types"
 
 export default function MyPublicationsPage() {
@@ -34,8 +36,10 @@ export default function MyPublicationsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
 
   // Fetch publications from Convex
-  const publicationsData = usePublicationsByUser(currentUser?._id || "")
-  const publications: Publication[] = publicationsData || []
+  const publicationsData = usePublications({ limit: 1000 })
+  const publications: Publication[] = (publicationsData || []).filter((publication: Publication) =>
+    publicationBelongsToUser(publication, currentUser?._id)
+  )
   const deletePublication = useDeletePublication()
 
   const { confirm, ConfirmDialog } = useConfirmDialog()
@@ -69,7 +73,7 @@ export default function MyPublicationsPage() {
         !query ||
         publication.title.toLowerCase().includes(query) ||
         publication.venue.toLowerCase().includes(query) ||
-        publication.authors.some((author) => author.toLowerCase().includes(query))
+        publication.authors.some((author) => getPublicationAuthorName(author).toLowerCase().includes(query))
       const matchesCategory = !categoryFilter || publication.category === categoryFilter
       return matchesSearch && matchesCategory
     })
@@ -169,49 +173,59 @@ export default function MyPublicationsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredPublications.map((publication) => (
-                    <TableRow key={publication._id}>
-                      <TableCell className="font-medium max-w-[320px] truncate">{publication.title}</TableCell>
-                      <TableCell className="max-w-[260px] truncate text-gray-600">{publication.authors.join(", ")}</TableCell>
-                      <TableCell>
-                        <span className="text-xs font-bold uppercase tracking-wider text-[hsl(211,60%,35%)]">
-                          {categoryLabelMap.get(publication.category) || publication.category}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-gray-600">{publication.venue}</TableCell>
-                      <TableCell>{publication.year}</TableCell>
-                      <TableCell className="text-gray-500">
-                        {new Date(publication.updatedAt).toLocaleDateString("zh-CN")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link href={`/publications/${publication._id}`}>
-                                <Eye className="h-4 w-4 mr-2" />
-                                查看
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link href={`/my-publications/${publication._id}`}>
-                                <Edit className="h-4 w-4 mr-2" />
-                                编辑
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600" onSelect={() => handleDelete(publication)}>
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              删除
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredPublications.map((publication) => {
+                    const canEdit = canEditPublication(publication, currentUser._id)
+                    const canDelete = String(publication.userId) === String(currentUser._id)
+                    return (
+                      <TableRow key={publication._id}>
+                        <TableCell className="font-medium max-w-[320px] truncate">{publication.title}</TableCell>
+                        <TableCell className="max-w-[260px] text-gray-600">
+                          <PublicationAuthorsList authors={publication.authors} />
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs font-bold uppercase tracking-wider text-[hsl(211,60%,35%)]">
+                            {categoryLabelMap.get(publication.category) || publication.category}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-gray-600">{publication.venue}</TableCell>
+                        <TableCell>{publication.year}</TableCell>
+                        <TableCell className="text-gray-500">
+                          {new Date(publication.updatedAt).toLocaleDateString("zh-CN")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/publications/${publication._id}`}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  查看
+                                </Link>
+                              </DropdownMenuItem>
+                              {canEdit && (
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/my-publications/${publication._id}`}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    编辑
+                                  </Link>
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete && (
+                                <DropdownMenuItem className="text-red-600" onSelect={() => handleDelete(publication)}>
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  删除
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Search, FileText, Users, Calendar, BookOpen, Newspaper } from "lucide-react"
 import { useNews, useUsers, usePublications, useEvents, useCourses } from "@/lib/api"
+import { formatPublicationAuthorsForText, getPublicationAuthorName } from "@/lib/publication-authors"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -109,7 +110,7 @@ function SearchContent() {
     publications.forEach((pub) => {
       if (
         pub.title.toLowerCase().includes(q) ||
-        pub.authors.some((author) => author.toLowerCase().includes(q)) ||
+        pub.authors.some((author) => getPublicationAuthorName(author).toLowerCase().includes(q)) ||
         pub.venue.toLowerCase().includes(q) ||
         pub.abstract.toLowerCase().includes(q)
       ) {
@@ -117,7 +118,7 @@ function SearchContent() {
           type: "publication",
           id: pub._id,
           title: pub.title,
-          description: `${pub.authors.join(", ")} - ${pub.venue} (${pub.year})`,
+          description: `${formatPublicationAuthorsForText(pub.authors)} - ${pub.venue} (${pub.year})`,
           url: `/publications/${pub._id}`,
           icon: <FileText className="h-5 w-5" />,
         })

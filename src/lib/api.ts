@@ -326,6 +326,15 @@ export function useCreateTreeholePost() {
   }, [create])
 }
 
+export function useEnsureTreeholeSerialNumbers() {
+  const ensure = useMutation(api.treehole.ensureSerialNumbers)
+  return useCallback(() => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return ensure({ sessionToken } as any)
+  }, [ensure])
+}
+
 export function useCreateTreeholeReply() {
   const create = useMutation(api.treehole.createReply)
   return useCallback((args: any) => {
@@ -351,6 +360,24 @@ export function useDeleteTreeholeReply() {
     if (!sessionToken) throw new Error("请先登录")
     return remove({ ...args, sessionToken } as any)
   }, [remove])
+}
+
+export function useVoteTreeholePost() {
+  const vote = useMutation(api.contentVotes.voteTreeholePost)
+  return useCallback((args: { id: string; value?: 1 | -1 }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return vote({ ...args, sessionToken } as any)
+  }, [vote])
+}
+
+export function useVoteTreeholeReply() {
+  const vote = useMutation(api.contentVotes.voteTreeholeReply)
+  return useCallback((args: { id: string; value?: 1 | -1 }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return vote({ ...args, sessionToken } as any)
+  }, [vote])
 }
 
 export function useFeedbackEntries() {
@@ -454,6 +481,28 @@ export function useSearchPublications(query: string) {
   return useQuery(api.publications.search, query ? { query } : "skip")
 }
 
+export function usePublicationVenues() {
+  return useQuery(api.publicationVenues.list)
+}
+
+export function useCreatePublicationVenue() {
+  const create = useMutation(api.publicationVenues.create)
+  return useCallback((args: { name: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
+}
+
+export function useUpdatePublicationVenue() {
+  const update = useMutation(api.publicationVenues.update)
+  return useCallback((args: { id: string; name: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
+}
+
 // ==================== 课程相关 ====================
 
 export function useCourses(args?: { skip?: number; limit?: number }) {
@@ -489,6 +538,7 @@ export function useCourseReviews(args?: string | {
   semesterYear?: number
   semesterTerm?: "spring" | "fall"
 }) {
+  const sessionToken = useTongClassSessionToken()
   const normalized =
     typeof args === "string"
       ? {
@@ -496,14 +546,18 @@ export function useCourseReviews(args?: string | {
       }
       : args
 
-  return useQuery(api.courseReviews.listByCourse, normalized?.courseName ? (normalized as any) : "skip")
+  return useQuery(
+    api.courseReviews.listByCourse,
+    normalized?.courseName ? ({ ...normalized, sessionToken: sessionToken || undefined } as any) : "skip"
+  )
 }
 
 export function useAllCourseReviews(args?: {
   courseName?: string
   status?: "pending" | "approved" | "rejected"
 }) {
-  return useQuery(api.courseReviews.listByCourseAll, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.courseReviews.listByCourseAll, { ...(args || {}), sessionToken: sessionToken || undefined } as any)
 }
 
 export function usePendingReviews(args?: { skip?: number; limit?: number }) {
@@ -553,6 +607,15 @@ export function useSetReviewTagColor() {
 
 export function useCommonReviewTags() {
   return useQuery(api.courseReviews.commonTags)
+}
+
+export function useVoteCourseReview() {
+  const vote = useMutation(api.contentVotes.voteCourseReview)
+  return useCallback((args: { id: string; value?: 1 | -1 }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return vote({ ...args, sessionToken } as any)
+  }, [vote])
 }
 
 // ==================== 认证操作 ====================

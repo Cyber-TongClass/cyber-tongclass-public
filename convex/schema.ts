@@ -69,6 +69,14 @@ export default defineSchema({
     .index("by_category", ["category"])
     .searchIndex("search_title", { searchField: "title" }),
 
+  publicationVenues: defineTable({
+    name: v.string(),
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"]),
+
   // Course reviews table
   courseReviews: defineTable({
     courseName: v.string(),
@@ -164,6 +172,7 @@ export default defineSchema({
     .index("by_name", ["name"]),
 
   treeholePosts: defineTable({
+    serialNumber: v.optional(v.number()),
     title: v.string(),
     content: v.string(),
     isAnonymous: v.boolean(),
@@ -183,6 +192,17 @@ export default defineSchema({
   })
     .index("by_post", ["postId"])
     .index("by_author", ["authorId"]),
+
+  contentVotes: defineTable({
+    userId: v.id("users"),
+    targetType: v.union(v.literal("treeholePost"), v.literal("treeholeReply"), v.literal("courseReview")),
+    targetId: v.string(),
+    value: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_target", ["targetType", "targetId"])
+    .index("by_user_target", ["userId", "targetType", "targetId"]),
 
   feedbackEntries: defineTable({
     title: v.string(),

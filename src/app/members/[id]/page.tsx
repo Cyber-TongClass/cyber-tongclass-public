@@ -1,12 +1,12 @@
 "use client"
-
-import * as React from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ArrowLeft, Mail, ExternalLink, BookOpen, FileText, School, GraduationCap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { usePublicationsByUser, useUserByProfileSlug } from "@/lib/api"
+import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
+import { usePublications, useUserByProfileSlug } from "@/lib/api"
+import { publicationBelongsToUser } from "@/lib/publication-authors"
 import { normalizeUrl } from "@/lib/utils"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import { getUserLinks, getUserPersonalEmails } from "@/lib/user-profile"
@@ -20,8 +20,10 @@ export default function MemberDetailPage() {
 
   const userData = useUserByProfileSlug(memberSlug)
   const member = userData ? { ...userData, id: userData._id } : null
-  const publicationsData = usePublicationsByUser(member?._id || "")
-  const publications: Publication[] = publicationsData || []
+  const publicationsData = usePublications({ limit: 1000 })
+  const publications: Publication[] = (publicationsData || []).filter((publication: Publication) =>
+    publicationBelongsToUser(publication, member?._id)
+  )
   const personalEmails = member ? getUserPersonalEmails(member) : []
   const profileLinks = member ? getUserLinks(member) : []
   const researchDirections = member?.researchDirections || []
@@ -185,22 +187,15 @@ export default function MemberDetailPage() {
               {publications.length > 0 ? (
                 <div className="space-y-4">
                   {publications.map((pub) => (
-                    <Link
+                    <div
                       key={pub._id}
-                      href={`/publications/${pub._id}`}
                       className="block p-4 rounded-lg border border-slate-200 hover:border-primary/30 hover:bg-[hsl(211,40%,97%)] transition-all"
                     >
-                      <h4 className="font-extrabold text-slate-900 mb-1 line-clamp-2">{pub.title}</h4>
+                      <Link href={`/publications/${pub._id}`} className="block">
+                        <h4 className="font-extrabold text-slate-900 hover:text-primary mb-1 line-clamp-2">{pub.title}</h4>
+                      </Link>
                       <p className="text-sm text-slate-600 mb-2">
-                        {pub.authors.map((author, index) => {
-                          const isCurrentUser = author === member.englishName
-                          return (
-                            <React.Fragment key={index}>
-                              {index > 0 && ", "}
-                              <span className={isCurrentUser ? "font-extrabold text-slate-600" : ""}>{author}</span>
-                            </React.Fragment>
-                          )
-                        })}
+                        <PublicationAuthorsList authors={pub.authors} emphasizedUserId={String(member._id)} />
                       </p>
                       <div className="flex items-center gap-3 text-xs text-slate-600">
                         <span className="font-medium text-primary">{pub.venue}</span>
@@ -209,7 +204,7 @@ export default function MemberDetailPage() {
                         <span>·</span>
                         <span>{pub.category}</span>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               ) : (

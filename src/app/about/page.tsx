@@ -134,7 +134,7 @@ export default function AboutPage() {
                     </div>
                     <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">立体化的学术交流网络</h3>
                     <p className="text-left text-slate-600 leading-relaxed text-sm">
-                     与UCLA、MIT、CMU等世界顶尖学府保持紧密交流，定期举办国际学术论坛，并与学生自主创办的Tong Talk学术沙龙和以学生为主体参展的学术交流活动AI TechDay。
+                     与MIT、CMU、Harvard、UCLA等世界顶尖学府保持紧密交流，定期举办国际学术论坛，并与学生自主创办的Tong Talk学术沙龙和以学生为主体参展的学术交流活动AI TechDay。
                     </p>
                   </div>
                   <div className="w-full md:w-[calc(33.333%-1rem)] group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">

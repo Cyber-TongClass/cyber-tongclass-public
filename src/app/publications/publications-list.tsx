@@ -5,7 +5,9 @@ import Link from "next/link"
 import { Search, FileText, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
+import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
 import { usePublications } from "@/lib/api"
+import { getPublicationAuthorName } from "@/lib/publication-authors"
 
 const categories = [
   { value: "all", label: "全部领域" },
@@ -42,7 +44,7 @@ export function PublicationsList() {
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
         const matchTitle = pub.title.toLowerCase().includes(query)
-        const matchAuthors = pub.authors.some((a) => a.toLowerCase().includes(query))
+        const matchAuthors = pub.authors.some((a) => getPublicationAuthorName(a).toLowerCase().includes(query))
         if (!matchTitle && !matchAuthors) return false
       }
       if (selectedCategory !== "all" && pub.category !== selectedCategory) {
@@ -109,7 +111,7 @@ export function PublicationsList() {
             onChange={(e) => setSortBy(e.target.value as "year" | "title")}
             className="flex h-10 w-full md:w-[140px] items-center justify-between rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <option value="year">按年份</option>
+            <option value="year">按发布时间</option>
             <option value="title">按标题</option>
           </select>
         </div>
@@ -126,16 +128,17 @@ export function PublicationsList() {
           <h2 className="text-2xl font-extrabold text-slate-900 mb-4">Latest Works</h2>
           <div className="grid gap-6">
             {latestPublications.map((pub) => (
-              <Link key={pub._id} href={`/publications/${pub._id}`}>
-                <Card className="border-0 border-b border-primary/20 shadow-sm hover:bg-slate-50 transition-colors duration-300 cursor-pointer">
+              <Card key={pub._id} className="border-0 border-b border-primary/20 shadow-sm hover:bg-slate-50 transition-colors duration-300">
                   <CardContent className="p-5">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-extrabold text-slate-900 mb-2 line-clamp-2">
-                          {pub.title}
-                        </h3>
+                        <Link href={`/publications/${pub._id}`} className="block">
+                          <h3 className="text-lg font-extrabold text-slate-900 hover:text-primary mb-2 line-clamp-2">
+                            {pub.title}
+                          </h3>
+                        </Link>
                         <p className="text-sm text-slate-600 mb-2">
-                          {pub.authors.join(", ")}
+                          <PublicationAuthorsList authors={pub.authors} />
                         </p>
                         <div className="flex items-center gap-3 text-xs text-slate-600">
                           <span className="font-medium text-primary">{pub.venue}</span>
@@ -161,8 +164,7 @@ export function PublicationsList() {
                       )}
                     </div>
                   </CardContent>
-                </Card>
-              </Link>
+              </Card>
             ))}
           </div>
         </section>
@@ -174,16 +176,17 @@ export function PublicationsList() {
           <h2 className="text-2xl font-extrabold text-slate-900 mb-4">Archive</h2>
           <div className="grid gap-6">
             {archivePublications.map((pub) => (
-              <Link key={pub._id} href={`/publications/${pub._id}`}>
-                <Card className="border-0 border-b border-primary/20 shadow-sm hover:bg-slate-50 transition-colors duration-300 cursor-pointer">
+              <Card key={pub._id} className="border-0 border-b border-primary/20 shadow-sm hover:bg-slate-50 transition-colors duration-300">
                   <CardContent className="p-5">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-extrabold text-slate-900 mb-2 line-clamp-2">
-                          {pub.title}
-                        </h3>
+                        <Link href={`/publications/${pub._id}`} className="block">
+                          <h3 className="text-lg font-extrabold text-slate-900 hover:text-primary mb-2 line-clamp-2">
+                            {pub.title}
+                          </h3>
+                        </Link>
                         <p className="text-sm text-slate-600 mb-2">
-                          {pub.authors.join(", ")}
+                          <PublicationAuthorsList authors={pub.authors} />
                         </p>
                         <div className="flex items-center gap-3 text-xs text-slate-600">
                           <span className="font-medium text-primary">{pub.venue}</span>
@@ -209,8 +212,7 @@ export function PublicationsList() {
                       )}
                     </div>
                   </CardContent>
-                </Card>
-              </Link>
+              </Card>
             ))}
           </div>
         </section>

@@ -180,6 +180,7 @@ export default function ReviewsPage() {
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
+  const [reviewSortBy, setReviewSortBy] = useState("latest")
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null)
   const [manualAddOpen, setManualAddOpen] = useState(false)
   const [manualAddError, setManualAddError] = useState("")
@@ -252,6 +253,10 @@ export default function ReviewsPage() {
       review.content.toLowerCase().includes(query)
     const matchesStatus = !statusFilter || review.status === statusFilter
     return matchesSearch && matchesStatus
+  })
+  const sortedFilteredReviews = [...filteredReviews].sort((a, b) => {
+    if (reviewSortBy === "score-desc") return (b.voteScore || 0) - (a.voteScore || 0)
+    return b.createdAt - a.createdAt
   })
 
   const selectedReview = useMemo(
@@ -1158,6 +1163,14 @@ export default function ReviewsPage() {
                 <DropdownMenuItem onClick={() => setStatusFilter("rejected")}>已拒绝</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <select
+              className="h-10 rounded-md border border-input bg-white px-3 text-sm"
+              value={reviewSortBy}
+              onChange={(event) => setReviewSortBy(event.target.value)}
+            >
+              <option value="latest">最新提交</option>
+              <option value="score-desc">点赞数</option>
+            </select>
           </div>
         </CardContent>
       </Card>
@@ -1171,6 +1184,7 @@ export default function ReviewsPage() {
                 <TableHead>教师</TableHead>
                 <TableHead>学期</TableHead>
                 <TableHead>总体评价</TableHead>
+                <TableHead>点赞数</TableHead>
                 <TableHead>评价内容</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>提交时间</TableHead>
@@ -1178,7 +1192,7 @@ export default function ReviewsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredReviews.map((review) => (
+              {sortedFilteredReviews.map((review) => (
                 <TableRow key={review._id}>
                   <TableCell className="font-medium">{review.courseName}</TableCell>
                   <TableCell>{review.instructor}</TableCell>
@@ -1186,6 +1200,7 @@ export default function ReviewsPage() {
                   <TableCell>
                     <Badge className={getRatingBadgeClass(review.overallRating)}>{review.overallRating}/10</Badge>
                   </TableCell>
+                  <TableCell>{review.voteScore || 0}</TableCell>
                   <TableCell className="max-w-xs truncate text-gray-500">{review.content}</TableCell>
                   <TableCell>
                     <Badge className={statusColors[review.status]}>{statusLabels[review.status]}</Badge>
