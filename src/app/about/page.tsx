@@ -47,8 +47,8 @@ export default function AboutPage() {
             <TabsTrigger value="introduction" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">项目介绍</TabsTrigger>
             <TabsTrigger value="accounts" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">官方账号</TabsTrigger>
             <TabsTrigger value="council" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">学生组织</TabsTrigger>
-            <TabsTrigger value="merchandise" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">周边</TabsTrigger>
-            <TabsTrigger value="contact" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">联系</TabsTrigger>
+            <TabsTrigger value="merchandise" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">周边文创</TabsTrigger>
+            <TabsTrigger value="contact" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">联系方式</TabsTrigger>
             <TabsTrigger value="changelog" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">更新日志</TabsTrigger>
             <TabsTrigger value="credits" className="flex-1 py-3 border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-slate-500 hover:text-slate-900 rounded-none bg-transparent font-medium text-sm transition-colors text-center">致谢</TabsTrigger>
           </TabsList>
@@ -181,6 +181,37 @@ export default function AboutPage() {
                   <p className="text-sm font-medium text-slate-900">PKU通班 · ID: pkutongclass</p>
                 </div>
               </div>
+              <div className="grid md:grid-cols-3 gap-6 mt-8">
+                {[
+                  {
+                    name: "通小喵表情包第1弹",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E8%A1%A8%E6%83%85%E5%8C%851.jpg",
+                  },
+                  {
+                    name: "通小喵表情包第2弹",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E8%A1%A8%E6%83%85%E5%8C%852.png",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.name}
+                    className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden  w-[88%] mx-auto"
+                  >
+                    <div className="aspect-square bg-slate-100 relative">
+                      <Image
+                        src={item.src}
+                        alt={item.name}
+                        fill
+                        unoptimized
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                      />
+                    </div>
+                    <div className="px-4 py-3 text-center">
+                      <h4 className="font-extrabold text-slate-900">{item.name}</h4>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </TabsContent>
 
@@ -266,16 +297,152 @@ export default function AboutPage() {
               <p className="text-slate-500 mb-8">
                 通班文创持续更新中，由宣传部设计制作，已陆续推出多种周边产品。如有好的建议，欢迎联系我们。
               </p>
+
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {/* 第一张大图：全屏时占前两列、前两行 */}
+                <div className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden sm:col-span-2 sm:row-span-2">
+                  <div className="aspect-square bg-slate-100 relative">
+                    <Image
+                      src="https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_0803.JPG"
+                      alt="通班文创"
+                      fill
+                      unoptimized
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      sizes="(max-width: 640px) 100vw, 66vw"
+                    />
+                  </div>
+                  <div className="px-4 py-3 text-center">
+                    <h4 className="font-extrabold text-slate-900">徽章</h4>
+                  </div>
+                </div>
+
+                {/* 第一行第三列、第二行第三列 */}
                 {[
-                  { name: "马克杯", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E9%A9%AC%E5%85%8B%E6%9D%AF.jpg" },
-                  { name: "托特包", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E6%89%98%E7%89%B9%E5%8C%85.PNG" },
-                  { name: "日历", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E6%97%A5%E5%8E%86.JPG" },
-                  { name: "本子", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E6%9C%AC%E5%AD%90.JPG" },
-                  { name: "班服小熊", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E7%8F%AD%E6%9C%8D%E5%B0%8F%E7%86%8A.pic.jpg" },
-                  { name: "T恤", src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E8%A1%A3%E6%9C%8D%E8%83%8C%E9%9D%A2.jpg" },
+                  {
+                    name: "班服熊",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E7%8F%AD%E6%9C%8D%E5%B0%8F%E7%86%8A.pic.jpg",
+                  },
+                  {
+                    name: "日历",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/%E6%97%A5%E5%8E%86.JPG",
+                  },
                 ].map((item) => (
-                  <div key={item.name} className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
+                  <div
+                    key={item.name}
+                    className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
+                  >
+                    <div className="aspect-square bg-slate-100 relative">
+                      <Image
+                        src={item.src}
+                        alt={item.name}
+                        fill
+                        unoptimized
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        sizes="(max-width: 640px) 50vw, 33vw"
+                      />
+                    </div>
+                    <div className="px-4 py-3 text-center">
+                      <h4 className="font-extrabold text-slate-900">{item.name}</h4>
+                    </div>
+                  </div>
+                ))}
+
+                {/* 接下来两行：小图，一行三列 */}
+                {[
+                  {
+                    name: "卡套",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_7735.PNG",
+                  },
+                  {
+                    name: "卡套",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_7734.PNG",
+                  },
+                  {
+                    name: "笔记本",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/RMYFE3938.JPG",
+                  },
+                  {
+                    name: "布袋",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_1075.JPG",
+                  },
+                  {
+                    name: "棒球帽",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_0051.JPG",
+                  },
+                  {
+                    name: "鼠标垫",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_0041.JPG",
+                  },
+                ].map((item, index) => (
+                  <div
+                    key={`${item.src}-${index}`}
+                    className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
+                  >
+                    <div className="aspect-square bg-slate-100 relative">
+                      <Image
+                        src={item.src}
+                        alt={item.name}
+                        fill
+                        unoptimized
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        sizes="(max-width: 640px) 50vw, 33vw"
+                      />
+                    </div>
+                    <div className="px-4 py-3 text-center">
+                      <h4 className="font-extrabold text-slate-900">{item.name}</h4>
+                    </div>
+                  </div>
+                ))}
+
+                {/* 横跨三列的大图：不显示标题 */}
+                <div className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden lg:col-span-3">
+                  <div className="aspect-[1.6/1] bg-slate-100 relative">
+                    <Image
+                      src="https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_1257.JPG"
+                      alt="通班文创展示图"
+                      fill
+                      unoptimized
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      sizes="100vw"
+                    />
+                  </div>
+                </div>
+
+                {/* 后面的图：继续小图，一行三个 */}
+                {[
+                  {
+                    name: "钥匙链",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/MKQLE2438.JPG",
+                  },
+                  {
+                    name: "透卡",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_7598.JPG",
+                  },
+                  {
+                    name: "书签",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_7753.jpg",
+                  },
+                  {
+                    name: "日历",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/IMG_E7752.JPG",
+                  },
+                  {
+                    name: "徽章",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/FQTP5338.JPG",
+                  },
+                  {
+                    name: "衬衫",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/BJYH6766.JPG",
+                  },
+                  {
+                    name: "文化衫",
+                    src: "https://raw.githubusercontent.com/Cyber-TongClass/merch-images/main/GZMH0661.JPG",
+                  },
+                ].map((item, index) => (
+                  <div
+                    key={`${item.src}-${index}`}
+                    className="group bg-white shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
+                  >
                     <div className="aspect-square bg-slate-100 relative">
                       <Image
                         src={item.src}
