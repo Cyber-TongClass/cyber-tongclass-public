@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   description: "北京大学 & 清华大学 通用人工智能实验班官方网站",
   keywords: ["人工智能", "通班", "PKU", "THU", "AI", "Machine Learning"],
   authors: [{ name: "Tong Class" }],
+  icons: {icon: "/logo.png"},
   openGraph: {
     title: "通班官方网站 | Tong Class",
     description: "北京大学 & 清华大学 通用人工智能实验班官方网站",
