@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { type MouseEvent, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
@@ -23,52 +23,6 @@ interface MarkdownSplitEditorProps {
 
 type ViewMode = "split" | "edit" | "preview"
 
-const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-
-const applyInlineHighlights = (value: string) => {
-  return value
-    .replace(/(!\[[^\]]*\]\([^\)]*\))/g, '<span class="md-token-image">$1</span>')
-    .replace(/(\[[^\]]*\]\([^\)]*\))/g, '<span class="md-token-link">$1</span>')
-    .replace(/(`[^`]+`)/g, '<span class="md-token-inline-code">$1</span>')
-    .replace(/(\*\*[^*]+\*\*)/g, '<span class="md-token-strong">$1</span>')
-    .replace(/(\*[^*]+\*)/g, '<span class="md-token-em">$1</span>')
-    .replace(/(~~[^~]+~~)/g, '<span class="md-token-strike">$1</span>')
-}
-
-const highlightMarkdownSource = (rawValue: string) => {
-  const lines = rawValue.split("\n")
-  let inFence = false
-
-  const highlighted = lines.map((line) => {
-    const escapedLine = escapeHtml(line)
-    const trimmed = line.trimStart()
-
-    if (trimmed.startsWith("```")) {
-      inFence = !inFence
-      return `<span class="md-token-fence">${escapedLine || " "}</span>`
-    }
-
-    if (inFence) {
-      return `<span class="md-token-codeblock">${escapedLine || " "}</span>`
-    }
-
-    let next = applyInlineHighlights(escapedLine || " ")
-
-    next = next.replace(/^(#{1,6}\s)/, '<span class="md-token-heading">$1</span>')
-    next = next.replace(/^(>\s?)/, '<span class="md-token-quote">$1</span>')
-    next = next.replace(/^(-\s|\*\s|\+\s)/, '<span class="md-token-list">$1</span>')
-    next = next.replace(/^(\d+\.\s)/, '<span class="md-token-list">$1</span>')
-
-    return next
-  })
-
-  return highlighted.join("\n")
-}
-
 export function MarkdownSplitEditor({
   id,
   value,
@@ -84,16 +38,7 @@ export function MarkdownSplitEditor({
   showToolbar = true,
 }: MarkdownSplitEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const sourcePreviewRef = useRef<HTMLPreElement | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>("split")
-
-  const highlightedSource = useMemo(() => highlightMarkdownSource(value), [value])
-
-  const syncSourceScroll = () => {
-    if (!textareaRef.current || !sourcePreviewRef.current) return
-    sourcePreviewRef.current.scrollTop = textareaRef.current.scrollTop
-    sourcePreviewRef.current.scrollLeft = textareaRef.current.scrollLeft
-  }
 
   const withTextarea = (action: (textarea: HTMLTextAreaElement) => void) => {
     if (!textareaRef.current || disabled) return
@@ -166,6 +111,10 @@ export function MarkdownSplitEditor({
     prefixSelectedLines(marker)
   }
 
+  const preserveSelection = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+  }
+
   const showSource = viewMode === "split" || viewMode === "edit"
   const showPreview = viewMode === "split" || viewMode === "preview"
 
@@ -173,9 +122,9 @@ export function MarkdownSplitEditor({
     <div className={cn("space-y-3", className)}>
       {showToolbar && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-white/60 p-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => replaceSelection("**", "**", "bold")}>B</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => replaceSelection("*", "*", "italic")}>I</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => replaceSelection("~~", "~~", "delete")}>S</Button>
+          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => replaceSelection("**", "**", "bold")}>B</Button>
+          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => replaceSelection("*", "*", "italic")}>I</Button>
+          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => replaceSelection("~~", "~~", "delete")}>S</Button>
           <div className="mx-1 h-5 w-px bg-border" />
           <select
             aria-label="Insert heading"
@@ -197,9 +146,9 @@ export function MarkdownSplitEditor({
             <option value="5">H5</option>
             <option value="6">H6</option>
           </select>
-          <Button type="button" size="sm" variant="outline" onClick={() => insertTemplate("[text](https://)", 1, 5)}>Link</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => insertTemplate("![alt](https://)", 2, 5)}>Image</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => prefixSelectedLines("> ")}>Quote</Button>
+          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => insertTemplate("[text](https://)", 1, 5)}>Link</Button>
+          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => insertTemplate("![alt](https://)", 2, 5)}>Image</Button>
+          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => prefixSelectedLines("> ")}>Quote</Button>
           <div className="mx-1 h-5 w-px bg-border" />
           <div className="inline-flex items-center rounded-md border border-input">
             <Button type="button" size="sm" variant={viewMode === "edit" ? "secondary" : "ghost"} onClick={() => setViewMode("edit")}>Edit</Button>
@@ -213,37 +162,21 @@ export function MarkdownSplitEditor({
         {showSource && (
           <div className="space-y-2">
             <p className="text-sm font-medium text-slate-900">{sourceLabel}</p>
-            <div className={cn("relative rounded-md border bg-slate-950/95", minHeightClassName)}>
-              <pre
-                ref={sourcePreviewRef}
-                aria-hidden
-                className={cn(
-                  "pointer-events-none overflow-auto p-3 font-mono text-sm leading-6 text-slate-100 whitespace-pre-wrap break-words",
-                  "[&_.md-token-heading]:text-sky-300 [&_.md-token-link]:text-cyan-300 [&_.md-token-image]:text-teal-300",
-                  "[&_.md-token-inline-code]:rounded [&_.md-token-inline-code]:bg-slate-800 [&_.md-token-inline-code]:px-1",
-                  "[&_.md-token-strong]:font-semibold [&_.md-token-strong]:text-amber-300",
-                  "[&_.md-token-em]:text-fuchsia-300 [&_.md-token-strike]:text-rose-300 [&_.md-token-strike]:line-through",
-                  "[&_.md-token-fence]:text-indigo-300 [&_.md-token-codeblock]:text-slate-300",
-                  "[&_.md-token-quote]:text-emerald-300 [&_.md-token-list]:text-orange-300"
-                )}
-                dangerouslySetInnerHTML={{ __html: highlightedSource || " " }}
-              />
-              <Textarea
-                ref={textareaRef}
-                id={id}
-                value={value}
-                onChange={(event) => onChange(event.target.value)}
-                onScroll={syncSourceScroll}
-                placeholder={placeholder}
-                className={cn(
-                  "absolute inset-0 z-10 resize-y border-0 bg-transparent font-mono text-sm leading-6 text-transparent caret-slate-100 whitespace-pre-wrap break-words p-3",
-                  "selection:bg-primary/30 selection:text-slate-100",
-                  minHeightClassName,
-                  textareaClassName
-                )}
-                disabled={disabled}
-              />
-            </div>
+            <Textarea
+              ref={textareaRef}
+              id={id}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder={placeholder}
+              className={cn(
+                "resize-y border-slate-800 bg-slate-950/95 font-mono text-sm leading-6 text-slate-100 caret-slate-100 placeholder:text-slate-400",
+                "selection:bg-primary/30 selection:text-slate-100 focus-visible:ring-slate-500",
+                minHeightClassName,
+                textareaClassName
+              )}
+              disabled={disabled}
+              spellCheck={false}
+            />
           </div>
         )}
 

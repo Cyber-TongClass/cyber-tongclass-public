@@ -21,6 +21,7 @@ import { useUserById, useCreateUser, useUpdateUser, useResetPasswordAsSuperAdmin
 import type { UserLink, UserRole } from "@/types"
 import { cohortToSelectValue, getCohortLabel, getCohortOptions, parseCohortValue, type CohortValue } from "@/lib/cohort"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { RESEARCH_DIRECTIONS } from "@/lib/research-directions"
 
 type Organization = "pku" | "thu"
 type Role = UserRole
@@ -52,6 +53,7 @@ type UserFormData = {
   photoUrl: string
   personalEmails: string[]
   bio: string
+  researchDirections: string[]
   researchInterests: string[]
   links: UserLink[]
 }
@@ -79,6 +81,7 @@ export default function UserFormPage() {
     photoUrl: "",
     personalEmails: [],
     bio: "",
+    researchDirections: [],
     researchInterests: [],
     links: [],
   })
@@ -114,6 +117,7 @@ export default function UserFormPage() {
         photoUrl: userData.realPhoto || userData.avatar || "",
         personalEmails: getUserPersonalEmails(userData),
         bio: userData.bio || "",
+        researchDirections: userData.researchDirections || [],
         researchInterests: userData.researchInterests || [],
         links: getUserLinks(userData),
       })
@@ -140,6 +144,15 @@ export default function UserFormPage() {
       ...formData,
       researchInterests: formData.researchInterests.filter((item) => item !== interest),
     })
+  }
+
+  const handleToggleDirection = (direction: string) => {
+    setFormData((previous) => ({
+      ...previous,
+      researchDirections: previous.researchDirections.includes(direction)
+        ? previous.researchDirections.filter((item) => item !== direction)
+        : [...previous.researchDirections, direction],
+    }))
   }
 
   const expectedEmailHint = useMemo(() => {
@@ -170,6 +183,7 @@ export default function UserFormPage() {
           password: formData.password,
           personalEmails: sanitizePersonalEmails(formData.personalEmails),
           bio: formData.bio.trim() || undefined,
+          researchDirections: formData.researchDirections.map((item) => item.trim()).filter(Boolean),
           researchInterests: formData.researchInterests.map((item) => item.trim()).filter(Boolean),
           links: sanitizeUserLinks(formData.links),
         })
@@ -195,6 +209,7 @@ export default function UserFormPage() {
         realPhoto: formData.photoUrl.trim() || undefined,
         personalEmails: sanitizePersonalEmails(formData.personalEmails),
         bio: formData.bio.trim(),
+        researchDirections: formData.researchDirections.map((item) => item.trim()).filter(Boolean),
         researchInterests: formData.researchInterests.map((item) => item.trim()).filter(Boolean),
         links: sanitizeUserLinks(formData.links),
       })
@@ -441,6 +456,24 @@ export default function UserFormPage() {
 
             <div className="space-y-2 md:col-span-2">
               <Label>Research Interests</Label>
+              <div className="rounded-md border border-slate-200/70 p-3">
+                <p className="mb-3 text-xs text-slate-600">
+                  选择成员页筛选和展示使用的研究方向；下方仍可添加自由填写的具体兴趣。
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {RESEARCH_DIRECTIONS.map((direction) => (
+                    <label key={direction.value} className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={formData.researchDirections.includes(direction.value)}
+                        onChange={() => handleToggleDirection(direction.value)}
+                        className="mt-1 rounded"
+                      />
+                      <span>{direction.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
               <div className="flex gap-2">
                 <Input
                   value={newInterest}

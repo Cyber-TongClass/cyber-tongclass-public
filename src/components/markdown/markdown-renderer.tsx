@@ -41,8 +41,9 @@ const markdownBaseClassName = [
   "[&_tr]:border-b [&_tr]:border-slate-200/70",
   "[&_th]:px-2 [&_th]:py-1.5 [&_th]:font-semibold",
   "[&_td]:px-2 [&_td]:py-1.5",
+  "[&_img]:my-4 [&_img]:max-w-full [&_img]:rounded-md [&_img]:border [&_img]:border-slate-200 [&_img]:object-contain",
   "[&_.katex]:text-base",
-  "[&_.katex-display]:my-4 [&_&_.katex-display]:overflow-x-auto [&_&_.katex-display]:overflow-y-hidden",
+  "[&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden",
 ].join(" ")
 
 export function MarkdownRenderer({ content, className, emptyFallback = "暂无内容" }: MarkdownRendererProps) {

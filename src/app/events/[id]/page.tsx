@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar, MapPin, Clock, ExternalLink } from "lucide-react"
 import { useParams } from "next/navigation"
 import { useEventById } from "@/lib/api"
 import { Button } from "@/components/ui/button"
+import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import type { Event } from "@/types"
 
 const eventTypeStyles = {
@@ -124,7 +125,7 @@ export default function EventDetailPage() {
 
           {event.description && (
             <div className="bg-white p-6 shadow-sm">
-              <div className="text-base leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{event.description}</div>
+              <MarkdownRenderer content={event.description} className="text-base" />
             </div>
           )}
 

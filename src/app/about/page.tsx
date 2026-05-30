@@ -35,7 +35,7 @@ export default function AboutPage() {
             </h1>
           </div>
           <p className="text-lg text-white/70 max-w-2xl relative">
-            了解北京大学与清华大学联合培养人工智能创新人才项目的更多信息。
+            了解北京大学与清华大学通用人工智能实验班的更多信息。
           </p>
         </div>
       </section>
@@ -114,7 +114,7 @@ export default function AboutPage() {
                     </div>
                     <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">前沿课程体系</h3>
                     <p className="text-left text-slate-600 leading-relaxed text-sm">
-                      打破了传统学科边界，为本科生量身定制了与世界前沿接轨的专属培养方案，覆盖了通用视觉、自然语言、认知推理、具身智能、机器学习和多智能体等六大AI核心领域，同时注重AI与其他学科的交叉融合。
+                      打破了传统学科边界，为本科生量身定制了与世界前沿接轨的专属培养方案，覆盖了具身智能、机器学习、通用视觉、自然语言、认知推理和多智能体等六大AI核心领域，同时注重AI与其他学科的交叉融合。
                     </p>
                   </div>
                   <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
@@ -134,7 +134,7 @@ export default function AboutPage() {
                     </div>
                     <h3 className="text-left text-xl font-extrabold text-slate-900 mb-3">立体化的学术交流网络</h3>
                     <p className="text-left text-slate-600 leading-relaxed text-sm">
-                     与MIT、CMU、Harvard、UCLA等世界顶尖学府保持紧密交流，定期举办国际学术论坛，并与学生自主创办的Tong Talk学术沙龙和以学生为主体参展的学术交流活动AI TechDay。
+                      与MIT、CMU、Harvard、UCLA等世界顶尖学府保持紧密交流，定期举办国际学术论坛，并有学生自主创办的&ldquo;Tong Talk&rdquo;学术沙龙和以学生为主体参展的学术交流活动&ldquo;AI TechDay&rdquo;。
                     </p>
                   </div>
                   <div className="w-full md:w-[calc(33.333%-1rem)] group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">

@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
+import { MarkdownSplitEditor } from "@/components/markdown/markdown-split-editor"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -154,6 +155,11 @@ function buildReviewPayload(form: ReviewFormState) {
     throw new Error("请选择有效年份")
   }
 
+  const content = form.content.trim()
+  if (!content) {
+    throw new Error("请填写评价内容")
+  }
+
   return {
     courseName: form.courseName,
     instructor: form.instructor.trim(),
@@ -168,7 +174,7 @@ function buildReviewPayload(form: ReviewFormState) {
     courseAverageScore: toOptionalNumber(form.courseAverageScore),
     personalScore: toOptionalNumber(form.personalScore),
     recommendedStudyMethod: form.recommendedStudyMethod || undefined,
-    content: form.content.trim(),
+    content,
     status: form.status,
     isAnonymous: form.isAnonymous,
   }
@@ -714,15 +720,14 @@ export default function ReviewsPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="manual-content">Markdown 长评测</Label>
-                  <Textarea
+                  <MarkdownSplitEditor
                     id="manual-content"
-                    rows={6}
                     value={reviewForm.content}
-                    onChange={(event) =>
-                      setReviewForm((previous) => ({ ...previous, content: event.target.value }))
+                    onChange={(value) =>
+                      setReviewForm((previous) => ({ ...previous, content: value }))
                     }
                     placeholder="可写教学方式、学习方法、考试形式、给学弟学妹的建议等..."
-                    required
+                    minHeightClassName="min-h-[220px]"
                   />
                 </div>
 
@@ -1357,7 +1362,9 @@ export default function ReviewsPage() {
 
               <div>
                 <p className="text-sm text-gray-500">评价内容</p>
-                <p className="mt-1 whitespace-pre-wrap">{selectedReview.content}</p>
+                <div className="mt-1 rounded-md border border-slate-200/60 bg-slate-50/60 p-4">
+                  <MarkdownRenderer content={selectedReview.content} />
+                </div>
               </div>
 
               <div className="flex gap-2 pt-4">

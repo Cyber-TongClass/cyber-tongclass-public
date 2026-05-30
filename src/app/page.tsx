@@ -53,18 +53,18 @@ export default function HomePage() {
   const features = [
     {
       title: "通识·通智·通用",
-      description: "交叉人文社科的「通识」、融会六大核心领域的「通智」、融入各行各业的「通用」，培养世界顶尖复合型人才",
+      description: "交叉人文社科的「通识」、融会六大核心领域的「通智」、融入各行各业的「通用」，培养世界顶尖复合型人才。",
       image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E9%80%9A%E7%94%A8%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E5%AE%9E%E9%AA%8C%E7%8F%AD_%E9%80%9A%E8%AF%86_%E9%80%9A%E6%99%BA_%E9%80%9A%E7%94%A8/assets/tongtongtong.webp",
       fit: "object-contain",
     },
     {
       title: "前沿课程体系",
-      description: "打破了传统学科边界，为本科生量身定制了与世界前沿接轨的专属培养方案，覆盖了通用视觉、自然语言、认知推理、具身智能、机器学习和多智能体等六大AI核心领域，同时注重AI与其他学科的交叉融合",
+      description: "打破了传统学科边界，为本科生量身定制了与世界前沿接轨的专属培养方案，覆盖了具身智能、机器学习、通用视觉、自然语言、认知推理和多智能体等六大AI核心领域，同时注重AI与其他学科的交叉融合。",
       image: "https://www.bigai.ai/wp-content/uploads/2022/10/%E7%A0%94%E7%A9%B6-e1666601512358.png",
     },
     {
       title: "顶尖科研实践",
-      description: "构建从人工智能初级研讨班、人工智能引论、人工智能系统实践到毕业设计的完整科研训练路径，聚焦 AI 领域，着力培养创新型、复合型通才",
+      description: "构建从人工智能初级研讨班、人工智能引论、人工智能系统实践到毕业设计的完整科研训练路径，聚焦 AI 领域，着力培养创新型、复合型通才。",
       image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E9%80%9A%E7%94%A8%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD%E5%AE%9E%E9%AA%8C%E7%8F%AD_%E9%80%9A%E8%AF%86_%E9%80%9A%E6%99%BA_%E9%80%9A%E7%94%A8/assets/17776187945420.7835409329709796.jpg",
     },
     {
@@ -74,7 +74,7 @@ export default function HomePage() {
     },
     {
       title: "顶尖的师资力量",
-      description: "融合北大、清华人工智能领域的顶尖教研力量，汇聚 IEEE Fellow、长江学者等高水平师资，依托两校深厚的学科积淀，打造国内一流的 AI 人才培养平台",
+      description: "融合北大、清华人工智能领域的顶尖教研力量，汇聚 IEEE Fellow、长江学者等高水平师资，依托两校深厚的学科积淀，打造国内一流的 AI 人才培养平台。",
       image: "https://cdn.jsdelivr.net/gh/Cyber-TongClass/news-assets@main/news%20images/%E5%B8%88%E8%B5%84.png",
     },
   ]

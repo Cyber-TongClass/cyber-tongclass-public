@@ -54,10 +54,20 @@ export default function UsersPage() {
   const deleteUserMutation = useDeleteUser()
 
   const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.englishName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    const query = searchQuery.trim().toLowerCase()
+    const searchableText = [
+      user.englishName,
+      user.chineseName,
+      user.username,
+      user.email,
+      user.studentId,
+      organizationLabels[user.organization],
+      getCohortLabel(user.cohort),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+    const matchesSearch = !query || searchableText.includes(query)
     const matchesRole = !roleFilter || user.role === roleFilter
     return matchesSearch && matchesRole
   })
