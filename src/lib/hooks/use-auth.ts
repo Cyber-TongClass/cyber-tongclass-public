@@ -49,9 +49,12 @@ export function useAuth() {
     storedSessionToken ? { sessionToken: storedSessionToken } : "skip"
   )
 
-  // Prefer Convex identity if present; otherwise use the signed local session token.
+  // Prefer the explicit local session token when present; it represents the account
+  // the user selected through this app's login flow.
   const isUserQueryPending = storedSessionToken !== null && tokenUser === undefined
-  const currentUser = sessionUser ?? (storedSessionToken && !isUserQueryPending ? tokenUser || null : null)
+  const currentUser = storedSessionToken
+    ? (!isUserQueryPending ? tokenUser || null : null)
+    : sessionUser || null
   
   // Get user role
   const currentRole = currentUser?.role ?? null

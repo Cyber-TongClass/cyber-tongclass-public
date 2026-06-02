@@ -203,8 +203,17 @@ export function useSignIn() {
 
 // ==================== 用户相关 ====================
 
-export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number; limit?: number; classMembersOnly?: boolean }) {
-  return useQuery(api.users.list, args || {})
+export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number | boolean; limit?: number; classMembersOnly?: boolean }) {
+  const queryArgs = useMemo(() => {
+    if (!args) return {}
+    const { skip, ...rest } = args
+    return {
+      ...rest,
+      ...(typeof skip === "number" ? { skip } : {}),
+    }
+  }, [args])
+
+  return useQuery(api.users.list, args?.skip === true ? "skip" : queryArgs)
 }
 
 export function useUserById(id?: string | null) {

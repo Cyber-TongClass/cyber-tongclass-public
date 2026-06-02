@@ -55,8 +55,10 @@ import {
   useReviewTags,
   useSetReviewTagColor,
   useUpdateCourseReview,
+  useUsers,
 } from "@/lib/api"
-import type { Course, CourseReview } from "@/types"
+import { useAuth } from "@/lib/hooks/use-auth"
+import type { Course, CourseReview, User } from "@/types"
 
 type ReviewFormState = {
   courseName: string
@@ -183,6 +185,7 @@ function buildReviewPayload(form: ReviewFormState) {
 export default function ReviewsPage() {
   const currentYear = new Date().getFullYear()
   const yearOptions = getCourseReviewYearOptions(2020, currentYear)
+  const { isSuperAdmin } = useAuth()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
@@ -212,6 +215,11 @@ export default function ReviewsPage() {
   const allReviewsData = useAllCourseReviews()
   const allReviews: CourseReview[] = allReviewsData || []
   const reviews = [...allReviews].sort((a, b) => b.createdAt - a.createdAt)
+  const usersData = useUsers({ limit: 1000, skip: !isSuperAdmin })
+  const usersById = useMemo(() => {
+    const entries = ((usersData || []) as User[]).map((user) => [String(user._id), user] as const)
+    return new Map(entries)
+  }, [usersData])
 
   const createReview = useCreateCourseReview()
   const approveReview = useApproveCourseReview()
@@ -250,13 +258,21 @@ export default function ReviewsPage() {
     toastTimer.current = window.setTimeout(() => setShowToast(false), duration)
   }
 
+  const getReviewAuthorName = (review: CourseReview) => {
+    if (!isSuperAdmin) return "匿名"
+    if (!review.authorId) return "无记录"
+    const user = usersById.get(String(review.authorId))
+    return user?.chineseName || user?.englishName || user?.username || String(review.authorId)
+  }
+
   const filteredReviews = reviews.filter((review) => {
     const query = searchQuery.trim().toLowerCase()
     const matchesSearch =
       !query ||
       review.courseName.toLowerCase().includes(query) ||
       review.instructor.toLowerCase().includes(query) ||
-      review.content.toLowerCase().includes(query)
+      review.content.toLowerCase().includes(query) ||
+      (isSuperAdmin && getReviewAuthorName(review).toLowerCase().includes(query))
     const matchesStatus = !statusFilter || review.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -1190,6 +1206,7 @@ export default function ReviewsPage() {
                 <TableHead>学期</TableHead>
                 <TableHead>总体评价</TableHead>
                 <TableHead>点赞数</TableHead>
+                {isSuperAdmin ? <TableHead>实际提交者</TableHead> : null}
                 <TableHead>评价内容</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>提交时间</TableHead>
@@ -1206,6 +1223,7 @@ export default function ReviewsPage() {
                     <Badge className={getRatingBadgeClass(review.overallRating)}>{review.overallRating}/10</Badge>
                   </TableCell>
                   <TableCell>{review.voteScore || 0}</TableCell>
+                  {isSuperAdmin ? <TableCell>{getReviewAuthorName(review)}</TableCell> : null}
                   <TableCell className="max-w-xs truncate text-gray-500">{review.content}</TableCell>
                   <TableCell>
                     <Badge className={statusColors[review.status]}>{statusLabels[review.status]}</Badge>
@@ -1275,6 +1293,12 @@ export default function ReviewsPage() {
                   <p className="text-sm text-gray-500">总体评价</p>
                   <Badge className={getRatingBadgeClass(selectedReview.overallRating)}>{selectedReview.overallRating}/10</Badge>
                 </div>
+                {isSuperAdmin ? (
+                  <div>
+                    <p className="text-sm text-gray-500">实际提交者</p>
+                    <p className="font-medium">{getReviewAuthorName(selectedReview)}</p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap gap-2">

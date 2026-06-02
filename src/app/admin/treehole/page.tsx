@@ -18,7 +18,7 @@ function formatTime(timestamp: number) {
 }
 
 export default function AdminTreeholePage() {
-  const { currentUser } = useAuth()
+  const { currentUser, isSuperAdmin } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState("latest")
   const [replySortBy, setReplySortBy] = useState("oldest")
@@ -45,6 +45,8 @@ export default function AdminTreeholePage() {
       return (a.createdAt || 0) - (b.createdAt || 0)
     })
   }, [detail, replySortBy])
+
+  const canViewAuthorInfo = (item: any) => isSuperAdmin || item?.authorIsRevealed
 
   const handleDeletePost = async (postId: string, title: string) => {
     if (!currentUser) return
@@ -81,7 +83,9 @@ export default function AdminTreeholePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-extrabold text-gray-900">树洞管理</h1>
-        <p className="mt-1 text-gray-500">查看树洞主贴与回帖，匿名内容在后台保留真实身份，便于治理。</p>
+        <p className="mt-1 text-gray-500">
+          查看树洞主贴与回帖。
+        </p>
       </div>
 
       <Card>
@@ -91,7 +95,7 @@ export default function AdminTreeholePage() {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索编号、标题、内容、前台显示名或真实姓名"
+                placeholder={isSuperAdmin ? "搜索编号、标题、内容、前台显示名或真实姓名" : "搜索编号、标题、内容或前台显示名"}
                 className="pr-10"
               />
               <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -135,7 +139,7 @@ export default function AdminTreeholePage() {
                   <TableRow key={post._id}>
                     <TableCell className="font-mono text-primary">#{post.serialLabel || "-------"}</TableCell>
                     <TableCell className="font-medium">{post.title}</TableCell>
-                    <TableCell>{post.realAuthorName}</TableCell>
+                    <TableCell>{canViewAuthorInfo(post) ? post.realAuthorName : "匿名"}</TableCell>
                     <TableCell>{post.publicAuthorName}</TableCell>
                     <TableCell>{post.replyCount}</TableCell>
                     <TableCell>{post.voteScore || 0}</TableCell>
@@ -173,10 +177,16 @@ export default function AdminTreeholePage() {
                     {selectedDetail.post.serialLabel ? (
                       <span className="font-mono font-semibold text-primary">#{selectedDetail.post.serialLabel}</span>
                     ) : null}
-                    <span>真实发布者：{selectedDetail.post.realAuthorName}</span>
+                    <span>
+                      真实发布者：{canViewAuthorInfo(selectedDetail.post) ? selectedDetail.post.realAuthorName : "匿名"}
+                    </span>
                     <span>前台显示：{selectedDetail.post.publicAuthorName}</span>
-                    <span>组织：{formatOrganizationLabel(selectedDetail.post.authorOrganization || "")}</span>
-                    <span>年级：{selectedDetail.post.authorCohort ? getCohortLabel(selectedDetail.post.authorCohort) : ""}</span>
+                    {canViewAuthorInfo(selectedDetail.post) ? (
+                      <>
+                        <span>组织：{formatOrganizationLabel(selectedDetail.post.authorOrganization || "")}</span>
+                        <span>年级：{selectedDetail.post.authorCohort ? getCohortLabel(selectedDetail.post.authorCohort) : ""}</span>
+                      </>
+                    ) : null}
                     <span>{formatTime(selectedDetail.post.createdAt)}</span>
                   </div>
                 </div>
@@ -207,10 +217,14 @@ export default function AdminTreeholePage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-3 text-sm text-slate-500">
-                          <span>真实发布者：{reply.realAuthorName}</span>
+                          <span>真实发布者：{canViewAuthorInfo(reply) ? reply.realAuthorName : "匿名"}</span>
                           <span>前台显示：{reply.publicAuthorName}</span>
-                          <span>组织：{formatOrganizationLabel(reply.authorOrganization || "")}</span>
-                          <span>年级：{reply.authorCohort ? getCohortLabel(reply.authorCohort) : ""}</span>
+                          {canViewAuthorInfo(reply) ? (
+                            <>
+                              <span>组织：{formatOrganizationLabel(reply.authorOrganization || "")}</span>
+                              <span>年级：{reply.authorCohort ? getCohortLabel(reply.authorCohort) : ""}</span>
+                            </>
+                          ) : null}
                           <span>点赞数：{reply.voteScore || 0}</span>
                           <span>{formatTime(reply.createdAt)}</span>
                         </div>

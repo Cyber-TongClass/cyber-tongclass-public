@@ -28,7 +28,7 @@ function formatTime(timestamp: number) {
 export default function TreeholeDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { currentUser, isAdmin } = useAuth()
+  const { currentUser } = useAuth()
   const detail = useTreeholePostById(params.id)
   const createReply = useCreateTreeholeReply()
   const deletePost = useDeleteTreeholePost()
@@ -77,7 +77,6 @@ export default function TreeholeDetailPage() {
   }
 
   const { post, replies } = detail as any
-  const canDeletePost = !!currentUser && (String(post.authorId) === String(currentUser._id) || isAdmin)
 
   const handleReplySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -165,7 +164,7 @@ export default function TreeholeDetailPage() {
                   currentUserVote={post.currentUserVote}
                   onVote={handleVotePost}
                 />
-                {canDeletePost ? (
+                {post.canDelete ? (
                   <Button type="button" variant="ghost" size="icon" className="text-slate-500 hover:text-red-600" onClick={handleDeletePost}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -235,8 +234,6 @@ export default function TreeholeDetailPage() {
             </Card>
           ) : (
             sortedReplies.map((reply: any) => {
-              const canDeleteReply = !!currentUser && (String(reply.authorId) === String(currentUser._id) || isAdmin)
-
               return (
                 <Card key={reply._id}>
                   <CardContent className="pt-6">
@@ -255,7 +252,7 @@ export default function TreeholeDetailPage() {
                           currentUserVote={reply.currentUserVote}
                           onVote={(value) => handleVoteReply(reply._id, value)}
                         />
-                        {canDeleteReply ? (
+                        {reply.canDelete ? (
                           <Button
                             type="button"
                             variant="ghost"

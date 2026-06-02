@@ -25,7 +25,7 @@ function formatTime(timestamp: number) {
 }
 
 export default function TreeholePage() {
-  const { currentUser, isAdmin } = useAuth()
+  const { currentUser } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
@@ -185,8 +185,6 @@ export default function TreeholePage() {
             </Card>
           ) : (
             sortedPosts.map((post: any) => {
-              const canDelete = !!currentUser && (String(post.authorId) === String(currentUser._id) || isAdmin)
-
               return (
                 <Card key={post._id}>
                   <CardHeader className="space-y-3">
@@ -209,7 +207,7 @@ export default function TreeholePage() {
                           currentUserVote={post.currentUserVote}
                           onVote={(value) => handleVotePost(post._id, value)}
                         />
-                        {canDelete ? (
+                        {post.canDelete ? (
                           <Button
                             type="button"
                             variant="ghost"

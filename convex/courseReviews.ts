@@ -56,7 +56,7 @@ async function sha256Hex(input: string) {
   return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
 }
 
-async function getActorIdFromSession(ctx: any, sessionToken?: string) {
+async function getActorFromSession(ctx: any, sessionToken?: string) {
   if (!sessionToken) return undefined
 
   const tokenHash = await sha256Hex(sessionToken)
@@ -67,19 +67,30 @@ async function getActorIdFromSession(ctx: any, sessionToken?: string) {
   if (!session || session.revokedAt || session.expiresAt <= Date.now()) return undefined
 
   const actor = await ctx.db.get(session.userId)
-  return actor?._id
+  return actor || undefined
+}
+
+async function getActorIdFromSession(ctx: any, sessionToken?: string) {
+  return (await getActorFromSession(ctx, sessionToken))?._id
 }
 
 function getEmptyVoteSummary() {
   return { likes: 0, dislikes: 0, score: 0, currentUserVote: undefined }
 }
 
-function normalizeReviewForClient(review: any, voteSummary?: any) {
+function normalizeReviewForClient(review: any, voteSummary?: any, actor?: any) {
   const legacySemester = parseLegacySemester(review.semester)
   const summary = voteSummary || getEmptyVoteSummary()
+  const revealAuthor =
+    !review.isAnonymous ||
+    (actor && review.authorId && String(actor._id) === String(review.authorId)) ||
+    actor?.role === "super_admin"
+  const { authorId, ...publicReview } = review
 
   return {
-    ...review,
+    ...publicReview,
+    ...(revealAuthor ? { authorId } : {}),
+    authorIsRevealed: revealAuthor,
     instructor: review.instructor || "未知教师",
     semesterYear: review.semesterYear ?? legacySemester.year ?? new Date(review.createdAt || Date.now()).getFullYear(),
     semesterTerm: review.semesterTerm ?? legacySemester.term ?? "spring",
@@ -134,7 +145,8 @@ export const listByCourse = query({
     let reviews = await ctx.db.query("courseReviews").order("desc").collect()
     // filter in JS so that missing `active` (older records) are treated as active
     reviews = reviews.filter((r) => r.status === "approved" && r.courseName === args.courseName && r.active !== false)
-    reviews = reviews.map(normalizeReviewForClient)
+    const actor = await getActorFromSession(ctx, args.sessionToken)
+    reviews = reviews.map((review) => normalizeReviewForClient(review, undefined, actor))
 
     if (args.instructor) {
       reviews = reviews.filter((review) => review.instructor === args.instructor)
@@ -148,10 +160,9 @@ export const listByCourse = query({
       reviews = reviews.filter((review) => review.semesterTerm === args.semesterTerm)
     }
 
-    const actorId = await getActorIdFromSession(ctx, args.sessionToken)
-    const voteSummaries = await getVoteSummaryMap(ctx, "courseReview", reviews.map((review) => String(review._id)), actorId)
+    const voteSummaries = await getVoteSummaryMap(ctx, "courseReview", reviews.map((review) => String(review._id)), actor?._id)
 
-    return reviews.map((review) => normalizeReviewForClient(review, voteSummaries.get(String(review._id))))
+    return reviews.map((review) => normalizeReviewForClient(review, voteSummaries.get(String(review._id)), actor))
   },
 })
 
@@ -172,10 +183,10 @@ export const listByCourseAll = query({
       reviews = reviews.filter((review) => review.status === args.status)
     }
 
-    const actorId = await getActorIdFromSession(ctx, args.sessionToken)
-    const voteSummaries = await getVoteSummaryMap(ctx, "courseReview", reviews.map((review) => String(review._id)), actorId)
+    const actor = await getActorFromSession(ctx, args.sessionToken)
+    const voteSummaries = await getVoteSummaryMap(ctx, "courseReview", reviews.map((review) => String(review._id)), actor?._id)
 
-    return reviews.map((review) => normalizeReviewForClient(review, voteSummaries.get(String(review._id))))
+    return reviews.map((review) => normalizeReviewForClient(review, voteSummaries.get(String(review._id)), actor))
   },
 })
 

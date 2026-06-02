@@ -83,34 +83,48 @@ async function sha256Hex(input: string) {
 }
 
 async function getActorOrThrow(ctx: any, sessionToken: string | undefined) {
-  if (!sessionToken) {
-    throw new Error("请先登录")
+  if (sessionToken) {
+    const tokenHash = await sha256Hex(sessionToken)
+    const session = await ctx.db
+      .query("authSessions")
+      .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
+      .first()
+    if (session && !session.revokedAt && session.expiresAt > Date.now()) {
+      const actor = await ctx.db.get(session.userId)
+      if (actor) {
+        return actor
+      }
+    }
   }
 
-  const tokenHash = await sha256Hex(sessionToken)
-  const session = await ctx.db
-    .query("authSessions")
-    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
-    .first()
-  if (!session || session.revokedAt || session.expiresAt <= Date.now()) {
-    throw new Error("请先登录")
+  const identity = await ctx.auth.getUserIdentity()
+  if (identity?.email) {
+    const identityUser = await ctx.db
+      .query("users")
+      .filter((q: any) => q.eq(q.field("email"), identity.email))
+      .first()
+    if (identityUser) {
+      return identityUser
+    }
   }
 
-  const actor = await ctx.db.get(session.userId)
-  if (!actor) {
-    throw new Error("用户不存在")
-  }
-
-  return actor
+  throw new Error("请先登录")
 }
 
 function canModerate(actor: any) {
   return actor?.role === "admin" || actor?.role === "super_admin"
 }
 
+function canViewPrivateAuthorInfo(actor: any) {
+  return actor?.role === "super_admin"
+}
+
+function canDeleteContent(actor: any, ownerId: Id<"users">) {
+  return canModerate(actor) || String(actor?._id) === String(ownerId)
+}
+
 function assertCanDelete(actor: any, ownerId: Id<"users">) {
-  if (canModerate(actor)) return
-  if (String(actor._id) !== String(ownerId)) {
+  if (!canDeleteContent(actor, ownerId)) {
     throw new Error("无权删除该内容")
   }
 }
@@ -159,6 +173,8 @@ function mapPostForClient(
   usersMap: Map<string, any>,
   aliasMap: Map<string, string>,
   replyCount: number,
+  actor: any,
+  includePrivateAuthorFields = false,
   voteSummary?: any,
   serialNumber?: number
 ) {
@@ -167,14 +183,20 @@ function mapPostForClient(
   const publicAuthorName = post.isAnonymous ? "匿名洞主" : getDisplayName(user)
   const summary = voteSummary || getEmptyVoteSummary()
   const displaySerialNumber = serialNumber || (isValidSerialNumber(post.serialNumber) ? post.serialNumber : undefined)
+  const revealAuthor = !post.isAnonymous || canViewPrivateAuthorInfo(actor)
+  const includeRealAuthor = revealAuthor || includePrivateAuthorFields
+  const { authorId, ...publicPost } = post
 
   return {
-    ...post,
+    ...publicPost,
+    ...(includeRealAuthor ? { authorId } : {}),
     serialNumber: displaySerialNumber,
     serialLabel: displaySerialNumber ? formatSerialNumber(displaySerialNumber) : undefined,
     publicAuthorName,
-    realAuthorName: getDisplayName(user),
+    realAuthorName: includeRealAuthor ? getDisplayName(user) : publicAuthorName,
+    authorIsRevealed: revealAuthor,
     anonymousAlias: post.isAnonymous ? "匿名洞主" : undefined,
+    canDelete: canDeleteContent(actor, post.authorId),
     replyCount,
     likes: summary.likes,
     dislikes: summary.dislikes,
@@ -183,7 +205,15 @@ function mapPostForClient(
   }
 }
 
-function mapReplyForClient(reply: any, post: any, usersMap: Map<string, any>, aliasMap: Map<string, string>, voteSummary?: any) {
+function mapReplyForClient(
+  reply: any,
+  post: any,
+  usersMap: Map<string, any>,
+  aliasMap: Map<string, string>,
+  actor: any,
+  includePrivateAuthorFields = false,
+  voteSummary?: any
+) {
   const ownerKey = String(reply.authorId)
   const user = usersMap.get(ownerKey)
   const publicAuthorName = reply.isAnonymous
@@ -192,16 +222,22 @@ function mapReplyForClient(reply: any, post: any, usersMap: Map<string, any>, al
       : aliasMap.get(ownerKey) || "匿名洞友"
     : getDisplayName(user)
   const summary = voteSummary || getEmptyVoteSummary()
+  const revealAuthor = !reply.isAnonymous || canViewPrivateAuthorInfo(actor)
+  const includeRealAuthor = revealAuthor || includePrivateAuthorFields
+  const { authorId, ...publicReply } = reply
 
   return {
-    ...reply,
+    ...publicReply,
+    ...(includeRealAuthor ? { authorId } : {}),
     publicAuthorName,
-    realAuthorName: getDisplayName(user),
+    realAuthorName: includeRealAuthor ? getDisplayName(user) : publicAuthorName,
+    authorIsRevealed: revealAuthor,
     anonymousAlias: reply.isAnonymous
       ? isAnonymousPostOwner(post, reply.authorId)
         ? "匿名洞主"
         : aliasMap.get(ownerKey) || "匿名洞友"
       : undefined,
+    canDelete: canDeleteContent(actor, reply.authorId),
     likes: summary.likes,
     dislikes: summary.dislikes,
     voteScore: summary.score,
@@ -244,6 +280,8 @@ export const list = query({
         usersMap,
         aliasMap,
         threadReplies.length,
+        actor,
+        false,
         voteSummaries.get(String(post._id)),
         serialMap.get(String(post._id))
       )
@@ -294,11 +332,13 @@ export const getById = query({
         usersMap,
         aliasMap,
         replies.length,
+        actor,
+        false,
         postVoteSummaries.get(String(post._id)),
         serialMap.get(String(post._id))
       ),
       replies: replies.map((reply) =>
-        mapReplyForClient(reply, post, usersMap, aliasMap, replyVoteSummaries.get(String(reply._id)))
+        mapReplyForClient(reply, post, usersMap, aliasMap, actor, false, replyVoteSummaries.get(String(reply._id)))
       ),
     }
   },
@@ -344,6 +384,8 @@ export const listAdmin = query({
         usersMap,
         aliasMap,
         threadReplies.length,
+        actor,
+        true,
         voteSummaries.get(String(post._id)),
         serialMap.get(String(post._id))
       )
@@ -407,6 +449,8 @@ export const getByIdAdmin = query({
           usersMap,
           aliasMap,
           replies.length,
+          actor,
+          true,
           postVoteSummaries.get(String(detail._id)),
           serialMap.get(String(detail._id))
         ),
@@ -416,7 +460,7 @@ export const getByIdAdmin = query({
       replies: replies.map((reply) => {
         const user = usersMap.get(String(reply.authorId))
         return {
-          ...mapReplyForClient(reply, detail, usersMap, aliasMap, replyVoteSummaries.get(String(reply._id))),
+          ...mapReplyForClient(reply, detail, usersMap, aliasMap, actor, true, replyVoteSummaries.get(String(reply._id))),
           authorOrganization: user?.organization,
           authorCohort: user?.cohort,
         }
