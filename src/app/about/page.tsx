@@ -533,16 +533,17 @@ export default function AboutPage() {
           <TabsContent value="changelog" className="mt-8">
             <div className="max-w-4xl">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">更新日志</h2>
-              <div className="space-y-4">
-                {[
-                  { date: "2026-05", text: "前端视觉全面升级：深蓝 Hero、酒红与靛蓝配色、直角卡片、年份水印、册别分组与半遮挡数字等" },
-                  { date: "2026-05", text: "成果页面重构：移除 Latest/Archive 切换，改为按年份侧栏展示；论文详情页去胶囊化" },
-                  { date: "2026-05", text: "课程测评卡片紧凑化，新增评分色块（绿/黄/红/灰），支持升序排序" },
-                  { date: "2026-05", text: "成员页按届别分组，大水印年份数字 + 横线分隔" },
-                  { date: "2026-05", text: "活动列表仅显示近期活动，日历保留全部" },
-                  { date: "2026-05", text: "树洞默认匿名；密码字段改为暗码" },
-                  { date: "2026-05", text: "新增自学资源链接页、文创周边展示页" },
-                ].map((entry) => (
+                <div className="space-y-4">
+                    {[
+                      { date: "2026-06", text: "内网新增「资料下载」板块，提供学术交流、学生活动报销等内部文件下载" },
+                      { date: "2026-05", text: "前端视觉全面升级：深蓝 Hero、酒红与靛蓝配色、直角卡片、年份水印、册别分组与半遮挡数字等" },
+                      { date: "2026-05", text: "成果页面重构：移除 Latest/Archive 切换，改为按年份侧栏展示；论文详情页去胶囊化" },
+                      { date: "2026-05", text: "课程测评卡片紧凑化，新增评分色块（绿/黄/红/灰），支持升序排序" },
+                      { date: "2026-05", text: "成员页按届别分组，大水印年份数字 + 横线分隔" },
+                      { date: "2026-05", text: "活动列表仅显示近期活动，日历保留全部" },
+                      { date: "2026-05", text: "树洞默认匿名；密码字段改为暗码" },
+                      { date: "2026-05", text: "新增自学资源链接页、文创周边展示页" },
+                    ].map((entry) => (
                   <div key={entry.text} className="flex gap-4">
                     <span className="text-xs font-bold text-slate-400 w-16 shrink-0 mt-0.5">{entry.date}</span>
                     <p className="text-sm text-slate-600">{entry.text}</p>

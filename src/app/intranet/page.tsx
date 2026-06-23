@@ -1,6 +1,6 @@
 "use client"
 
-import { CalendarDays, FileText, Link as LinkIcon, MessageSquare } from "lucide-react"
+import { CalendarDays, Download, FileText, Link as LinkIcon, MessageSquare } from "lucide-react"
 import { IntranetSectionCard } from "@/components/intranet/intranet-section-card"
 
 const intranetSections = [
@@ -27,6 +27,12 @@ const intranetSections = [
     description: "科技节成果展示、投稿管理、评奖、报销和外部作者/志愿者注册入口。内部成员可直接使用通班账号进入。",
     icon: CalendarDays,
     href: "/techday",
+  },
+  {
+    title: "资料下载",
+    description: "学术交流、学生活动报销等内部文件的下载入口，包含申请表格、支持方案和流程说明。",
+    icon: Download,
+    href: "/intranet/materials",
   },
 ]
 
