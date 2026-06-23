@@ -5,36 +5,52 @@ import { ArrowLeft, Download } from "lucide-react"
 
 const downloadableSections = [
   {
-    title: "学术交流资料",
-    description: "学术交流项目相关的申请表格、支持方案和报销指引，仅供通班内部成员使用。",
+    title: "培养方案",
+    description: "各年级培养方案，可能与现今实际情况相比略有不同或过时，仅供参考，具体请以院办最新通知为准。",
     materials: [
       {
-        name: "通班学术交流项目支持方案（2023.09 修订版）",
-        file: "/intranet-materials/通班学术交流项目支持方案202309修订版.pdf",
+        name: "25级培养方案",
+        file: "/intranet-materials/25级培养方案.pdf",
         type: "PDF",
       },
       {
-        name: "通班学术交流项目支持申请表（空表）",
-        file: "/intranet-materials/通班学术交流项目支持申请表-（空表）.docx",
-        type: "DOCX",
+        name: "23级培养方案",
+        file: "/intranet-materials/23级培养方案.pdf",
+        type: "PDF",
       },
+    ],
+  },
+  {
+    title: "学术交流报销相关资料",
+    description: "学术交流项目相关的申请表格、支持方案和报销指引，仅供通班内部成员使用。",
+    materials: [
+      {
+        name: "通班学术交流项目支持方案",
+        file: "/intranet-materials/通班学术交流项目支持方案.pdf",
+        type: "PDF",
+      },
+      // {
+      //   name: "通班学术交流项目支持申请表（空表）",
+      //   file: "/intranet-materials/通班学术交流项目支持申请表-（空表）.docx",
+      //   type: "DOCX",
+      // },
       {
         name: "通班学生出国出境报销注意事项",
         file: "/intranet-materials/通班学生出国出境报销注意事项.docx",
         type: "DOCX",
       },
       {
-        name: "各国住宿伙食公杂开支标准",
-        file: "/intranet-materials/各国住宿伙食公杂开支标准.xlsx",
+        name: "各国住宿伙食公杂费开支标准",
+        file: "/intranet-materials/各国住宿伙食公杂费开支标准.xlsx",
         type: "XLSX",
       },
     ],
   },
-  {
-    title: "学生活动报销资料",
-    description: "学生组织活动相关的报销申请表格和流程说明。",
-    materials: [],
-  },
+  // {
+  //   title: "学生活动报销资料",
+  //   description: "学生组织活动相关的报销申请表格和流程说明。",
+  //   materials: [],
+  // },
 ]
 
 export default function MaterialsPage() {
@@ -54,7 +70,7 @@ export default function MaterialsPage() {
           </Link>
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">资料下载</h1>
           <p className="text-lg text-white/70 max-w-2xl mt-2">
-            学术交流、学生活动报销等内部文件资源，请勿分享到公开渠道。
+            培养方案、报销政策等内部文件资源，请勿分享到公开渠道。
           </p>
         </div>
       </section>

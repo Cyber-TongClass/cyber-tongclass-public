@@ -214,6 +214,50 @@ export default defineSchema({
   })
     .index("by_author", ["authorId"]),
 
+  studentFormProfiles: defineTable({
+    userId: v.id("users"),
+    gender: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  academicExchangeSupportApplications: defineTable({
+    userId: v.id("users"),
+    applicantName: v.string(),
+    studentId: v.string(),
+    email: v.string(),
+    gender: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    projectCategory: v.string(),
+    projectName: v.string(),
+    exchangeLocation: v.string(),
+    projectTime: v.string(),
+    otherFunding: v.string(),
+    projectPlan: v.string(),
+    expenseItems: v.array(v.object({
+      item: v.string(),
+      amount: v.number(),
+      note: v.optional(v.string()),
+    })),
+    totalAmount: v.number(),
+    applicationDate: v.string(),
+    publicationId: v.id("publications"),
+    paperTitle: v.string(),
+    paperAuthors: v.array(v.string()),
+    applicantAuthorName: v.string(),
+    applicantAuthorIndexLabel: v.string(),
+    applicantAffiliation: v.string(),
+    totalPages: v.number(),
+    bodyPages: v.number(),
+    paperPdfUrl: v.string(),
+    status: v.literal("submitted"),
+    submittedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user_createdAt", ["userId", "createdAt"]),
+
   // Auth config table (for pre-registered student IDs)
   authConfig: defineTable({
     allowedStudentIds: v.array(v.string()),

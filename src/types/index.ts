@@ -70,6 +70,52 @@ export interface PublicationVenue {
   updatedAt?: number
 }
 
+export interface StudentFormProfile {
+  _id: string
+  userId: string
+  gender?: string
+  phone?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AcademicExchangeExpenseItem {
+  item: string
+  amount: number
+  note?: string
+}
+
+export interface AcademicExchangeSupportApplication {
+  _id: string
+  userId: string
+  applicantName: string
+  studentId: string
+  email: string
+  gender?: string
+  phone?: string
+  projectCategory: string
+  projectName: string
+  exchangeLocation: string
+  projectTime: string
+  otherFunding: string
+  projectPlan: string
+  expenseItems: AcademicExchangeExpenseItem[]
+  totalAmount: number
+  applicationDate: string
+  publicationId: string
+  paperTitle: string
+  paperAuthors: string[]
+  applicantAuthorName: string
+  applicantAuthorIndexLabel: string
+  applicantAffiliation: string
+  totalPages: number
+  bodyPages: number
+  paperPdfUrl: string
+  status: "submitted"
+  submittedAt: number
+  createdAt: number
+}
+
 // Course review types
 export interface CourseReview {
   _id: string

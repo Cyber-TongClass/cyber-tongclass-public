@@ -39,6 +39,11 @@ const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
 const currentUserRoleRef = makeFunctionReference<"query">("auth:currentUserRole")
 const isAdminRef = makeFunctionReference<"query">("auth:isAdmin")
 const isSuperAdminRef = makeFunctionReference<"query">("auth:isSuperAdmin")
+const academicExchangeProfileRef = makeFunctionReference<"query">("academicExchange:getStudentFormProfile")
+const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("academicExchange:upsertStudentFormProfile")
+const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
+const getAcademicExchangeApplicationRef = makeFunctionReference<"query">("academicExchange:getApplication")
+const createAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:createApplication")
 const TECHDAY_AUTH_STORAGE_EVENT = "techday-auth-storage"
 const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
 
@@ -488,6 +493,44 @@ export function usePublicationsCount(args?: { category?: string; year?: number }
 
 export function useSearchPublications(query: string) {
   return useQuery(api.publications.search, query ? { query } : "skip")
+}
+
+// ==================== 学术交流支持申请 ====================
+
+export function useStudentFormProfile() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(academicExchangeProfileRef, sessionToken ? { sessionToken } : "skip")
+}
+
+export function useUpsertStudentFormProfile() {
+  const upsert = useMutation(upsertAcademicExchangeProfileRef)
+  return useCallback((args: { gender?: string; phone?: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return upsert({ ...args, sessionToken } as any)
+  }, [upsert])
+}
+
+export function useAcademicExchangeApplications() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listAcademicExchangeApplicationsRef, sessionToken ? { sessionToken } : "skip")
+}
+
+export function useAcademicExchangeApplication(id?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getAcademicExchangeApplicationRef,
+    sessionToken && id ? ({ sessionToken, id: id as any } as any) : "skip"
+  )
+}
+
+export function useCreateAcademicExchangeApplication() {
+  const create = useMutation(createAcademicExchangeApplicationRef)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function usePublicationVenues() {

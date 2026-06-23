@@ -1,6 +1,6 @@
 "use client"
 
-import { CalendarDays, Download, FileText, Link as LinkIcon, MessageSquare } from "lucide-react"
+import { CalendarDays, Download, FileText, Link as LinkIcon, MessageSquare, Receipt } from "lucide-react"
 import { IntranetSectionCard } from "@/components/intranet/intranet-section-card"
 
 const intranetSections = [
@@ -30,9 +30,15 @@ const intranetSections = [
   },
   {
     title: "资料下载",
-    description: "学术交流、学生活动报销等内部文件的下载入口，包含申请表格、支持方案和流程说明。",
+    description: "通班相关的各种内部资料下载，包括但不限于培养方案、报销政策文件等。",
     icon: Download,
     href: "/intranet/materials",
+  },
+  {
+    title: "报销",
+    description: "学术交流支持、学生活动等报销申请入口。",
+    icon: Receipt,
+    href: "/intranet/reimbursements",
   },
 ]
 
