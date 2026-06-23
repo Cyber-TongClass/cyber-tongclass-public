@@ -95,7 +95,9 @@ async function buildPdf(application: any) {
     throw new Error("缺少中文字体资源，无法生成中文申请表 PDF")
   }
 
-  const font = await pdfDoc.embedFont(fontBytes, { subset: true })
+  // Full embedding is larger, but pdf-lib/fontkit can render Noto Sans SC
+  // incorrectly when subsetting CJK glyphs in production PDFs.
+  const font = await pdfDoc.embedFont(fontBytes, { subset: false })
   const a4: [number, number] = [595.28, 841.89]
   const margin = 40
   const tableWidth = a4[0] - margin * 2
