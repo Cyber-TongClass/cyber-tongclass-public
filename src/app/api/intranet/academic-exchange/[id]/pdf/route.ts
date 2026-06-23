@@ -2,38 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { readFile } from "fs/promises"
 import path from "path"
+import fontkit from "@pdf-lib/fontkit"
+import { PDFDocument, rgb } from "pdf-lib"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
 
 export const runtime = "nodejs"
 
 const getApplicationRef = makeFunctionReference<"query">("academicExchange:getApplication")
-
-type PdfDeps = {
-  PDFDocument: any
-  rgb: any
-  StandardFonts: any
-  fontkit: any
-}
-
-async function loadPdfDeps(): Promise<PdfDeps | null> {
-  try {
-    const importModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<any>
-    const [pdfLib, fontkitModule] = await Promise.all([
-      importModule("pdf-lib"),
-      importModule("@pdf-lib/fontkit"),
-    ])
-
-    return {
-      PDFDocument: pdfLib.PDFDocument,
-      rgb: pdfLib.rgb,
-      StandardFonts: pdfLib.StandardFonts,
-      fontkit: fontkitModule.default || fontkitModule,
-    }
-  } catch {
-    return null
-  }
-}
 
 async function loadChineseFontBytes() {
   const candidates = [
@@ -110,8 +86,7 @@ async function fetchPaperPdf(url: string) {
   return bytes
 }
 
-async function buildPdf(application: any, deps: PdfDeps) {
-  const { PDFDocument, rgb, fontkit } = deps
+async function buildPdf(application: any) {
   const pdfDoc = await PDFDocument.create()
   pdfDoc.registerFontkit(fontkit)
 
@@ -121,7 +96,7 @@ async function buildPdf(application: any, deps: PdfDeps) {
   }
 
   const font = await pdfDoc.embedFont(fontBytes, { subset: true })
-  const a4 = [595.28, 841.89]
+  const a4: [number, number] = [595.28, 841.89]
   const margin = 40
   const tableWidth = a4[0] - margin * 2
   const lineHeight = 14
@@ -336,19 +311,11 @@ export async function POST(
       return NextResponse.json({ ok: false, message: "未找到申请记录" }, { status: 404 })
     }
 
-    const deps = await loadPdfDeps()
-    if (!deps) {
-      return NextResponse.json({
-        ok: false,
-        message: "PDF 导出依赖尚未安装：需要 pdf-lib、@pdf-lib/fontkit 和 @fontsource/noto-sans-sc。当前 npm 依赖冲突阻止了安装。",
-      }, { status: 500 })
-    }
-
-    const pdfBytes = await buildPdf(application, deps)
+    const pdfBytes = await buildPdf(application)
     const applicantName = sanitizeFileName(application.applicantName || "申请人")
     const fileName = encodeURIComponent(`通班学术交流支持项目申请表-${sanitizeFileName(application.projectName)}-${applicantName}.pdf`)
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "content-type": "application/pdf",
         "content-disposition": `attachment; filename*=UTF-8''${fileName}`,
