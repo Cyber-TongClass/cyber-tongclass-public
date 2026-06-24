@@ -51,6 +51,17 @@ const downloadableSections = [
   //   description: "学生组织活动相关的报销申请表格和流程说明。",
   //   materials: [],
   // },
+  {
+    title: "奖学金评选",
+    description: "奖学金评选相关的说明材料。",
+    materials: [
+      {
+        name: "关于通班奖学金科研成果的评审建议",
+        file: "/intranet-materials/关于通班奖学金科研成果的评审建议.pdf",
+        type: "PDF",
+      },
+    ],
+  },
 ]
 
 export default function MaterialsPage() {

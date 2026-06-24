@@ -12,25 +12,20 @@ export const runtime = "nodejs"
 const getApplicationRef = makeFunctionReference<"query">("academicExchange:getApplication")
 
 async function loadChineseFontBytes() {
-  const candidates = [
-    path.join(/* turbopackIgnore: true */ process.cwd(), "public", "fonts", "SimSun.ttf"),
-    path.join(/* turbopackIgnore: true */ process.cwd(), "public", "fonts", "Songti.ttf"),
-    path.join(/* turbopackIgnore: true */ process.cwd(), "public", "fonts", "Songti.otf"),
-    path.join(/* turbopackIgnore: true */ process.cwd(), "public", "fonts", "NotoSansSC-Regular.otf"),
-    path.join(/* turbopackIgnore: true */ process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
-    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-    "/Library/Fonts/Arial Unicode.ttf",
-  ]
+  // Source Han Sans SC is bundled in public/ so local and deployed PDF output
+  // use the same open-source CJK font instead of relying on server fonts.
+  const fontPath = path.join(
+    /*turbopackIgnore: true*/ process.cwd(),
+    "public",
+    "fonts",
+    "SourceHanSansSC-Regular.otf"
+  )
 
-  for (const candidate of candidates) {
-    try {
-      return await readFile(candidate)
-    } catch {
-      // Try the next font path.
-    }
+  try {
+    return await readFile(fontPath)
+  } catch {
+    return null
   }
-
-  return null
 }
 
 function sanitizeFileName(value: string) {
