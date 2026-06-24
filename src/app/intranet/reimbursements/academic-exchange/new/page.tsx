@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/lib/hooks/use-auth"
@@ -43,6 +44,8 @@ const resizeTextarea = (event: FormEvent<HTMLTextAreaElement>) => {
   target.style.height = `${target.scrollHeight}px`
 }
 
+const projectCategoryOptions = ["出境访学", "学术会议", "其他"] as const
+
 export default function NewAcademicExchangeApplicationPage() {
   const router = useRouter()
   const { currentUser } = useAuth()
@@ -75,6 +78,7 @@ export default function NewAcademicExchangeApplicationPage() {
     paperPdfUrl: "",
   })
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([newExpenseRow()])
+  const [projectCategoryOption, setProjectCategoryOption] = useState("")
   const [message, setMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -92,6 +96,7 @@ export default function NewAcademicExchangeApplicationPage() {
     return publications.find((publication) => String(publication._id) === form.publicationId) || null
   }, [form.publicationId, publications])
 
+  const skipsPaperSection = form.projectCategory === "出境访学"
   const applicantAuthorInfo = selectedPublication ? getApplicantAuthorInfo(selectedPublication, currentUser?._id) : null
   const formattedAuthors = selectedPublication ? formatPaperAuthors(selectedPublication.authors, applicantAuthorInfo?.name) : []
 
@@ -106,6 +111,14 @@ export default function NewAcademicExchangeApplicationPage() {
     setForm((previous) => ({ ...previous, [key]: value }))
   }
 
+  const updateProjectCategoryOption = (value: string) => {
+    setProjectCategoryOption(value)
+    setForm((previous) => ({
+      ...previous,
+      projectCategory: value === "其他" ? "" : value,
+    }))
+  }
+
   const updateExpenseRow = (key: string, patch: Partial<ExpenseRow>) => {
     setExpenseRows((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
   }
@@ -114,14 +127,21 @@ export default function NewAcademicExchangeApplicationPage() {
     event.preventDefault()
     setMessage("")
 
-    if (!selectedPublication) {
-      setMessage("请选择关联论文。")
+    if (!form.projectCategory.trim()) {
+      setMessage(projectCategoryOption === "其他" ? "请填写其他项目类别。" : "请选择项目类别。")
       return
     }
 
-    if (!applicantAuthorInfo) {
-      setMessage("无法在该论文作者列表中识别申请人，请先去个人学术修正作者关联。")
-      return
+    if (!skipsPaperSection) {
+      if (!selectedPublication) {
+        setMessage("请选择关联论文。")
+        return
+      }
+
+      if (!applicantAuthorInfo) {
+        setMessage("无法在该论文作者列表中识别申请人，请先去个人学术修正作者关联。")
+        return
+      }
     }
 
     const expenseItems = expenseRows
@@ -139,19 +159,21 @@ export default function NewAcademicExchangeApplicationPage() {
 
     const totalPages = Number(form.totalPages)
     const bodyPages = Number(form.bodyPages)
-    if (!Number.isInteger(totalPages) || !Number.isInteger(bodyPages) || totalPages <= 0 || bodyPages <= 0) {
-      setMessage("总页数和正文页数必须是正整数。")
-      return
-    }
+    if (!skipsPaperSection) {
+      if (!Number.isInteger(totalPages) || !Number.isInteger(bodyPages) || totalPages <= 0 || bodyPages <= 0) {
+        setMessage("总页数和正文页数必须是正整数。")
+        return
+      }
 
-    if (!/^https?:\/\//i.test(form.paperPdfUrl.trim())) {
-      setMessage("论文 arXiv PDF 链接必须是点开即 PDF 的 http(s) 链接。")
-      return
+      if (!/^https?:\/\//i.test(form.paperPdfUrl.trim())) {
+        setMessage("论文 arXiv PDF 链接必须是点开即 PDF 的 http(s) 链接。")
+        return
+      }
     }
 
     setSubmitting(true)
     try {
-      const id = await createApplication({
+      const payload: Record<string, unknown> = {
         applicantName: form.applicantName,
         email: form.email,
         gender: form.gender,
@@ -164,12 +186,17 @@ export default function NewAcademicExchangeApplicationPage() {
         projectPlan: form.projectPlan,
         expenseItems,
         applicationDate: form.applicationDate,
-        publicationId: form.publicationId,
-        applicantAffiliation: form.applicantAffiliation,
-        totalPages,
-        bodyPages,
-        paperPdfUrl: form.paperPdfUrl,
-      })
+      }
+
+      if (!skipsPaperSection) {
+        payload.publicationId = form.publicationId
+        payload.applicantAffiliation = form.applicantAffiliation
+        payload.totalPages = totalPages
+        payload.bodyPages = bodyPages
+        payload.paperPdfUrl = form.paperPdfUrl
+      }
+
+      const id = await createApplication(payload)
       router.push(`/intranet/reimbursements/academic-exchange/${id}`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "提交失败")
@@ -193,15 +220,17 @@ export default function NewAcademicExchangeApplicationPage() {
           <p className="mt-1 text-sm text-slate-500">提交后申请将进入历史记录，不能再编辑。</p>
         </div>
 
-        <div className="flex gap-3 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <div className="space-y-1">
-            <p className="font-medium">请先在个人学术中登记论文并完成作者关联。</p>
-            <p>如果系统没有找到论文，或选中论文后无法识别你在作者列表中的位置，将无法提交学术交流支持申请。</p>
+        {!skipsPaperSection ? (
+          <div className="flex gap-3 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div className="space-y-1">
+              <p className="font-medium">请先在个人学术中登记论文并完成作者关联。</p>
+              <p>如果系统没有找到论文，或选中论文后无法识别你在作者列表中的位置，将无法提交学术交流支持申请。</p>
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        {publicationsData !== undefined && publications.length === 0 ? (
+        {!skipsPaperSection && publicationsData !== undefined && publications.length === 0 ? (
           <Card>
             <CardContent className="space-y-4 pt-6">
               <p className="text-sm text-slate-600">系统没有找到可用于申请的个人学术论文。请先去个人学术完成论文登记和作者关联，否则无法报销。</p>
@@ -248,7 +277,26 @@ export default function NewAcademicExchangeApplicationPage() {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label>项目类别</Label>
-                <Input value={form.projectCategory} onChange={(event) => updateForm("projectCategory", event.target.value)} required />
+                <Select value={projectCategoryOption} onValueChange={updateProjectCategoryOption} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="请选择项目类别" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projectCategoryOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {projectCategoryOption === "其他" ? (
+                  <Input
+                    value={form.projectCategory}
+                    onChange={(event) => updateForm("projectCategory", event.target.value)}
+                    placeholder="请填写其他项目类别"
+                    required
+                  />
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label>项目名称</Label>
@@ -277,11 +325,12 @@ export default function NewAcademicExchangeApplicationPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>关联接收论文及其作者单位</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          {!skipsPaperSection ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>关联接收论文及其作者单位</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
               <div className="grid gap-2">
                 <Label>选择个人学术论文</Label>
                 <p className="text-xs text-slate-500">
@@ -341,8 +390,9 @@ export default function NewAcademicExchangeApplicationPage() {
                   <p className="text-xs text-slate-500">请确认链接直接返回 PDF 文件，并与上方总页数、正文页数对应。</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>

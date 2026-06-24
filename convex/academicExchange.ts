@@ -239,22 +239,33 @@ export const createApplication = mutation({
     projectPlan: v.string(),
     expenseItems: v.array(expenseItemValidator),
     applicationDate: v.string(),
-    publicationId: v.id("publications"),
-    applicantAffiliation: v.string(),
-    totalPages: v.number(),
-    bodyPages: v.number(),
-    paperPdfUrl: v.string(),
+    publicationId: v.optional(v.id("publications")),
+    applicantAffiliation: v.optional(v.string()),
+    totalPages: v.optional(v.number()),
+    bodyPages: v.optional(v.number()),
+    paperPdfUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getUserBySession(ctx, args.sessionToken)
-    const publication = await ctx.db.get(args.publicationId)
-    if (!publication) {
-      throw new Error("请选择有效的论文")
-    }
+    const projectCategory = args.projectCategory.trim()
+    const requiresPaper = projectCategory !== "出境访学"
+    let publication: any = null
+    let authorInfo: { name: string; label: string } | null = null
 
-    const authorInfo = buildAuthorIndexLabel(publication.authors, String(user._id))
-    if (!authorInfo) {
-      throw new Error("无法在该论文作者列表中识别申请人，请先去个人学术修正作者关联")
+    if (requiresPaper) {
+      if (!args.publicationId) {
+        throw new Error("请选择有效的论文")
+      }
+
+      publication = await ctx.db.get(args.publicationId)
+      if (!publication) {
+        throw new Error("请选择有效的论文")
+      }
+
+      authorInfo = buildAuthorIndexLabel(publication.authors, String(user._id))
+      if (!authorInfo) {
+        throw new Error("无法在该论文作者列表中识别申请人，请先去个人学术修正作者关联")
+      }
     }
 
     const expenseItems = args.expenseItems
@@ -272,26 +283,34 @@ export const createApplication = mutation({
     const requiredStrings = [
       args.applicantName,
       args.email,
-      args.projectCategory,
+      projectCategory,
       args.projectName,
       args.exchangeLocation,
       args.projectTime,
       args.otherFunding,
       args.projectPlan,
       args.applicationDate,
-      args.applicantAffiliation,
-      args.paperPdfUrl,
     ]
     if (requiredStrings.some((value) => !value.trim())) {
       throw new Error("请完整填写申请信息")
     }
 
-    if (!/^https?:\/\//i.test(args.paperPdfUrl.trim())) {
-      throw new Error("论文 PDF 链接必须是 http(s) 链接")
-    }
+    if (requiresPaper) {
+      const paperRequiredStrings = [
+        args.applicantAffiliation,
+        args.paperPdfUrl,
+      ]
+      if (paperRequiredStrings.some((value) => !value?.trim())) {
+        throw new Error("请完整填写论文信息")
+      }
 
-    if (!Number.isInteger(args.totalPages) || !Number.isInteger(args.bodyPages) || args.totalPages <= 0 || args.bodyPages <= 0) {
-      throw new Error("页数必须是正整数")
+      if (!/^https?:\/\//i.test(args.paperPdfUrl!.trim())) {
+        throw new Error("论文 PDF 链接必须是 http(s) 链接")
+      }
+
+      if (!Number.isInteger(args.totalPages) || !Number.isInteger(args.bodyPages) || args.totalPages! <= 0 || args.bodyPages! <= 0) {
+        throw new Error("页数必须是正整数")
+      }
     }
 
     const now = Date.now()
@@ -322,7 +341,7 @@ export const createApplication = mutation({
       email: args.email.trim().toLowerCase(),
       gender: normalizeOptionalString(args.gender),
       phone: normalizeOptionalString(args.phone),
-      projectCategory: args.projectCategory.trim(),
+      projectCategory,
       projectName: args.projectName.trim(),
       exchangeLocation: args.exchangeLocation.trim(),
       projectTime: args.projectTime.trim(),
@@ -331,15 +350,15 @@ export const createApplication = mutation({
       expenseItems,
       totalAmount: expenseItems.reduce((sum, item) => sum + item.amount, 0),
       applicationDate: args.applicationDate,
-      publicationId: args.publicationId,
-      paperTitle: publication.title,
-      paperAuthors: publication.authors,
-      applicantAuthorName: authorInfo.name,
-      applicantAuthorIndexLabel: authorInfo.label,
-      applicantAffiliation: args.applicantAffiliation.trim(),
-      totalPages: args.totalPages,
-      bodyPages: args.bodyPages,
-      paperPdfUrl: args.paperPdfUrl.trim(),
+      publicationId: requiresPaper ? args.publicationId : undefined,
+      paperTitle: requiresPaper ? publication.title : undefined,
+      paperAuthors: requiresPaper ? publication.authors : undefined,
+      applicantAuthorName: requiresPaper ? authorInfo!.name : undefined,
+      applicantAuthorIndexLabel: requiresPaper ? authorInfo!.label : undefined,
+      applicantAffiliation: requiresPaper ? args.applicantAffiliation!.trim() : undefined,
+      totalPages: requiresPaper ? args.totalPages : undefined,
+      bodyPages: requiresPaper ? args.bodyPages : undefined,
+      paperPdfUrl: requiresPaper ? args.paperPdfUrl!.trim() : undefined,
       status: "submitted",
       submittedAt: now,
       createdAt: now,

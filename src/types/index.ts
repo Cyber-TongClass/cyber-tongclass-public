@@ -102,15 +102,15 @@ export interface AcademicExchangeSupportApplication {
   expenseItems: AcademicExchangeExpenseItem[]
   totalAmount: number
   applicationDate: string
-  publicationId: string
-  paperTitle: string
-  paperAuthors: string[]
-  applicantAuthorName: string
-  applicantAuthorIndexLabel: string
-  applicantAffiliation: string
-  totalPages: number
-  bodyPages: number
-  paperPdfUrl: string
+  publicationId?: string
+  paperTitle?: string
+  paperAuthors?: string[]
+  applicantAuthorName?: string
+  applicantAuthorIndexLabel?: string
+  applicantAffiliation?: string
+  totalPages?: number
+  bodyPages?: number
+  paperPdfUrl?: string
   status: "submitted"
   submittedAt: number
   createdAt: number

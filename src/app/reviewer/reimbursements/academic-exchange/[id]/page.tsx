@@ -116,7 +116,8 @@ export default function ReviewerAcademicExchangeDetailPage() {
     )
   }
 
-  const paperAuthors = formatPaperAuthors(application.paperAuthors, application.applicantAuthorName)
+  const hasPaperInfo = Boolean(application.paperTitle || application.paperPdfUrl)
+  const paperAuthors = formatPaperAuthors(application.paperAuthors || [], application.applicantAuthorName)
 
   return (
     <div className="space-y-6">
@@ -194,11 +195,11 @@ export default function ReviewerAcademicExchangeDetailPage() {
             }
           />
           <div className="grid gap-3 md:grid-cols-3">
-            <Field label="申请人位次" value={`${application.applicantAuthorName}，${application.applicantAuthorIndexLabel}`} />
+            <Field label="申请人位次" value={application.applicantAuthorName ? `${application.applicantAuthorName}，${application.applicantAuthorIndexLabel || ""}` : "-"} />
             <Field label="申请人所在单位" value={application.applicantAffiliation} />
-            <Field label="页数" value={`总页数 ${application.totalPages}，正文页数 ${application.bodyPages}`} />
+            <Field label="页数" value={hasPaperInfo ? `总页数 ${application.totalPages || ""}，正文页数 ${application.bodyPages || ""}` : "-"} />
           </div>
-          <Field label="论文 PDF 链接" value={<a href={application.paperPdfUrl} target="_blank" rel="noreferrer" className="text-slate-950 underline underline-offset-4">{application.paperPdfUrl}</a>} />
+          <Field label="论文 PDF 链接" value={application.paperPdfUrl ? <a href={application.paperPdfUrl} target="_blank" rel="noreferrer" className="text-slate-950 underline underline-offset-4">{application.paperPdfUrl}</a> : "-"} />
         </CardContent>
       </Card>
 

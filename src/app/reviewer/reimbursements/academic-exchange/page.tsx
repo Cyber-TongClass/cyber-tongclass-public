@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { Download, Eye, Search } from "lucide-react"
+import { Archive, Download, Eye, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -42,11 +42,75 @@ async function downloadReviewerPdf(application: AcademicExchangeSupportApplicati
   URL.revokeObjectURL(url)
 }
 
+async function downloadSelectedApplicationsZip(
+  applicationIds: string[],
+  onProgress: (progress: number | null) => void
+) {
+  const response = await fetch("/api/reviewer/academic-exchange/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicationIds }),
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new Error(payload?.message || "批量导出失败")
+  }
+
+  const fileName = getDownloadFileName(response, "学术交流支持申请导出.zip")
+  const contentLength = Number(response.headers.get("content-length") || 0)
+  const reader = response.body?.getReader()
+
+  if (!reader) {
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    onProgress(100)
+    return
+  }
+
+  const chunks: BlobPart[] = []
+  let loaded = 0
+  onProgress(contentLength ? 0 : null)
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (value) {
+      chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength))
+      loaded += value.length
+      if (contentLength) {
+        onProgress(Math.min(99, Math.round((loaded / contentLength) * 100)))
+      }
+    }
+  }
+
+  const blob = new Blob(chunks, { type: "application/zip" })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+  onProgress(100)
+}
+
 export default function ReviewerAcademicExchangePage() {
   const [applications, setApplications] = useState<AcademicExchangeSupportApplication[] | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [message, setMessage] = useState("")
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [batchExporting, setBatchExporting] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -84,6 +148,35 @@ export default function ReviewerAcademicExchangePage() {
     })
   }, [applications, searchQuery])
 
+  const selectedCount = selectedIds.size
+  const allFilteredSelected = filteredApplications.length > 0 && filteredApplications.every((application) => selectedIds.has(application._id))
+
+  const toggleApplication = (id: string, checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (checked) {
+        next.add(id)
+      } else {
+        next.delete(id)
+      }
+      return next
+    })
+  }
+
+  const toggleFilteredApplications = (checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      for (const application of filteredApplications) {
+        if (checked) {
+          next.add(application._id)
+        } else {
+          next.delete(application._id)
+        }
+      }
+      return next
+    })
+  }
+
   const handleDownload = async (application: AcademicExchangeSupportApplication) => {
     setMessage("")
     setDownloadingId(application._id)
@@ -96,6 +189,27 @@ export default function ReviewerAcademicExchangePage() {
     }
   }
 
+  const handleBatchExport = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) {
+      setMessage("请先选择至少一条申请记录。")
+      return
+    }
+
+    setMessage("")
+    setBatchExporting(true)
+    setBatchProgress(null)
+    try {
+      await downloadSelectedApplicationsZip(ids, setBatchProgress)
+      setMessage(`已导出 ${ids.length} 条申请记录。`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "批量导出失败")
+    } finally {
+      setBatchExporting(false)
+      window.setTimeout(() => setBatchProgress(null), 1200)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -103,6 +217,10 @@ export default function ReviewerAcademicExchangePage() {
           <h1 className="text-2xl font-extrabold text-slate-950">学术交流支持申请</h1>
           <p className="mt-1 text-sm text-slate-500">只读查看同学已提交的学术交流支持申请，并按需下载单份申请 PDF。</p>
         </div>
+        <Button type="button" onClick={handleBatchExport} disabled={batchExporting || selectedCount === 0}>
+          <Archive className="mr-2 h-4 w-4" />
+          {batchExporting ? "正在导出..." : `导出选中 ${selectedCount || ""}`}
+        </Button>
       </div>
 
       {message ? (
@@ -113,14 +231,32 @@ export default function ReviewerAcademicExchangePage() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              className="pl-9"
-              placeholder="搜索姓名、学号、项目名称、类别或地点..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
+          <div className="flex flex-col gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                className="pl-9"
+                placeholder="搜索姓名、学号、项目名称、类别或地点..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+              <span>已选择 {selectedCount} 条申请。批量导出会下载一个 ZIP，内含汇总 Excel 和所有选中申请 PDF。</span>
+              {batchExporting ? (
+                <div className="min-w-[220px]">
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full rounded-full bg-slate-900 transition-all"
+                      style={{ width: `${batchProgress ?? 35}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-right text-xs text-slate-500">
+                    {batchProgress === null ? "正在生成文件..." : `下载进度 ${batchProgress}%`}
+                  </p>
+                </div>
+              ) : null}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -133,6 +269,14 @@ export default function ReviewerAcademicExchangePage() {
           <Table className="min-w-[960px]">
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={(event) => toggleFilteredApplications(event.target.checked)}
+                    aria-label="选择当前筛选结果"
+                  />
+                </TableHead>
                 <TableHead>申请人</TableHead>
                 <TableHead>学号</TableHead>
                 <TableHead>项目名称</TableHead>
@@ -146,15 +290,23 @@ export default function ReviewerAcademicExchangePage() {
             <TableBody>
               {applications === null ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-slate-500">Loading...</TableCell>
+                  <TableCell colSpan={9} className="h-24 text-center text-slate-500">Loading...</TableCell>
                 </TableRow>
               ) : filteredApplications.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-slate-500">暂无申请记录</TableCell>
+                  <TableCell colSpan={9} className="h-24 text-center text-slate-500">暂无申请记录</TableCell>
                 </TableRow>
               ) : (
                 filteredApplications.map((application) => (
                   <TableRow key={application._id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(application._id)}
+                        onChange={(event) => toggleApplication(application._id, event.target.checked)}
+                        aria-label={`选择 ${application.applicantName} 的申请`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{application.applicantName}</TableCell>
                     <TableCell>{application.studentId}</TableCell>
                     <TableCell className="max-w-[260px] truncate">{application.projectName}</TableCell>
