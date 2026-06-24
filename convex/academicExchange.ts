@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { REVIEWER_ACADEMIC_EXCHANGE_READ, requireReviewerPermission } from "./reviewer/lib"
 
 const AUTHOR_META_PATTERN = /^(.*?)\s*\[tc-author:([^\]]+)\]\s*$/
 
@@ -173,6 +174,53 @@ export const getApplication = query({
       return null
     }
     return application
+  },
+})
+
+export const listApplicationsForReviewer = query({
+  args: { reviewerSessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireReviewerPermission(ctx, args.reviewerSessionToken, REVIEWER_ACADEMIC_EXCHANGE_READ)
+    return await ctx.db
+      .query("academicExchangeSupportApplications")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .collect()
+  },
+})
+
+export const getApplicationForReviewer = query({
+  args: {
+    reviewerSessionToken: v.optional(v.string()),
+    id: v.id("academicExchangeSupportApplications"),
+  },
+  handler: async (ctx, args) => {
+    await requireReviewerPermission(ctx, args.reviewerSessionToken, REVIEWER_ACADEMIC_EXCHANGE_READ)
+    return await ctx.db.get(args.id)
+  },
+})
+
+export const logReviewerApplicationDownload = mutation({
+  args: {
+    reviewerSessionToken: v.optional(v.string()),
+    id: v.id("academicExchangeSupportApplications"),
+  },
+  handler: async (ctx, args) => {
+    const reviewer = await requireReviewerPermission(ctx, args.reviewerSessionToken, REVIEWER_ACADEMIC_EXCHANGE_READ)
+    const application = await ctx.db.get(args.id)
+    if (!application) {
+      throw new Error("未找到申请记录")
+    }
+
+    await ctx.db.insert("reviewerAuditLogs", {
+      reviewerId: reviewer._id,
+      action: "downloadAcademicExchangePdf",
+      targetType: "academicExchangeSupportApplication",
+      targetId: String(args.id),
+      createdAt: Date.now(),
+    })
+
+    return { success: true }
   },
 })
 

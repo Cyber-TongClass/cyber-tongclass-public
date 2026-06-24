@@ -256,7 +256,43 @@ export default defineSchema({
     submittedAt: v.number(),
     createdAt: v.number(),
   })
-    .index("by_user_createdAt", ["userId", "createdAt"]),
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  reviewerAccounts: defineTable({
+    username: v.string(),
+    displayName: v.string(),
+    passwordHash: v.string(),
+    salt: v.string(),
+    enabled: v.boolean(),
+    permissions: v.array(v.string()),
+    createdBy: v.id("users"),
+    lastLoginAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_username", ["username"])
+    .index("by_enabled", ["enabled"]),
+
+  reviewerSessions: defineTable({
+    reviewerId: v.id("reviewerAccounts"),
+    tokenHash: v.string(),
+    issuedAt: v.number(),
+    expiresAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_reviewer", ["reviewerId"]),
+
+  reviewerAuditLogs: defineTable({
+    reviewerId: v.id("reviewerAccounts"),
+    action: v.string(),
+    targetType: v.string(),
+    targetId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_reviewer_createdAt", ["reviewerId", "createdAt"])
+    .index("by_target", ["targetType", "targetId"]),
 
   // Auth config table (for pre-registered student IDs)
   authConfig: defineTable({

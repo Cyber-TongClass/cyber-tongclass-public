@@ -44,6 +44,10 @@ const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("acad
 const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
 const getAcademicExchangeApplicationRef = makeFunctionReference<"query">("academicExchange:getApplication")
 const createAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:createApplication")
+const listReviewerAccountsRef = makeFunctionReference<"query">("reviewerAuth:listAccounts")
+const createReviewerAccountRef = makeFunctionReference<"mutation">("reviewerAuth:createAccount")
+const updateReviewerAccountRef = makeFunctionReference<"mutation">("reviewerAuth:updateAccount")
+const resetReviewerPasswordRef = makeFunctionReference<"mutation">("reviewerAuth:resetPassword")
 const TECHDAY_AUTH_STORAGE_EVENT = "techday-auth-storage"
 const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
 
@@ -531,6 +535,51 @@ export function useCreateAcademicExchangeApplication() {
     if (!sessionToken) throw new Error("请先登录")
     return create({ ...args, sessionToken } as any)
   }, [create])
+}
+
+// ==================== Reviewer 账号管理 ====================
+
+export function useReviewerAccounts() {
+  const requesterSessionToken = useTongClassSessionToken()
+  return useQuery(listReviewerAccountsRef, requesterSessionToken ? { requesterSessionToken } : "skip")
+}
+
+export function useCreateReviewerAccount() {
+  const create = useMutation(createReviewerAccountRef)
+  return useCallback((args: {
+    username: string
+    displayName: string
+    password: string
+    permissions?: string[]
+    enabled?: boolean
+  }) => {
+    const requesterSessionToken = getTongClassStoredSessionToken()
+    if (!requesterSessionToken) throw new Error("请先登录")
+    return create({ ...args, requesterSessionToken } as any)
+  }, [create])
+}
+
+export function useUpdateReviewerAccount() {
+  const update = useMutation(updateReviewerAccountRef)
+  return useCallback((args: {
+    id: string
+    displayName?: string
+    permissions?: string[]
+    enabled?: boolean
+  }) => {
+    const requesterSessionToken = getTongClassStoredSessionToken()
+    if (!requesterSessionToken) throw new Error("请先登录")
+    return update({ ...args, requesterSessionToken, id: args.id as any } as any)
+  }, [update])
+}
+
+export function useResetReviewerPassword() {
+  const reset = useMutation(resetReviewerPasswordRef)
+  return useCallback((args: { id: string; password: string }) => {
+    const requesterSessionToken = getTongClassStoredSessionToken()
+    if (!requesterSessionToken) throw new Error("请先登录")
+    return reset({ ...args, requesterSessionToken, id: args.id as any } as any)
+  }, [reset])
 }
 
 export function usePublicationVenues() {

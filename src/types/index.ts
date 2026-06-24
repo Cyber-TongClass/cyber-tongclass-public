@@ -116,6 +116,20 @@ export interface AcademicExchangeSupportApplication {
   createdAt: number
 }
 
+export type ReviewerPermission = "academicExchange:read"
+
+export interface ReviewerAccount {
+  _id: string
+  username: string
+  displayName: string
+  enabled: boolean
+  permissions: ReviewerPermission[]
+  createdBy: string
+  lastLoginAt?: number
+  createdAt: number
+  updatedAt: number
+}
+
 // Course review types
 export interface CourseReview {
   _id: string

@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   Cog,
+  ShieldCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,6 +27,7 @@ import { useTechDayActorArgs, useTechDayCurrentPrincipal } from "@/lib/api"
 const navItems = [
   { href: "/admin", label: "仪表盘", icon: LayoutDashboard },
   { href: "/admin/users", label: "用户管理", icon: Users },
+  { href: "/admin/reviewers", label: "Reviewer", icon: ShieldCheck },
   { href: "/admin/reviews", label: "课程测评", icon: Star },
   { href: "/admin/publications", label: "成果管理", icon: BookOpen },
   { href: "/admin/news", label: "新闻管理", icon: FileText },
