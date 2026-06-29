@@ -48,6 +48,8 @@ convex/_generated/
 logs/
 *.log
 
+.superpowers/
+
 node_modules/
 prompt.md
 README_old.md通班研究.md
