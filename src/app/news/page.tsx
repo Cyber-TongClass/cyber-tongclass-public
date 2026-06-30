@@ -222,6 +222,7 @@ export default function NewsPage() {
                                     </div>
                                     {item.coverImageUrl ? (
                                       <div className="h-24 w-full overflow-hidden rounded-md bg-slate-100 md:h-24 md:w-40 md:shrink-0">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
                                           src={item.coverImageUrl}
                                           alt={item.title}

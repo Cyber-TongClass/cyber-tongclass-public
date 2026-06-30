@@ -67,7 +67,7 @@ export default function PublicationsPage() {
   const [sortOrder, setSortOrder] = React.useState<"desc" | "asc">("desc")
 
   const publicationsData = usePublications()
-  const publications: Publication[] = publicationsData || []
+  const publications: Publication[] = React.useMemo(() => publicationsData || [], [publicationsData])
 
   const categoryOptions = React.useMemo(() => {
     const unique = Array.from(new Set(publications.map((pub) => pub.category))).sort((a, b) => a.localeCompare(b))

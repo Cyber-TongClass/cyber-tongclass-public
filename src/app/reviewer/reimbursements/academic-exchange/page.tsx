@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatCurrency, formatDate } from "@/lib/academic-exchange"
+import { getAcademicExchangePaperPdfLabel } from "@/lib/academic-exchange-pdf-source"
 import type { AcademicExchangeSupportApplication } from "@/types"
 
 function getDownloadFileName(response: Response, fallback: string) {
@@ -266,7 +267,7 @@ export default function ReviewerAcademicExchangePage() {
           <CardTitle>申请列表</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          <Table className="min-w-[960px]">
+          <Table className="min-w-[1100px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">
@@ -283,6 +284,7 @@ export default function ReviewerAcademicExchangePage() {
                 <TableHead>项目类别</TableHead>
                 <TableHead>交流地点</TableHead>
                 <TableHead>申请金额</TableHead>
+                <TableHead>论文 PDF</TableHead>
                 <TableHead>提交时间</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -290,11 +292,11 @@ export default function ReviewerAcademicExchangePage() {
             <TableBody>
               {applications === null ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-slate-500">Loading...</TableCell>
+                  <TableCell colSpan={10} className="h-24 text-center text-slate-500">Loading...</TableCell>
                 </TableRow>
               ) : filteredApplications.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-slate-500">暂无申请记录</TableCell>
+                  <TableCell colSpan={10} className="h-24 text-center text-slate-500">暂无申请记录</TableCell>
                 </TableRow>
               ) : (
                 filteredApplications.map((application) => (
@@ -313,6 +315,7 @@ export default function ReviewerAcademicExchangePage() {
                     <TableCell>{application.projectCategory}</TableCell>
                     <TableCell>{application.exchangeLocation}</TableCell>
                     <TableCell>{formatCurrency(application.totalAmount)}</TableCell>
+                    <TableCell className="max-w-[180px] truncate">{getAcademicExchangePaperPdfLabel(application) || "-"}</TableCell>
                     <TableCell>{formatDate(application.submittedAt)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

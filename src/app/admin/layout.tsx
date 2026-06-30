@@ -16,6 +16,8 @@ import {
   Menu,
   Cog,
   ShieldCheck,
+  TableProperties,
+  ClipboardList,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,6 +34,8 @@ const navItems = [
   { href: "/admin/publications", label: "成果管理", icon: BookOpen },
   { href: "/admin/news", label: "新闻管理", icon: FileText },
   { href: "/admin/events", label: "活动管理", icon: Calendar },
+  { href: "/admin/reimbursements", label: "报销管理", icon: TableProperties },
+  { href: "/admin/forms", label: "OA 表单", icon: ClipboardList },
   { href: "/admin/techday/settings", label: "TechDay", icon: Calendar },
   { href: "/admin/treehole", label: "树洞管理", icon: MessageSquare },
   { href: "/admin/feedback", label: "反馈管理", icon: FileText },
@@ -115,7 +119,7 @@ export default function AdminLayout({
   const actorArgs = useTechDayActorArgs()
   const techDayPrincipal = useTechDayCurrentPrincipal(actorArgs)
 
-  const adminAllowedPrefixes = ["/admin/news", "/admin/events", "/admin/reviews", "/admin/treehole", "/admin/feedback", "/admin/techday"]
+  const adminAllowedPrefixes = ["/admin/news", "/admin/events", "/admin/reviews", "/admin/treehole", "/admin/feedback", "/admin/reimbursements", "/admin/forms", "/admin/techday"]
   const isAdminAllowed =
     isSuperAdmin || adminAllowedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   const isTechDayAdminRoute = pathname === "/admin/techday" || pathname.startsWith("/admin/techday/")

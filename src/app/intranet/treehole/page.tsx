@@ -34,7 +34,8 @@ export default function TreeholePage() {
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
-  const posts = useTreeholePosts({ search: searchQuery.trim() || undefined }) || []
+  const postsData = useTreeholePosts({ search: searchQuery.trim() || undefined })
+  const posts = useMemo(() => postsData || [], [postsData])
   const createPost = useCreateTreeholePost()
   const deletePost = useDeleteTreeholePost()
   const ensureSerialNumbers = useEnsureTreeholeSerialNumbers()

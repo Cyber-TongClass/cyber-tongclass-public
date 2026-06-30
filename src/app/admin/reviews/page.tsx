@@ -209,7 +209,7 @@ export default function ReviewsPage() {
   const [tagEditColor, setTagEditColor] = useState("#2563EB")
 
   const coursesData = useCourses()
-  const courses: Course[] = coursesData || []
+  const courses: Course[] = useMemo(() => coursesData || [], [coursesData])
   const tongClassCourses = courses.filter((course) => course.isTongClassCourse)
   const otherCourses = courses.filter((course) => !course.isTongClassCourse)
   const allReviewsData = useAllCourseReviews()
@@ -229,8 +229,10 @@ export default function ReviewsPage() {
   const createCourse = useCreateCourse()
   const updateCourse = useUpdateCourse()
   const assignByTags = useAssignReviewsByTags()
-  const commonTagList = useCommonReviewTags() || []
-  const reviewTags = useReviewTags() || []
+  const commonTagsData = useCommonReviewTags()
+  const commonTagList = useMemo(() => commonTagsData || [], [commonTagsData])
+  const reviewTagsData = useReviewTags()
+  const reviewTags = useMemo(() => reviewTagsData || [], [reviewTagsData])
   const editTag = useEditReviewTag()
   const setTagColor = useSetReviewTagColor()
   const updateReview = useUpdateCourseReview()

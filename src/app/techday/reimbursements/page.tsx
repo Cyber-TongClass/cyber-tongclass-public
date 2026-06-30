@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react"
 import { Download, Plus } from "lucide-react"
+import { ReimbursementFileUploadField } from "@/components/reimbursements/reimbursement-file-upload-field"
 import { TechDayShell } from "@/components/techday/techday-shell"
 import { TechDayAccessGuard } from "@/components/techday/techday-access-guard"
 import { TechDayReimbursementStatusBadge } from "@/components/techday/techday-badges"
@@ -23,6 +24,7 @@ import {
   useTechDayCurrentPrincipal,
   useTechDayReimbursements,
 } from "@/lib/api"
+import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import { downloadCsv, type TechDayReimbursementStatus } from "@/types/techday"
 
 const reviewOptions: Array<{ status: TechDayReimbursementStatus; label: string }> = [
@@ -60,7 +62,6 @@ const formatDateTime = (value?: number | null) => {
 export default function TechDayReimbursementsPage() {
   const actorArgs = useTechDayActorArgs()
   const principal = useTechDayCurrentPrincipal(actorArgs)
-  const reimbursements = useTechDayReimbursements(actorArgs)
   const create = useCreateTechDayReimbursement()
   const remove = useDeleteTechDayReimbursement()
   const review = useReviewTechDayReimbursement()
@@ -72,6 +73,8 @@ export default function TechDayReimbursementsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const isAdmin = principal?.techDayUser?.role === "admin" || principal?.mainUser?.role === "admin" || principal?.mainUser?.role === "super_admin"
+  const canUseReimbursements = principal !== undefined && (isAdmin || principal?.techDayUser?.role === "volunteer")
+  const reimbursements = useTechDayReimbursements(canUseReimbursements ? actorArgs : null)
   const exportRows = useExportTechDayReimbursements(isAdmin ? actorArgs : null)
   const orgOptions = useMemo(() => principal?.techDayUser?.assignedTracks?.length ? principal.techDayUser.assignedTracks : principal?.techDayUser?.volunteerTracks || ["待分配"], [principal])
 
@@ -95,18 +98,17 @@ export default function TechDayReimbursementsPage() {
         invoiceCompany: form.invoiceCompany,
       })
       if (file) {
-        const uploadUrl = await generateUploadUrl(actorArgs)
-        const result = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-          body: file,
-        })
-        if (!result.ok) throw new Error("附件上传失败")
-        const payload = await result.json()
+        const uploadTarget = await generateUploadUrl({
+          ...actorArgs,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          fileKind: "reimbursement",
+        } as any)
+        const storageId = await uploadFileToStorageTarget(uploadTarget as any, file, "附件上传失败")
         await finalizeAttachment({
           ...actorArgs,
           reimbursementId: id as any,
-          storageId: payload.storageId,
+          storageId,
           fileName: file.name,
           mimeType: file.type || "application/octet-stream",
           size: file.size,
@@ -175,13 +177,13 @@ export default function TechDayReimbursementsPage() {
                           <Textarea className="min-h-28" value={form.content} onChange={(event) => setForm((value) => ({ ...value, content: event.target.value }))} required />
                         </div>
                         <div className="grid gap-2 md:col-span-2">
-                          <Label>提交附件</Label>
-                          <Input
-                            type="file"
+                          <ReimbursementFileUploadField
                             accept="application/pdf,image/png,image/jpeg,image/webp"
-                            onChange={(event) => setFile(event.target.files?.[0] || null)}
+                            description="支持 PDF、PNG、JPG、WebP，最大 20MB。"
+                            file={file}
+                            inputId="techday-reimbursement-attachment"
+                            onFileChange={setFile}
                           />
-                          <p className="text-xs text-slate-500">支持 PDF、PNG、JPG、WebP，最大 20MB。</p>
                         </div>
                         {message ? <p className="text-sm text-slate-600 md:col-span-2">{message}</p> : null}
                         <div className="flex justify-end gap-2 md:col-span-2">

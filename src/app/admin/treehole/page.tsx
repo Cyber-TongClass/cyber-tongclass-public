@@ -23,10 +23,11 @@ export default function AdminTreeholePage() {
   const [sortBy, setSortBy] = useState("latest")
   const [replySortBy, setReplySortBy] = useState("oldest")
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
-  const posts = useAdminTreeholePosts({
+  const postsData = useAdminTreeholePosts({
     actorId: currentUser?._id ? String(currentUser._id) : null,
     search: searchQuery.trim() || undefined,
-  }) || []
+  })
+  const posts = useMemo(() => postsData || [], [postsData])
   const detail = useAdminTreeholePostById(selectedPostId, currentUser?._id ? String(currentUser._id) : null)
   const deletePost = useDeleteTreeholePost()
   const deleteReply = useDeleteTreeholeReply()

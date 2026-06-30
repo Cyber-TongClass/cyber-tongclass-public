@@ -4,8 +4,9 @@ import { useCallback, useMemo, useSyncExternalStore } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { makeFunctionReference } from "convex/server"
 import { api } from "../../convex/_generated/api"
-import type { UserLink } from "@/types"
+import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
+import { toOAFormUpsertPayload } from "@/lib/oa-forms"
 
 type IdLike =
   | string
@@ -44,6 +45,31 @@ const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("acad
 const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
 const getAcademicExchangeApplicationRef = makeFunctionReference<"query">("academicExchange:getApplication")
 const createAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:createApplication")
+const generateAcademicExchangeUploadUrlRef = makeFunctionReference<"mutation">("academicExchange:generateUploadUrl")
+const getAcademicExchangePaperPdfUrlRef = makeFunctionReference<"query">("academicExchange:getPaperPdfUrl")
+const listPublishedReimbursementTablesRef = makeFunctionReference<"query">("reimbursementTables:listPublished")
+const getPublishedReimbursementTableRef = makeFunctionReference<"query">("reimbursementTables:getPublishedBySlug")
+const listAdminReimbursementTablesRef = makeFunctionReference<"query">("reimbursementTables:listAdmin")
+const upsertAdminReimbursementTableRef = makeFunctionReference<"mutation">("reimbursementTables:upsertAdmin")
+const removeAdminReimbursementTableRef = makeFunctionReference<"mutation">("reimbursementTables:removeAdmin")
+const seedAcademicExchangeReimbursementTablesRef = makeFunctionReference<"mutation">("reimbursementTables:seedAcademicExchangeDefaults")
+const listPublishedOAFormsRef = makeFunctionReference<"query">("oaForms:listPublished")
+const getPublishedOAFormBySlugRef = makeFunctionReference<"query">("oaForms:getPublishedBySlug")
+const adminListOAFormsRef = makeFunctionReference<"query">("oaForms:adminList")
+const adminGetOAFormRef = makeFunctionReference<"query">("oaForms:adminGet")
+const adminUpsertOAFormRef = makeFunctionReference<"mutation">("oaForms:adminUpsert")
+const adminSetOAFormStatusRef = makeFunctionReference<"mutation">("oaForms:adminSetStatus")
+const adminRemoveOAFormRef = makeFunctionReference<"mutation">("oaForms:adminRemove")
+const generateOAFormUploadUrlRef = makeFunctionReference<"mutation">("oaForms:generateUploadUrl")
+const submitOAFormRef = makeFunctionReference<"mutation">("oaForms:submit")
+const updateOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:updateSubmission")
+const listMyOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:listMine")
+const adminListOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:adminListSubmissions")
+const adminReviewOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:adminReviewSubmission")
+const getOAFormAttachmentUrlRef = makeFunctionReference<"query">("oaForms:getAttachmentUrl")
+const adminExportOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:adminExportSubmissions")
+const adminUpdateOAFormResultConfigRef = makeFunctionReference<"mutation">("oaForms:adminUpdateResultConfig")
+const adminBatchUpdateOAFormResultsRef = makeFunctionReference<"mutation">("oaForms:adminBatchUpdateResults")
 const listReviewerAccountsRef = makeFunctionReference<"query">("reviewerAuth:listAccounts")
 const createReviewerAccountRef = makeFunctionReference<"mutation">("reviewerAuth:createAccount")
 const updateReviewerAccountRef = makeFunctionReference<"mutation">("reviewerAuth:updateAccount")
@@ -537,6 +563,213 @@ export function useCreateAcademicExchangeApplication() {
   }, [create])
 }
 
+export function useGenerateAcademicExchangeUploadUrl() {
+  const generate = useMutation(generateAcademicExchangeUploadUrlRef)
+  return useCallback((args?: { fileName?: string; mimeType?: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return generate({ ...(args || {}), sessionToken } as any)
+  }, [generate])
+}
+
+export function useAcademicExchangePaperPdfUrl(id?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getAcademicExchangePaperPdfUrlRef,
+    sessionToken && id ? ({ sessionToken, id: id as any } as any) : "skip"
+  )
+}
+
+// ==================== 报销资料表格 ====================
+
+export function usePublishedReimbursementMaterialTables(args?: { category?: string }) {
+  return useQuery(listPublishedReimbursementTablesRef, args || {})
+}
+
+export function usePublishedReimbursementMaterialTable(slug?: string | null) {
+  return useQuery(getPublishedReimbursementTableRef, slug ? { slug } : "skip")
+}
+
+export function useAdminReimbursementMaterialTables() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listAdminReimbursementTablesRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+export function useUpsertReimbursementMaterialTable() {
+  const upsert = useMutation(upsertAdminReimbursementTableRef)
+  return useCallback((args: ReimbursementMaterialTableDraft) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return upsert({ ...args, id: args._id as any, sessionToken } as any)
+  }, [upsert])
+}
+
+export function useRemoveReimbursementMaterialTable() {
+  const remove = useMutation(removeAdminReimbursementTableRef)
+  return useCallback((id: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ id: id as any, sessionToken } as any)
+  }, [remove])
+}
+
+export function useSeedAcademicExchangeReimbursementTables() {
+  const seed = useMutation(seedAcademicExchangeReimbursementTablesRef)
+  return useCallback(() => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return seed({ sessionToken } as any)
+  }, [seed])
+}
+
+// ==================== OA 表单 / 问卷申请 ====================
+
+export function usePublishedOAForms(args?: { category?: string; kind?: "form" | "reimbursement"; includePast?: boolean }) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listPublishedOAFormsRef,
+    sessionToken ? ({ sessionToken, ...(args || {}) } as any) : "skip"
+  )
+}
+
+export function usePublishedOAFormBySlug(slug?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getPublishedOAFormBySlugRef,
+    sessionToken && slug ? ({ sessionToken, slug } as any) : "skip"
+  )
+}
+
+export function useAdminOAForms(args?: { kind?: "form" | "reimbursement" }) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(adminListOAFormsRef, sessionToken ? ({ sessionToken, ...(args || {}) } as any) : "skip")
+}
+
+export function useAdminOAForm(id?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(adminGetOAFormRef, sessionToken && id ? ({ sessionToken, id: id as any } as any) : "skip")
+}
+
+export function useAdminUpsertOAForm() {
+  const upsert = useMutation(adminUpsertOAFormRef)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return upsert({ ...toOAFormUpsertPayload(args), sessionToken } as any)
+  }, [upsert])
+}
+
+export function useAdminSetOAFormStatus() {
+  const setStatus = useMutation(adminSetOAFormStatusRef)
+  return useCallback((args: { id: string; status: "draft" | "published" | "archived" }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setStatus({ ...args, sessionToken, id: args.id as any } as any)
+  }, [setStatus])
+}
+
+export function useAdminRemoveOAForm() {
+  const remove = useMutation(adminRemoveOAFormRef)
+  return useCallback((args: { id: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...args, sessionToken, id: args.id as any } as any)
+  }, [remove])
+}
+
+export function useGenerateOAFormUploadUrl() {
+  const generate = useMutation(generateOAFormUploadUrlRef)
+  return useCallback((args?: { fileName?: string; mimeType?: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return generate({ ...(args || {}), sessionToken } as any)
+  }, [generate])
+}
+
+export function useSubmitOAForm() {
+  const submit = useMutation(submitOAFormRef)
+  return useCallback((args: { formId: string; answers: Record<string, unknown> }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return submit({ ...args, sessionToken, formId: args.formId as any } as any)
+  }, [submit])
+}
+
+export function useUpdateOAFormSubmission() {
+  const update = useMutation(updateOAFormSubmissionRef)
+  return useCallback((args: { id: string; answers: Record<string, unknown> }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken, id: args.id as any } as any)
+  }, [update])
+}
+
+export function useMyOAFormSubmissions(formId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listMyOAFormSubmissionsRef,
+    sessionToken && formId !== null ? ({ sessionToken, formId: formId ? (formId as any) : undefined } as any) : "skip"
+  )
+}
+
+export function useAdminOAFormSubmissions(args?: { formId?: string | null; status?: "pending" | "approved" | "rejected" | "needs_changes"; search?: string }) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    adminListOAFormSubmissionsRef,
+    sessionToken && args?.formId ? ({ sessionToken, ...args, formId: args.formId as any } as any) : "skip"
+  )
+}
+
+export function useAdminReviewOAFormSubmission() {
+  const review = useMutation(adminReviewOAFormSubmissionRef)
+  return useCallback((args: {
+    id: string
+    reviewStatus: "pending" | "approved" | "rejected" | "needs_changes"
+    adminNote?: string
+    resultValues?: Record<string, unknown>
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return review({ ...args, sessionToken, id: args.id as any } as any)
+  }, [review])
+}
+
+export function useOAFormAttachmentUrl(args?: { submissionId?: string | null; storageId?: string | null }) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getOAFormAttachmentUrlRef,
+    sessionToken && args?.submissionId && args?.storageId
+      ? ({ sessionToken, submissionId: args.submissionId as any, storageId: args.storageId } as any)
+      : "skip"
+  )
+}
+
+export function useAdminExportOAFormSubmissions(formId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    adminExportOAFormSubmissionsRef,
+    sessionToken && formId ? ({ sessionToken, formId: formId as any } as any) : "skip"
+  )
+}
+
+export function useAdminUpdateOAFormResultConfig() {
+  const update = useMutation(adminUpdateOAFormResultConfigRef)
+  return useCallback((args: { formId: string; resultFields: unknown[]; resultsVisible: boolean }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken, formId: args.formId as any } as any)
+  }, [update])
+}
+
+export function useAdminBatchUpdateOAFormResults() {
+  const update = useMutation(adminBatchUpdateOAFormResultsRef)
+  return useCallback((args: { formId: string; rows: unknown[] }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken, formId: args.formId as any } as any)
+  }, [update])
+}
+
 // ==================== Reviewer 账号管理 ====================
 
 export function useReviewerAccounts() {
@@ -891,8 +1124,8 @@ export function useUpdateTechDayVotes() {
   return useMutation(techdayApi.techday.submissions.updateVotes)
 }
 
-export function useTechDayReimbursements(args?: TechDayActorArgs) {
-  return useQuery(techdayApi.techday.reimbursements.list, args || {})
+export function useTechDayReimbursements(args?: TechDayActorArgs | null) {
+  return useQuery(techdayApi.techday.reimbursements.list, args === null ? "skip" : args || {})
 }
 
 export function useExportTechDayReimbursements(args?: TechDayActorArgs | null) {

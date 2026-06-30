@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { REVIEWER_SESSION_COOKIE } from "@/lib/server/reviewer-session"
+import { fetchUploadedAcademicExchangePaperPdf } from "@/lib/server/academic-exchange-paper-pdf"
 import { buildAcademicExchangePdf, sanitizeAcademicExchangePdfFileName } from "@/lib/server/academic-exchange-pdf"
 
 export const runtime = "nodejs"
@@ -30,7 +31,8 @@ export async function POST(
       return NextResponse.json({ ok: false, message: "未找到申请记录" }, { status: 404 })
     }
 
-    const pdfBytes = await buildAcademicExchangePdf(application)
+    const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, { reviewerSessionToken })
+    const pdfBytes = await buildAcademicExchangePdf(application, { paperPdfBytes })
     await client.mutation(logDownloadRef, {
       reviewerSessionToken,
       id: params.id as any,

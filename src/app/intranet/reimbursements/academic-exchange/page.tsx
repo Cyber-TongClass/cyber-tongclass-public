@@ -1,16 +1,33 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, Download, Eye, FilePlus2 } from "lucide-react"
+import { ArrowLeft, Eye, FilePlus2, FileText, TableProperties } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { academicExchangeMaterials, formatCurrency, formatDate } from "@/lib/academic-exchange"
-import { useAcademicExchangeApplications } from "@/lib/api"
-import type { AcademicExchangeSupportApplication } from "@/types"
+import { formatCurrency, formatDate } from "@/lib/academic-exchange"
+import {
+  ACADEMIC_EXCHANGE_REIMBURSEMENT_CATEGORY,
+  reimbursementMaterialTableCards,
+} from "@/lib/reimbursement-material-tables"
+import {
+  ACADEMIC_EXCHANGE_MATERIAL_CATEGORY,
+  reimbursementMaterialPages,
+} from "@/lib/reimbursement-material-pages"
+import { useAcademicExchangeApplications, usePublishedReimbursementMaterialTables } from "@/lib/api"
+import type { AcademicExchangeSupportApplication, ReimbursementMaterialTable } from "@/types"
 
 export default function AcademicExchangeSupportPage() {
   const applications = useAcademicExchangeApplications() as AcademicExchangeSupportApplication[] | undefined
+  const publishedTables = usePublishedReimbursementMaterialTables({
+    category: ACADEMIC_EXCHANGE_REIMBURSEMENT_CATEGORY,
+  }) as ReimbursementMaterialTable[] | undefined
+  const visibleTables = publishedTables === undefined
+    ? undefined
+    : publishedTables.length > 0
+      ? publishedTables
+      : reimbursementMaterialTableCards
+  const materialPages = reimbursementMaterialPages.filter((item) => item.category === ACADEMIC_EXCHANGE_MATERIAL_CATEGORY)
 
   return (
     <div className="min-h-screen bg-[hsl(211,30%,97%)]">
@@ -27,7 +44,7 @@ export default function AcademicExchangeSupportPage() {
             <div>
               <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">学术交流支持</h1>
               <p className="text-lg text-white/70 max-w-2xl mt-2">
-                下载学术交流材料，提交新的支持申请，或查看已经提交的历史记录。
+                查看学术交流材料和标准表格，提交新的支持申请，或查看已经提交的历史记录。
               </p>
             </div>
             <Button asChild className="bg-white text-primary hover:bg-white/90">
@@ -46,22 +63,42 @@ export default function AcademicExchangeSupportPage() {
             <CardTitle>学术交流报销相关资料</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
-            {academicExchangeMaterials.map((item) => (
-              <a
-                key={item.name}
-                href={item.file}
-                download
+            {materialPages.map((item) => (
+              <Link
+                key={item.slug}
+                href={`/intranet/reimbursements/materials/${item.slug}`}
                 className="flex min-w-0 items-center gap-3 rounded-sm border border-slate-200 bg-white px-4 py-3 transition-all hover:border-primary/30 hover:shadow-sm"
               >
                 <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
-                  <Download className="h-5 w-5" />
+                  <FileText className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-slate-900">{item.name}</span>
-                  <span className="text-xs text-slate-400">{item.type} 文件</span>
+                  <span className="block truncate text-sm font-medium text-slate-900">{item.title}</span>
+                  <span className="text-xs text-slate-400">查看页面</span>
                 </span>
-              </a>
+              </Link>
             ))}
+            {visibleTables === undefined ? (
+              <div className="flex min-w-0 items-center gap-3 rounded-sm border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                正在读取网页表格...
+              </div>
+            ) : (
+              visibleTables.map((item) => (
+                <Link
+                  key={item.slug}
+                  href={`/intranet/reimbursements/tables/${item.slug}`}
+                  className="flex min-w-0 items-center gap-3 rounded-sm border border-slate-200 bg-white px-4 py-3 transition-all hover:border-primary/30 hover:shadow-sm"
+                >
+                  <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
+                    <TableProperties className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-slate-900">{item.title}</span>
+                    <span className="text-xs text-slate-400">查看表单</span>
+                  </span>
+                </Link>
+              ))
+            )}
           </CardContent>
         </Card>
 

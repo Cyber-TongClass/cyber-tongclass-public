@@ -111,9 +111,136 @@ export interface AcademicExchangeSupportApplication {
   totalPages?: number
   bodyPages?: number
   paperPdfUrl?: string
+  paperPdfSource?: "url" | "upload"
+  paperPdfStorageId?: string
+  paperPdfFileName?: string
+  paperPdfMimeType?: string
+  paperPdfSize?: number
   status: "submitted"
   submittedAt: number
   createdAt: number
+}
+
+export type OAFormStatus = "draft" | "published" | "archived"
+export type OAFormKind = "form" | "reimbursement"
+export type OAReviewStatus = "pending" | "approved" | "rejected" | "needs_changes"
+export type OAFieldType = "text" | "textarea" | "number" | "date" | "select" | "radio" | "checkbox" | "file" | "table"
+export type OAResultFieldType = "text" | "number" | "date" | "select"
+
+export interface OAFormOption {
+  label: string
+  value: string
+}
+
+export interface OATableColumn {
+  id: string
+  label: string
+  type: "text" | "number" | "date"
+  required?: boolean
+}
+
+export interface OAFormField {
+  id: string
+  type: OAFieldType
+  label: string
+  helpText?: string
+  placeholder?: string
+  required?: boolean
+  options?: OAFormOption[]
+  acceptedMimeTypes?: string[]
+  maxFiles?: number
+  maxFileSizeMB?: number
+  columns?: OATableColumn[]
+}
+
+export interface OAResultField {
+  id: string
+  label: string
+  type: OAResultFieldType
+  visibleToSubmitter?: boolean
+  options?: OAFormOption[]
+}
+
+export interface OAForm {
+  _id: string
+  slug: string
+  title: string
+  description?: string
+  category: string
+  kind?: OAFormKind
+  visibility: "members" | "admins"
+  status: OAFormStatus
+  allowMultipleSubmissions?: boolean
+  maxSubmissionsPerUser?: number
+  allowSubmissionEdits?: boolean
+  openAt?: number
+  closeAt?: number
+  fields: OAFormField[]
+  resultFields?: OAResultField[]
+  resultsVisible?: boolean
+  createdBy: string
+  updatedBy?: string
+  publishedAt?: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface OAFileAnswer {
+  storageId: string
+  fileName: string
+  mimeType: string
+  size: number
+}
+
+export interface OAFormSubmission {
+  _id: string
+  formId: string
+  formSlug: string
+  submitterId: string
+  submitterName: string
+  studentId: string
+  submitterEmail?: string
+  answers: Record<string, unknown>
+  reviewStatus: OAReviewStatus
+  adminNote?: string
+  reviewerId?: string
+  reviewerName?: string
+  reviewedAt?: number
+  resultValues?: Record<string, unknown>
+  submittedAt: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ReimbursementMaterialTableColumn {
+  id: string
+  label: string
+  width?: string
+}
+
+export interface ReimbursementMaterialTableRow {
+  id: string
+  cells: string[]
+  kind?: "data" | "section"
+  sectionLevel?: number
+}
+
+export interface ReimbursementMaterialTableDraft {
+  _id?: string
+  slug: string
+  title: string
+  description: string
+  category: string
+  columns: ReimbursementMaterialTableColumn[]
+  rows: ReimbursementMaterialTableRow[]
+  isPublished: boolean
+}
+
+export interface ReimbursementMaterialTable extends ReimbursementMaterialTableDraft {
+  _id: string
+  createdBy?: string
+  createdAt: number
+  updatedAt: number
 }
 
 export type ReviewerPermission = "academicExchange:read"

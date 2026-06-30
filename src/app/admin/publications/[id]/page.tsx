@@ -68,8 +68,9 @@ export default function AdminPublicationEditorPage() {
   // Fetch publication data from Convex
   const publicationData = usePublicationById(isCreateMode ? undefined : publicationId)
   const publicationsData = usePublications({ limit: 1000 })
-  const publications: Publication[] = publicationsData || []
-  const publicationVenuesData = usePublicationVenues() || []
+  const publications: Publication[] = useMemo(() => publicationsData || [], [publicationsData])
+  const publicationVenuesResponse = usePublicationVenues()
+  const publicationVenuesData = useMemo(() => publicationVenuesResponse || [], [publicationVenuesResponse])
   const publication: Publication | null = publicationData || null
   const publicationLoading = !isCreateMode && publicationData === undefined
 

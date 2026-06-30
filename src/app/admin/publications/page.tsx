@@ -52,8 +52,8 @@ export default function AdminPublicationsPage() {
   const createPublicationVenue = useCreatePublicationVenue()
   const updatePublicationVenue = useUpdatePublicationVenue()
 
-  const publications: Publication[] = publicationsData || []
-  const users = usersData || []
+  const publications: Publication[] = useMemo(() => publicationsData || [], [publicationsData])
+  const users = useMemo(() => usersData || [], [usersData])
   const publicationVenues: PublicationVenue[] = publicationVenuesData || []
 
   const { confirm, ConfirmDialog } = useConfirmDialog()

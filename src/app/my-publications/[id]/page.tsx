@@ -63,8 +63,9 @@ export default function MyPublicationEditorPage() {
   // Fetch publication from Convex
   const publicationData = usePublicationById(isCreateMode ? undefined : (publicationId as string))
   const publicationsData = usePublications({ limit: 1000 })
-  const publications: Publication[] = publicationsData || []
-  const publicationVenuesData = usePublicationVenues() || []
+  const publications: Publication[] = useMemo(() => publicationsData || [], [publicationsData])
+  const publicationVenuesResponse = usePublicationVenues()
+  const publicationVenuesData = useMemo(() => publicationVenuesResponse || [], [publicationVenuesResponse])
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const users = usersData || []
   const createPublication = useCreatePublication()

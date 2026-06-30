@@ -54,7 +54,7 @@ export default function EventsPage() {
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const eventsData = useEvents()
   const deleteEventMutation = useDeleteEvent()
-  const events: Event[] = eventsData || []
+  const events: Event[] = useMemo(() => eventsData || [], [eventsData])
   const { confirm, ConfirmDialog } = useConfirmDialog()
 
   const eventTypes = useMemo(() => {

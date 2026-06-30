@@ -23,7 +23,10 @@ export default function TechDayAuthorProfilePage() {
             <CardHeader><CardTitle>{principal?.techDayUser?.name || "作者"}</CardTitle></CardHeader>
             <CardContent className="grid gap-3 text-sm text-slate-600 md:grid-cols-3">
               <p><span className="font-medium text-slate-950">邮箱：</span>{principal?.techDayUser?.email || "-"}</p>
-              <p><span className="font-medium text-slate-950">人员类型：</span>{principal?.techDayUser?.role ? <TechDayRoleBadge role={principal.techDayUser.role} /> : "-"}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-slate-950">人员类型：</span>
+                {principal?.techDayUser?.role ? <TechDayRoleBadge role={principal.techDayUser.role} /> : "-"}
+              </div>
               <p><span className="font-medium text-slate-950">学校：</span>{principal?.techDayUser?.school || "-"}</p>
               <p><span className="font-medium text-slate-950">学院：</span>{principal?.techDayUser?.college || "-"}</p>
               <p><span className="font-medium text-slate-950">界别：</span>{principal?.techDayUser?.grade || "-"}</p>

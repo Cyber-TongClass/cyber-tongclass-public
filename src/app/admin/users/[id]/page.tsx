@@ -424,6 +424,7 @@ export default function UserFormPage() {
               </p>
               {formData.photoUrl.trim() ? (
                 <div className="flex items-center gap-4 rounded-md border border-slate-200/70 bg-slate-100/20 p-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={formData.photoUrl}
                     alt="头像预览"

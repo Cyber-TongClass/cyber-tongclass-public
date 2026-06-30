@@ -312,6 +312,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-4 rounded-md border border-slate-200/70 bg-slate-100/20 p-4">
                 <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
                   {currentUser.realPhoto || currentUser.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={currentUser.realPhoto || currentUser.avatar} alt="Official profile photo" className="h-full w-full object-cover" />
                   ) : (
                     <User className="h-8 w-8 text-gray-400" />

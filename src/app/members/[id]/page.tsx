@@ -62,6 +62,7 @@ export default function MemberDetailPage() {
             <CardHeader className="text-center pb-4">
               <div className="h-24 w-24 mx-auto rounded-full overflow-hidden bg-primary/10 mb-4">
                 {profilePhoto ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={profilePhoto} alt={member.englishName} className="h-full w-full object-cover" />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center text-primary font-bold text-3xl">
