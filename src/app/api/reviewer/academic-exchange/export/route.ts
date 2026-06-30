@@ -3,6 +3,8 @@ import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { REVIEWER_SESSION_COOKIE } from "@/lib/server/reviewer-session"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
+import { getAcademicExchangePaperPdfLabel } from "@/lib/academic-exchange-pdf-source"
+import { fetchUploadedAcademicExchangePaperPdf } from "@/lib/server/academic-exchange-paper-pdf"
 import { buildAcademicExchangePdf, sanitizeAcademicExchangePdfFileName } from "@/lib/server/academic-exchange-pdf"
 import { buildSimpleXlsx } from "@/lib/server/simple-xlsx"
 import { buildSimpleZip } from "@/lib/server/simple-zip"
@@ -56,6 +58,7 @@ function buildSummaryRows(applications: any[], allApplications: any[]) {
     "作者",
     "作者排序及作者单位",
     "论文页数",
+    "论文 PDF 来源",
   ]
 
   const rows = applications.map((application) => [
@@ -73,6 +76,7 @@ function buildSummaryRows(applications: any[], allApplications: any[]) {
     (application.paperAuthors || []).map((author: string) => getPublicationAuthorName(author)).join("，"),
     [application.applicantAuthorIndexLabel, application.applicantAffiliation].filter(Boolean).join("；"),
     application.totalPages || application.bodyPages ? `总页数 ${application.totalPages || ""}；正文页数 ${application.bodyPages || ""}` : "",
+    getAcademicExchangePaperPdfLabel(application),
   ])
 
   return [headers, ...rows]
@@ -121,7 +125,8 @@ export async function POST(request: NextRequest) {
     ]
 
     for (const application of applications) {
-      const pdfBytes = await buildAcademicExchangePdf(application)
+      const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, { reviewerSessionToken })
+      const pdfBytes = await buildAcademicExchangePdf(application, { paperPdfBytes })
       const applicantName = sanitizeAcademicExchangePdfFileName(application.applicantName || "申请人")
       const projectName = sanitizeAcademicExchangePdfFileName(application.projectName || String(application._id))
       zipEntries.push({

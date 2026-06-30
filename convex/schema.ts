@@ -1,6 +1,59 @@
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
+const oaFieldType = v.union(
+  v.literal("text"),
+  v.literal("textarea"),
+  v.literal("number"),
+  v.literal("date"),
+  v.literal("select"),
+  v.literal("radio"),
+  v.literal("checkbox"),
+  v.literal("file"),
+  v.literal("table")
+)
+
+const oaResultFieldType = v.union(
+  v.literal("text"),
+  v.literal("number"),
+  v.literal("date"),
+  v.literal("select")
+)
+
+const oaOption = v.object({
+  label: v.string(),
+  value: v.string(),
+})
+
+const oaTableColumn = v.object({
+  id: v.string(),
+  label: v.string(),
+  type: v.union(v.literal("text"), v.literal("number"), v.literal("date")),
+  required: v.optional(v.boolean()),
+})
+
+const oaFormField = v.object({
+  id: v.string(),
+  type: oaFieldType,
+  label: v.string(),
+  helpText: v.optional(v.string()),
+  placeholder: v.optional(v.string()),
+  required: v.optional(v.boolean()),
+  options: v.optional(v.array(oaOption)),
+  acceptedMimeTypes: v.optional(v.array(v.string())),
+  maxFiles: v.optional(v.number()),
+  maxFileSizeMB: v.optional(v.number()),
+  columns: v.optional(v.array(oaTableColumn)),
+})
+
+const oaResultField = v.object({
+  id: v.string(),
+  label: v.string(),
+  type: oaResultFieldType,
+  visibleToSubmitter: v.optional(v.boolean()),
+  options: v.optional(v.array(oaOption)),
+})
+
 export default defineSchema({
   // Users table
   users: defineTable({
@@ -252,12 +305,93 @@ export default defineSchema({
     totalPages: v.optional(v.number()),
     bodyPages: v.optional(v.number()),
     paperPdfUrl: v.optional(v.string()),
+    paperPdfSource: v.optional(v.union(v.literal("url"), v.literal("upload"))),
+    paperPdfStorageId: v.optional(v.union(v.id("_storage"), v.string())),
+    paperPdfFileName: v.optional(v.string()),
+    paperPdfMimeType: v.optional(v.string()),
+    paperPdfSize: v.optional(v.number()),
     status: v.literal("submitted"),
     submittedAt: v.number(),
     createdAt: v.number(),
   })
     .index("by_user_createdAt", ["userId", "createdAt"])
     .index("by_createdAt", ["createdAt"]),
+
+  reimbursementMaterialTables: defineTable({
+    slug: v.string(),
+    title: v.string(),
+    description: v.string(),
+    category: v.string(),
+    columns: v.array(v.object({
+      id: v.string(),
+      label: v.string(),
+      width: v.optional(v.string()),
+    })),
+    rows: v.array(v.object({
+      id: v.string(),
+      cells: v.array(v.string()),
+      kind: v.optional(v.union(v.literal("data"), v.literal("section"))),
+      sectionLevel: v.optional(v.number()),
+    })),
+    isPublished: v.boolean(),
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_category", ["category"])
+    .index("by_published_category", ["isPublished", "category"]),
+
+  oaForms: defineTable({
+    slug: v.string(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    category: v.string(),
+    kind: v.optional(v.union(v.literal("form"), v.literal("reimbursement"))),
+    visibility: v.union(v.literal("members"), v.literal("admins")),
+    status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+    allowMultipleSubmissions: v.optional(v.boolean()),
+    maxSubmissionsPerUser: v.optional(v.number()),
+    allowSubmissionEdits: v.optional(v.boolean()),
+    openAt: v.optional(v.number()),
+    closeAt: v.optional(v.number()),
+    fields: v.array(oaFormField),
+    resultFields: v.optional(v.array(oaResultField)),
+    resultsVisible: v.optional(v.boolean()),
+    createdBy: v.id("users"),
+    updatedBy: v.optional(v.id("users")),
+    publishedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_status_category", ["status", "category"])
+    .index("by_creator_createdAt", ["createdBy", "createdAt"])
+    .index("by_updatedAt", ["updatedAt"]),
+
+  oaFormSubmissions: defineTable({
+    formId: v.id("oaForms"),
+    formSlug: v.string(),
+    submitterId: v.id("users"),
+    submitterName: v.string(),
+    studentId: v.string(),
+    submitterEmail: v.optional(v.string()),
+    answers: v.any(),
+    reviewStatus: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"), v.literal("needs_changes")),
+    adminNote: v.optional(v.string()),
+    reviewerId: v.optional(v.id("users")),
+    reviewerName: v.optional(v.string()),
+    reviewedAt: v.optional(v.number()),
+    resultValues: v.optional(v.any()),
+    submittedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_form_createdAt", ["formId", "createdAt"])
+    .index("by_form_status_createdAt", ["formId", "reviewStatus", "createdAt"])
+    .index("by_submitter_createdAt", ["submitterId", "createdAt"])
+    .index("by_form_submitter_createdAt", ["formId", "submitterId", "createdAt"])
+    .index("by_form_studentId", ["formId", "studentId"]),
 
   reviewerAccounts: defineTable({
     username: v.string(),
@@ -453,7 +587,7 @@ export default defineSchema({
     voteImpact: v.optional(v.number()),
     voteFeasibility: v.optional(v.number()),
     paperUrl: v.optional(v.string()),
-    posterStorageId: v.optional(v.id("_storage")),
+    posterStorageId: v.optional(v.union(v.id("_storage"), v.string())),
     posterFileName: v.optional(v.string()),
     posterMimeType: v.optional(v.string()),
     posterSize: v.optional(v.number()),
@@ -497,7 +631,7 @@ export default defineSchema({
     reviewerId: v.optional(v.id("techDayUsers")),
     reviewerNameSnapshot: v.optional(v.string()),
     reviewedAt: v.optional(v.number()),
-    attachmentStorageId: v.optional(v.id("_storage")),
+    attachmentStorageId: v.optional(v.union(v.id("_storage"), v.string())),
     attachmentFileName: v.optional(v.string()),
     attachmentMimeType: v.optional(v.string()),
     attachmentSize: v.optional(v.number()),

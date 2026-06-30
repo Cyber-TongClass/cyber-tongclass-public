@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
+import { fetchUploadedAcademicExchangePaperPdf } from "@/lib/server/academic-exchange-paper-pdf"
 import { buildAcademicExchangePdf, sanitizeAcademicExchangePdfFileName } from "@/lib/server/academic-exchange-pdf"
 
 export const runtime = "nodejs"
@@ -30,7 +31,8 @@ export async function POST(
       return NextResponse.json({ ok: false, message: "未找到申请记录" }, { status: 404 })
     }
 
-    const pdfBytes = await buildAcademicExchangePdf(application)
+    const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, { sessionToken })
+    const pdfBytes = await buildAcademicExchangePdf(application, { paperPdfBytes })
     const applicantName = sanitizeAcademicExchangePdfFileName(application.applicantName || "申请人")
     const fileName = encodeURIComponent(`通班学术交流支持项目申请表-${sanitizeAcademicExchangePdfFileName(application.projectName)}-${applicantName}.pdf`)
 

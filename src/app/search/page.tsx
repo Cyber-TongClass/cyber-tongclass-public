@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState, Suspense } from "react"
+import React, { useCallback, useEffect, useMemo, useState, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Search, FileText, Users, Calendar, BookOpen, Newspaper } from "lucide-react"
@@ -35,25 +35,13 @@ function SearchContent() {
   const eventsData = useEvents({})
   const coursesData = useCourses({})
 
-  const news = newsData || []
-  const users = usersData || []
-  const publications = publicationsData || []
-  const events = eventsData || []
-  const courses = coursesData || []
+  const news = useMemo(() => newsData || [], [newsData])
+  const users = useMemo(() => usersData || [], [usersData])
+  const publications = useMemo(() => publicationsData || [], [publicationsData])
+  const events = useMemo(() => eventsData || [], [eventsData])
+  const courses = useMemo(() => coursesData || [], [coursesData])
 
-  useEffect(() => {
-    if (initialQuery) {
-      performSearch(initialQuery)
-    }
-  }, [initialQuery])
-
-  useEffect(() => {
-    if (query && hasSearched) {
-      performSearch(query)
-    }
-  }, [news, users, publications, events, courses, query])
-
-  const performSearch = (searchQuery: string) => {
+  const performSearch = useCallback((searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([])
       setHasSearched(false)
@@ -163,7 +151,19 @@ function SearchContent() {
 
     setResults(newResults)
     setIsSearching(false)
-  }
+  }, [courses, events, news, publications, users])
+
+  useEffect(() => {
+    if (initialQuery) {
+      performSearch(initialQuery)
+    }
+  }, [initialQuery, performSearch])
+
+  useEffect(() => {
+    if (query && hasSearched) {
+      performSearch(query)
+    }
+  }, [hasSearched, performSearch, query])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()

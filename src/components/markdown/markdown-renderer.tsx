@@ -65,7 +65,11 @@ export function MarkdownRenderer({ content, className, emptyFallback = "暂无�
           img: ({ ...props }) => {
             const src = props.src || ""
             const safeSrc = /^(https?:|\/)/i.test(src) ? src : ""
-            return safeSrc ? <img {...props} src={safeSrc} loading="lazy" /> : null
+            const alt = typeof props.alt === "string" ? props.alt : ""
+            return safeSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img {...props} src={safeSrc} alt={alt} loading="lazy" />
+            ) : null
           },
         }}
       >

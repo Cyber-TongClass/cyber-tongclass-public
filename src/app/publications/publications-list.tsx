@@ -37,7 +37,7 @@ export function PublicationsList() {
 
   // Fetch publications from Convex
   const publicationsData = usePublications({})
-  const publications = publicationsData || []
+  const publications = useMemo(() => publicationsData || [], [publicationsData])
 
   const filteredPublications = useMemo(() => {
     return publications.filter((pub) => {

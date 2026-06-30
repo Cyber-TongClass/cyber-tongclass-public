@@ -1,7 +1,5 @@
 "use client"
 
-import * as React from "react"
-import Link from "next/link"
 import Image from "next/image"
 import { 
   GraduationCap, 
@@ -10,14 +8,10 @@ import {
   Mail, 
   MapPin, 
   ExternalLink,
-  ArrowRight,
-  Clock,
   Award,
   Group
 } from "lucide-react"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function AboutPage() {
@@ -55,9 +49,7 @@ export default function AboutPage() {
 
           {/* Introduction */}
           <TabsContent value="introduction" className="mt-8">
-            <div className="max-w-4xl">
-              <h2 className="text-2xl font-extrabold text-slate-900 mb-8">项目介绍</h2>
-
+            <div className="w-full">
               {/* Overview */}
               <h3 className="text-2xl font-extrabold text-slate-900 mb-4">关于我们</h3>
               <div className="space-y-3 text-slate-600 leading-loose text-base mb-12">
@@ -70,31 +62,29 @@ export default function AboutPage() {
               </div>
             </div>
 
-            {/* Statistics — Full-bleed */}
-            <div className="w-screen relative left-1/2 -translate-x-1/2 bg-[hsl(20,20%,85%)] py-14 mb-12">
-              <div className="max-w-4xl mx-auto px-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-                  <div className="space-y-2">
-                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">359</div>
-                    <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">北清成员</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">104</div>
-                    <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">顶会论文</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">130</div>
-                    <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">科研课题</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-4xl md:text-5xl font-extrabold text-slate-800">169</div>
-                    <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">奖项荣誉</div>
-                  </div>
+            {/* Statistics */}
+            <div className="bg-[hsl(20,20%,85%)] py-14 mb-12 shadow-[0_0_0_100vmax_hsl(20,20%,85%)] [clip-path:inset(0_-100vmax)]">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                <div className="space-y-2">
+                  <div className="text-4xl md:text-5xl font-extrabold text-slate-800">359</div>
+                  <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">北清成员</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-4xl md:text-5xl font-extrabold text-slate-800">104</div>
+                  <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">顶会论文</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-4xl md:text-5xl font-extrabold text-slate-800">130</div>
+                  <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">科研课题</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-4xl md:text-5xl font-extrabold text-slate-800">169</div>
+                  <div className="text-[hsl(15,15%,50%)] text-sm font-medium uppercase tracking-wider">奖项荣誉</div>
                 </div>
               </div>
             </div>
 
-            <div className="max-w-4xl">
+            <div className="w-full">
               {/* Features */}
               <div>
                 <h3 className="text-xl font-extrabold text-slate-900 mb-6">项目特色</h3>
@@ -153,7 +143,7 @@ export default function AboutPage() {
 
           {/* Official Accounts */}
           <TabsContent value="accounts" className="mt-8">
-            <div className="max-w-4xl">
+            <div className="w-full">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">官方账号</h2>
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
@@ -217,7 +207,7 @@ export default function AboutPage() {
 
           {/* Student Council */}
           <TabsContent value="council" className="mt-8">
-            <div className="max-w-4xl">
+            <div className="w-full">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">学生组织</h2>
               <p className="text-slate-600 mb-8">
                 北大和清华通班分别形成了学生自发组织的服务团体，致力于完善班级建设、宣传班级形象、促进学术交流、丰富同学们的学习生活。
@@ -292,7 +282,7 @@ export default function AboutPage() {
 
           {/* Merchandise */}
           <TabsContent value="merchandise" className="mt-8">
-            <div className="max-w-4xl">
+            <div className="w-full">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">周边产品</h2>
               <p className="text-slate-500 mb-8">
                 通班文创持续更新中，由宣传部设计制作，已陆续推出多种周边产品。如有好的建议，欢迎联系我们。
@@ -464,7 +454,7 @@ export default function AboutPage() {
 
           {/* Contact */}
           <TabsContent value="contact" className="mt-8">
-            <div className="max-w-4xl">
+            <div className="w-full">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">联系我们</h2>
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="group bg-white p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
@@ -531,7 +521,7 @@ export default function AboutPage() {
 
           {/* Changelog */}
           <TabsContent value="changelog" className="mt-8">
-            <div className="max-w-4xl">
+            <div className="w-full">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">更新日志</h2>
                 <div className="space-y-4">
                     {[
@@ -555,7 +545,7 @@ export default function AboutPage() {
 
           {/* Credits */}
           <TabsContent value="credits" className="mt-8">
-            <div className="max-w-4xl">
+            <div className="w-full">
               <h2 className="text-2xl font-extrabold text-slate-900 mb-6">致谢</h2>
               <p className="text-slate-600 mb-8">
                 本网站由通班学术部开发与维护。感谢每一位参与者和贡献者的努力与奉献！（致谢名单按姓名字母顺序排列）

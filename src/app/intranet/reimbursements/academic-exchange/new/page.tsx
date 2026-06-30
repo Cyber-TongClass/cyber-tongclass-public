@@ -3,28 +3,24 @@
 import Link from "next/link"
 import { FormEvent, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { AlertTriangle, ArrowLeft, Plus, Save, Trash2 } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Save } from "lucide-react"
+import { ReimbursementExpenseItems, type ReimbursementExpenseRow } from "@/components/reimbursements/reimbursement-expense-items"
+import { ReimbursementFileUploadField } from "@/components/reimbursements/reimbursement-file-upload-field"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { useCreateAcademicExchangeApplication, usePublications, useStudentFormProfile } from "@/lib/api"
+import { useCreateAcademicExchangeApplication, useGenerateAcademicExchangeUploadUrl, usePublications, useStudentFormProfile } from "@/lib/api"
 import { formatCurrency, formatPaperAuthors, getApplicantAuthorInfo } from "@/lib/academic-exchange"
+import { validateAcademicExchangePaperPdfUpload } from "@/lib/academic-exchange-pdf-source"
+import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import { publicationBelongsToUser } from "@/lib/publication-authors"
 import type { Publication, StudentFormProfile } from "@/types"
 
-type ExpenseRow = {
-  key: string
-  item: string
-  amount: string
-  note: string
-}
-
-const newExpenseRow = (): ExpenseRow => ({
+const newExpenseRow = (): ReimbursementExpenseRow => ({
   key: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
   item: "",
   amount: "",
@@ -55,6 +51,7 @@ export default function NewAcademicExchangeApplicationPage() {
     return (publicationsData || []).filter((publication: Publication) => publicationBelongsToUser(publication, currentUser?._id))
   }, [currentUser?._id, publicationsData])
   const createApplication = useCreateAcademicExchangeApplication()
+  const generateUploadUrl = useGenerateAcademicExchangeUploadUrl()
 
   const defaultName = currentUser?.chineseName || currentUser?.englishName || currentUser?.username || ""
   const defaultEmail = currentUser?.studentId ? `${currentUser.studentId}@stu.pku.edu.cn` : currentUser?.email || ""
@@ -77,7 +74,10 @@ export default function NewAcademicExchangeApplicationPage() {
     bodyPages: "",
     paperPdfUrl: "",
   })
-  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([newExpenseRow()])
+  const [expenseRows, setExpenseRows] = useState<ReimbursementExpenseRow[]>([newExpenseRow()])
+  const [paperPdfSource, setPaperPdfSource] = useState<"url" | "upload">("url")
+  const [paperPdfFile, setPaperPdfFile] = useState<File | null>(null)
+  const [paperPdfFileError, setPaperPdfFileError] = useState<string | null>(null)
   const [projectCategoryOption, setProjectCategoryOption] = useState("")
   const [message, setMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -119,13 +119,23 @@ export default function NewAcademicExchangeApplicationPage() {
     }))
   }
 
-  const updateExpenseRow = (key: string, patch: Partial<ExpenseRow>) => {
+  const updateExpenseRow = (key: string, patch: Partial<ReimbursementExpenseRow>) => {
     setExpenseRows((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+  }
+
+  const updatePaperPdfFile = (file: File | null) => {
+    setPaperPdfFile(file)
+    setPaperPdfFileError(file ? validateAcademicExchangePaperPdfUpload({
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+    }) : null)
   }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setMessage("")
+    let paperPdfUpload: File | null = null
 
     if (!form.projectCategory.trim()) {
       setMessage(projectCategoryOption === "其他" ? "请填写其他项目类别。" : "请选择项目类别。")
@@ -165,9 +175,27 @@ export default function NewAcademicExchangeApplicationPage() {
         return
       }
 
-      if (!/^https?:\/\//i.test(form.paperPdfUrl.trim())) {
-        setMessage("论文 arXiv PDF 链接必须是点开即 PDF 的 http(s) 链接。")
-        return
+      if (paperPdfSource === "url") {
+        if (!/^https?:\/\//i.test(form.paperPdfUrl.trim())) {
+          setMessage("论文 PDF 链接必须是点开即 PDF 的 http(s) 链接。")
+          return
+        }
+      } else {
+        if (!paperPdfFile) {
+          setMessage("请上传论文 PDF 文件。")
+          return
+        }
+        const uploadError = validateAcademicExchangePaperPdfUpload({
+          fileName: paperPdfFile.name,
+          mimeType: paperPdfFile.type || "application/octet-stream",
+          size: paperPdfFile.size,
+        })
+        if (uploadError) {
+          setPaperPdfFileError(uploadError)
+          setMessage(uploadError)
+          return
+        }
+        paperPdfUpload = paperPdfFile
       }
     }
 
@@ -193,7 +221,18 @@ export default function NewAcademicExchangeApplicationPage() {
         payload.applicantAffiliation = form.applicantAffiliation
         payload.totalPages = totalPages
         payload.bodyPages = bodyPages
-        payload.paperPdfUrl = form.paperPdfUrl
+        if (paperPdfSource === "upload" && paperPdfUpload) {
+          const uploadTarget = await generateUploadUrl({
+            fileName: paperPdfUpload.name,
+            mimeType: paperPdfUpload.type || "application/octet-stream",
+          })
+          payload.paperPdfStorageId = await uploadFileToStorageTarget(uploadTarget as any, paperPdfUpload, "论文 PDF 上传失败")
+          payload.paperPdfFileName = paperPdfUpload.name
+          payload.paperPdfMimeType = paperPdfUpload.type || "application/octet-stream"
+          payload.paperPdfSize = paperPdfUpload.size
+        } else {
+          payload.paperPdfUrl = form.paperPdfUrl
+        }
       }
 
       const id = await createApplication(payload)
@@ -385,9 +424,51 @@ export default function NewAcademicExchangeApplicationPage() {
                   <Input type="number" min={1} step={1} value={form.bodyPages} onChange={(event) => updateForm("bodyPages", event.target.value)} required />
                 </div>
                 <div className="grid gap-2 md:col-span-3">
-                  <Label>论文 arXiv PDF 链接</Label>
-                  <Input type="url" value={form.paperPdfUrl} onChange={(event) => updateForm("paperPdfUrl", event.target.value)} placeholder="必须是点开就是 PDF 的链接（例：https://arxiv.org/pdf/......），否则后续无法拼接" required />
-                  <p className="text-xs text-slate-500">请确认链接直接返回 PDF 文件，并与上方总页数、正文页数对应。</p>
+                  <Label>论文 PDF 来源</Label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-slate-200 bg-white p-3 text-sm">
+                      <input
+                        className="mt-1"
+                        type="radio"
+                        name="paperPdfSource"
+                        checked={paperPdfSource === "url"}
+                        onChange={() => setPaperPdfSource("url")}
+                      />
+                      <span>
+                        <span className="block font-medium text-slate-900">外部 PDF 链接</span>
+                        <span className="text-xs text-slate-500">适合 arXiv / Archive 已经更新且链接能直接返回 PDF 的情况。</span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-slate-200 bg-white p-3 text-sm">
+                      <input
+                        className="mt-1"
+                        type="radio"
+                        name="paperPdfSource"
+                        checked={paperPdfSource === "upload"}
+                        onChange={() => setPaperPdfSource("upload")}
+                      />
+                      <span>
+                        <span className="block font-medium text-slate-900">上传 PDF</span>
+                        <span className="text-xs text-slate-500">适合最新版论文 PDF 尚未同步到 Archive / arXiv 的情况。</span>
+                      </span>
+                    </label>
+                  </div>
+                  {paperPdfSource === "url" ? (
+                    <>
+                      <Input type="url" value={form.paperPdfUrl} onChange={(event) => updateForm("paperPdfUrl", event.target.value)} placeholder="必须是点开就是 PDF 的链接（例：https://arxiv.org/pdf/......），否则后续无法拼接" required />
+                      <p className="text-xs text-slate-500">请确认链接直接返回 PDF 文件，并与上方总页数、正文页数对应。</p>
+                    </>
+                  ) : (
+                    <ReimbursementFileUploadField
+                      accept="application/pdf"
+                      description="仅支持 PDF，最大 30MB；导出申请表时会自动拼接到申请表后。"
+                      error={paperPdfFileError}
+                      file={paperPdfFile}
+                      inputId="academic-exchange-paper-pdf"
+                      label="上传论文 PDF"
+                      onFileChange={updatePaperPdfFile}
+                    />
+                  )}
                 </div>
               </div>
               </CardContent>
@@ -398,47 +479,23 @@ export default function NewAcademicExchangeApplicationPage() {
             <CardHeader>
               <CardTitle>申请金额</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 overflow-x-auto">
-              <Table className="min-w-[760px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>开支项目</TableHead>
-                    <TableHead>预计金额（人民币元）</TableHead>
-                    <TableHead>备注</TableHead>
-                    <TableHead className="w-16"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {expenseRows.map((row) => (
-                    <TableRow key={row.key}>
-                      <TableCell>
-                        <Input value={row.item} onChange={(event) => updateExpenseRow(row.key, { item: event.target.value })} required />
-                      </TableCell>
-                      <TableCell>
-                        <Input type="number" min={0} step="0.01" value={row.amount} onChange={(event) => updateExpenseRow(row.key, { amount: event.target.value })} required />
-                      </TableCell>
-                      <TableCell>
-                        <Input value={row.note} onChange={(event) => updateExpenseRow(row.key, { note: event.target.value })} />
-                      </TableCell>
-                      <TableCell>
-                        {expenseRows.length > 1 ? (
-                          <Button type="button" variant="ghost" size="icon" onClick={() => setExpenseRows((rows) => rows.filter((item) => item.key !== row.key))}>
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <Button type="button" variant="outline" onClick={() => setExpenseRows((rows) => [...rows, newExpenseRow()])}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  增加一行
-                </Button>
-                <p className="text-lg font-semibold text-slate-900">总计：{formatCurrency(totalAmount)}</p>
-              </div>
+            <CardContent>
+              <ReimbursementExpenseItems
+                rows={expenseRows}
+                totalLabel={formatCurrency(totalAmount)}
+                onAddRow={() => setExpenseRows((rows) => [...rows, newExpenseRow()])}
+                onAppendRows={(parsedRows) => setExpenseRows((rows) => [
+                  ...rows,
+                  ...parsedRows.map((row) => ({
+                    ...newExpenseRow(),
+                    item: row.item,
+                    amount: row.amount,
+                    note: row.note,
+                  })),
+                ])}
+                onRemoveRow={(key) => setExpenseRows((rows) => rows.filter((item) => item.key !== key))}
+                onUpdateRow={updateExpenseRow}
+              />
             </CardContent>
           </Card>
 
@@ -448,7 +505,7 @@ export default function NewAcademicExchangeApplicationPage() {
             <Button asChild type="button" variant="outline">
               <Link href="/intranet/reimbursements/academic-exchange">取消</Link>
             </Button>
-            <Button type="submit" disabled={submitting || publications.length === 0}>
+            <Button type="submit" disabled={submitting || (!skipsPaperSection && publications.length === 0)}>
               <Save className="mr-2 h-4 w-4" />
               {submitting ? "提交中..." : "提交申请"}
             </Button>

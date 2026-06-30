@@ -2,6 +2,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 import fontkit from "@pdf-lib/fontkit"
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
+import { getAcademicExchangePaperPdfLabel, hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
 
 export function sanitizeAcademicExchangePdfFileName(value: string) {
@@ -82,7 +83,10 @@ async function fetchPaperPdf(url: string) {
   return bytes
 }
 
-export async function buildAcademicExchangePdf(application: any) {
+export async function buildAcademicExchangePdf(
+  application: any,
+  options: { paperPdfBytes?: Uint8Array | null } = {}
+) {
   const pdfDoc = await PDFDocument.create()
   pdfDoc.registerFontkit(fontkit)
 
@@ -214,10 +218,11 @@ export async function buildAcademicExchangePdf(application: any) {
   ])
   const thirdWidth = tableWidth / 3
   const halfWidth = tableWidth / 2
-  const hasPaperAttachment = Boolean(application.paperPdfUrl)
+  const hasPaperAttachment = hasAcademicExchangePaperPdfAttachment(application)
+  const paperPdfLabel = getAcademicExchangePaperPdfLabel(application)
   const paperAuthors = (application.paperAuthors || []).map((author: string) => getPublicationAuthorName(author)).join("，")
   const paperDetailText = hasPaperAttachment
-    ? `论文题目：${application.paperTitle || ""}\n作者：${paperAuthors}\n申请人位次：${application.applicantAuthorName || ""}，${application.applicantAuthorIndexLabel || ""}\n申请人所在单位：${application.applicantAffiliation || ""}\n总页数：${application.totalPages || ""}；正文页数：${application.bodyPages || ""}\n论文 PDF：${application.paperPdfUrl || ""}`
+    ? `论文题目：${application.paperTitle || ""}\n作者：${paperAuthors}\n申请人位次：${application.applicantAuthorName || ""}，${application.applicantAuthorIndexLabel || ""}\n申请人所在单位：${application.applicantAffiliation || ""}\n总页数：${application.totalPages || ""}；正文页数：${application.bodyPages || ""}\n论文 PDF：${paperPdfLabel}`
     : " "
 
   drawCenteredText("通班学术交流支持项目", margin, y, tableWidth, 16)
@@ -299,7 +304,10 @@ export async function buildAcademicExchangePdf(application: any) {
   drawText(`申请时间：${formatApplicationDate(application.applicationDate)}`, a4[0] - margin - 210, y, 11)
 
   if (hasPaperAttachment) {
-    const paperPdfBytes = await fetchPaperPdf(application.paperPdfUrl)
+    const paperPdfBytes = options.paperPdfBytes || (application.paperPdfUrl ? await fetchPaperPdf(application.paperPdfUrl) : null)
+    if (!paperPdfBytes) {
+      throw new Error("未找到已上传的论文 PDF")
+    }
     const paperPdf = await PDFDocument.load(paperPdfBytes)
     const copiedPages = await pdfDoc.copyPages(paperPdf, paperPdf.getPageIndices())
     copiedPages.forEach((copiedPage: any) => pdfDoc.addPage(copiedPage))

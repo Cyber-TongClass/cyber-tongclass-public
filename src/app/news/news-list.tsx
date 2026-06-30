@@ -21,7 +21,7 @@ export function NewsList() {
 
   // Fetch news from Convex
   const newsData = useNews()
-  const news: News[] = newsData || []
+  const news: News[] = useMemo(() => newsData || [], [newsData])
 
   const filteredNews = useMemo(() => {
     return news.filter((item) => {

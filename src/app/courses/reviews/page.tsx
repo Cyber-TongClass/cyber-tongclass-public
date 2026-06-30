@@ -15,7 +15,8 @@ import { Star, Plus, Search } from "lucide-react"
 
 export default function CourseReviewsPage() {
   const { isAuthenticated, isLoading } = useAuth()
-  const allReviews = useAllCourseReviews({ status: "approved" }) || []
+  const allReviewsData = useAllCourseReviews({ status: "approved" })
+  const allReviews = React.useMemo(() => allReviewsData || [], [allReviewsData])
   const voteReview = useVoteCourseReview()
   const [mode, setMode] = React.useState("latest") // latest | top
   const [query, setQuery] = React.useState("")

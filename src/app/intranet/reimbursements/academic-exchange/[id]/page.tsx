@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { downloadAcademicExchangePdf, formatCurrency, formatDate, formatPaperAuthors } from "@/lib/academic-exchange"
-import { useAcademicExchangeApplication } from "@/lib/api"
+import { getAcademicExchangePaperPdfLabel, hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
+import { useAcademicExchangeApplication, useAcademicExchangePaperPdfUrl } from "@/lib/api"
 import type { AcademicExchangeSupportApplication } from "@/types"
 
 function Field({ label, value }: { label: string; value?: ReactNode }) {
@@ -23,6 +24,7 @@ function Field({ label, value }: { label: string; value?: ReactNode }) {
 export default function AcademicExchangeApplicationDetailPage() {
   const params = useParams<{ id: string }>()
   const application = useAcademicExchangeApplication(params.id) as AcademicExchangeSupportApplication | null | undefined
+  const uploadedPaperPdfUrl = useAcademicExchangePaperPdfUrl(params.id) as string | null | undefined
   const [message, setMessage] = useState("")
   const [downloading, setDownloading] = useState(false)
 
@@ -65,8 +67,9 @@ export default function AcademicExchangeApplicationDetailPage() {
     )
   }
 
-  const hasPaperInfo = Boolean(application.paperTitle || application.paperPdfUrl)
+  const hasPaperInfo = Boolean(application.paperTitle || hasAcademicExchangePaperPdfAttachment(application))
   const paperAuthors = formatPaperAuthors(application.paperAuthors || [], application.applicantAuthorName)
+  const paperPdfLabel = getAcademicExchangePaperPdfLabel(application)
 
   return (
     <div className="min-h-screen bg-[hsl(211,30%,97%)] py-10 px-4">
@@ -145,7 +148,18 @@ export default function AcademicExchangeApplicationDetailPage() {
               <Field label="申请人所在单位" value={application.applicantAffiliation} />
               <Field label="页数" value={hasPaperInfo ? `总页数 ${application.totalPages || ""}，正文页数 ${application.bodyPages || ""}` : "-"} />
             </div>
-            <Field label="论文 PDF 链接" value={application.paperPdfUrl ? <a href={application.paperPdfUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">{application.paperPdfUrl}</a> : "-"} />
+            <Field
+              label="论文 PDF 来源"
+              value={
+                application.paperPdfStorageId ? (
+                  uploadedPaperPdfUrl ? (
+                    <a href={uploadedPaperPdfUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">{paperPdfLabel}</a>
+                  ) : paperPdfLabel
+                ) : application.paperPdfUrl ? (
+                  <a href={application.paperPdfUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">{application.paperPdfUrl}</a>
+                ) : "-"
+              }
+            />
           </CardContent>
         </Card>
 

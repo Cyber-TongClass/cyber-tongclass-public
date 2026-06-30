@@ -32,7 +32,7 @@ export function MembersList() {
 
   // Fetch users from Convex
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
-  const users = usersData || []
+  const users = useMemo(() => usersData || [], [usersData])
 
   // Filter users by role (member, admin, super_admin)
   const registeredUsers = useMemo(() => {

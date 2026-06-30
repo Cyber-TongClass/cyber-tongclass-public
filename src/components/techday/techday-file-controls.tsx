@@ -5,14 +5,17 @@ import { Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useGenerateTechDayUploadUrl } from "@/lib/api"
+import { uploadFileToStorageTarget } from "@/lib/file-upload"
 
 export function TechDayFileUpload({
   actorArgs,
   accept,
+  fileKind = "poster",
   onUploaded,
 }: {
   actorArgs: Record<string, string | undefined>
   accept?: string
+  fileKind?: "poster" | "reimbursement"
   onUploaded: (file: { storageId: string; fileName: string; mimeType: string; size: number }) => Promise<void>
 }) {
   const generateUploadUrl = useGenerateTechDayUploadUrl()
@@ -25,16 +28,15 @@ export function TechDayFileUpload({
     setUploading(true)
     setMessage(null)
     try {
-      const uploadUrl = await generateUploadUrl(actorArgs)
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
-      })
-      if (!result.ok) throw new Error("上传失败")
-      const payload = await result.json()
+      const uploadTarget = await generateUploadUrl({
+        ...actorArgs,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        fileKind,
+      } as any)
+      const storageId = await uploadFileToStorageTarget(uploadTarget as any, file, "上传失败")
       await onUploaded({
-        storageId: payload.storageId,
+        storageId,
         fileName: file.name,
         mimeType: file.type || "application/octet-stream",
         size: file.size,

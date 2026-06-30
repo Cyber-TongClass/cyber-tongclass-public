@@ -1,7 +1,20 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, Download } from "lucide-react"
+import { ArrowLeft, Download, FileText, TableProperties } from "lucide-react"
+import {
+  ACADEMIC_EXCHANGE_REIMBURSEMENT_CATEGORY,
+  reimbursementMaterialTableCards,
+} from "@/lib/reimbursement-material-tables"
+import {
+  ACADEMIC_EXCHANGE_MATERIAL_CATEGORY,
+  SCHOLARSHIP_REVIEW_MATERIAL_CATEGORY,
+  reimbursementMaterialPages,
+} from "@/lib/reimbursement-material-pages"
+import { usePublishedReimbursementMaterialTables } from "@/lib/api"
+import type { ReimbursementMaterialTable } from "@/types"
+
+const ACADEMIC_EXCHANGE_SECTION_TITLE = "学术交流报销相关资料"
 
 const downloadableSections = [
   {
@@ -21,30 +34,10 @@ const downloadableSections = [
     ],
   },
   {
-    title: "学术交流报销相关资料",
+    title: ACADEMIC_EXCHANGE_SECTION_TITLE,
     description: "学术交流项目相关的申请表格、支持方案和报销指引，仅供通班内部成员使用。",
-    materials: [
-      {
-        name: "通班学术交流项目支持方案",
-        file: "/intranet-materials/通班学术交流项目支持方案.pdf",
-        type: "PDF",
-      },
-      // {
-      //   name: "通班学术交流项目支持申请表（空表）",
-      //   file: "/intranet-materials/通班学术交流项目支持申请表-（空表）.docx",
-      //   type: "DOCX",
-      // },
-      {
-        name: "通班学生出国出境报销注意事项",
-        file: "/intranet-materials/通班学生出国出境报销注意事项.docx",
-        type: "DOCX",
-      },
-      {
-        name: "各国住宿伙食公杂费开支标准",
-        file: "/intranet-materials/各国住宿伙食公杂费开支标准.xlsx",
-        type: "XLSX",
-      },
-    ],
+    materials: [],
+    pageCategory: ACADEMIC_EXCHANGE_MATERIAL_CATEGORY,
   },
   // {
   //   title: "学生活动报销资料",
@@ -54,17 +47,21 @@ const downloadableSections = [
   {
     title: "奖学金评选",
     description: "奖学金评选相关的说明材料。",
-    materials: [
-      {
-        name: "关于通班奖学金科研成果的评审建议",
-        file: "/intranet-materials/关于通班奖学金科研成果的评审建议.pdf",
-        type: "PDF",
-      },
-    ],
+    materials: [],
+    pageCategory: SCHOLARSHIP_REVIEW_MATERIAL_CATEGORY,
   },
 ]
 
 export default function MaterialsPage() {
+  const publishedTables = usePublishedReimbursementMaterialTables({
+    category: ACADEMIC_EXCHANGE_REIMBURSEMENT_CATEGORY,
+  }) as ReimbursementMaterialTable[] | undefined
+  const visibleTables = publishedTables === undefined
+    ? undefined
+    : publishedTables.length > 0
+      ? publishedTables
+      : reimbursementMaterialTableCards
+
   return (
     <div className="min-h-screen bg-white">
       <section className="bg-primary relative overflow-hidden">
@@ -88,38 +85,87 @@ export default function MaterialsPage() {
 
       <section className="bg-[hsl(211,30%,97%)] py-16 md:py-24">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          {downloadableSections.map((section) => (
-            <div key={section.title} className="mb-16 last:mb-0">
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">{section.title}</h2>
-              <p className="text-sm text-slate-500 mb-6">{section.description}</p>
-              {section.materials.length > 0 ? (
-                <div className="space-y-3">
-                  {section.materials.map((item) => (
-                    <a
-                      key={item.name}
-                      href={item.file}
-                      download
-                      className="flex items-center gap-4 bg-white border border-slate-200 rounded-sm px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group"
-                    >
-                      <div className="flex-shrink-0 w-10 h-10 rounded-sm bg-primary/10 flex items-center justify-center">
-                        <Download className="h-5 w-5 text-primary" />
+          {downloadableSections.map((section) => {
+            const isAcademicExchangeSection = section.title === ACADEMIC_EXCHANGE_SECTION_TITLE
+            const materialPages = section.pageCategory
+              ? reimbursementMaterialPages.filter((item) => item.category === section.pageCategory)
+              : []
+            const hasMaterials = section.materials.length > 0 || materialPages.length > 0 || isAcademicExchangeSection
+
+            return (
+              <div key={section.title} className="mb-16 last:mb-0">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">{section.title}</h2>
+                <p className="text-sm text-slate-500 mb-6">{section.description}</p>
+                {hasMaterials ? (
+                  <div className="space-y-3">
+                    {section.materials.map((item) => (
+                      <a
+                        key={item.name}
+                        href={item.file}
+                        download
+                        className="flex items-center gap-4 bg-white border border-slate-200 rounded-sm px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group"
+                      >
+                        <div className="flex-shrink-0 w-10 h-10 rounded-sm bg-primary/10 flex items-center justify-center">
+                          <Download className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors">
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-slate-400">下载 {item.type} 文件</p>
+                        </div>
+                      </a>
+                    ))}
+                    {materialPages.map((item) => (
+                      <Link
+                        key={item.slug}
+                        href={`/intranet/reimbursements/materials/${item.slug}`}
+                        className="flex items-center gap-4 bg-white border border-slate-200 rounded-sm px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group"
+                      >
+                        <div className="flex-shrink-0 w-10 h-10 rounded-sm bg-primary/10 flex items-center justify-center">
+                          <FileText className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors">
+                            {item.title}
+                          </p>
+                          <p className="text-xs text-slate-400">查看页面</p>
+                        </div>
+                      </Link>
+                    ))}
+                    {isAcademicExchangeSection && visibleTables === undefined ? (
+                      <div className="flex items-center gap-4 bg-white border border-dashed border-slate-200 rounded-sm px-5 py-4 text-sm text-slate-500">
+                        正在读取网页表格...
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors">
-                          {item.name}
-                        </p>
-                        <p className="text-xs text-slate-400">{item.type} 文件</p>
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400 py-12 text-center bg-white border border-dashed border-slate-200 rounded-sm">
-                  暂无文件，敬请期待
-                </p>
-              )}
-            </div>
-          ))}
+                    ) : null}
+                    {isAcademicExchangeSection && visibleTables
+                      ? visibleTables.map((item) => (
+                        <Link
+                          key={item.slug}
+                          href={`/intranet/reimbursements/tables/${item.slug}`}
+                          className="flex items-center gap-4 bg-white border border-slate-200 rounded-sm px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group"
+                        >
+                          <div className="flex-shrink-0 w-10 h-10 rounded-sm bg-primary/10 flex items-center justify-center">
+                            <TableProperties className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors">
+                              {item.title}
+                            </p>
+                            <p className="text-xs text-slate-400">查看表单</p>
+                          </div>
+                        </Link>
+                      ))
+                      : null}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400 py-12 text-center bg-white border border-dashed border-slate-200 rounded-sm">
+                    暂无文件，敬请期待
+                  </p>
+                )}
+              </div>
+            )
+          })}
         </div>
       </section>
     </div>
