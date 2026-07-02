@@ -313,6 +313,7 @@ export default defineSchema({
     status: v.literal("submitted"),
     submittedAt: v.number(),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   })
     .index("by_user_createdAt", ["userId", "createdAt"])
     .index("by_createdAt", ["createdAt"]),

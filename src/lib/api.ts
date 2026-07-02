@@ -47,6 +47,10 @@ const getAcademicExchangeApplicationRef = makeFunctionReference<"query">("academ
 const createAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:createApplication")
 const generateAcademicExchangeUploadUrlRef = makeFunctionReference<"mutation">("academicExchange:generateUploadUrl")
 const getAcademicExchangePaperPdfUrlRef = makeFunctionReference<"query">("academicExchange:getPaperPdfUrl")
+const listAdminAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplicationsForSuperAdmin")
+const getAdminAcademicExchangeApplicationRef = makeFunctionReference<"query">("academicExchange:getApplicationForSuperAdmin")
+const updateAdminAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:updateApplicationForSuperAdmin")
+const deleteAdminAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:deleteApplicationForSuperAdmin")
 const listPublishedReimbursementTablesRef = makeFunctionReference<"query">("reimbursementTables:listPublished")
 const getPublishedReimbursementTableRef = makeFunctionReference<"query">("reimbursementTables:getPublishedBySlug")
 const listAdminReimbursementTablesRef = makeFunctionReference<"query">("reimbursementTables:listAdmin")
@@ -578,6 +582,37 @@ export function useAcademicExchangePaperPdfUrl(id?: string | null) {
     getAcademicExchangePaperPdfUrlRef,
     sessionToken && id ? ({ sessionToken, id: id as any } as any) : "skip"
   )
+}
+
+export function useAdminAcademicExchangeApplications(enabled = true) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listAdminAcademicExchangeApplicationsRef, enabled && sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+export function useAdminAcademicExchangeApplication(id?: string | null, enabled = true) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getAdminAcademicExchangeApplicationRef,
+    enabled && sessionToken && id ? ({ sessionToken, id: id as any } as any) : "skip"
+  )
+}
+
+export function useUpdateAdminAcademicExchangeApplication() {
+  const update = useMutation(updateAdminAcademicExchangeApplicationRef)
+  return useCallback((args: Record<string, unknown> & { id: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, id: args.id as any, sessionToken } as any)
+  }, [update])
+}
+
+export function useDeleteAdminAcademicExchangeApplication() {
+  const remove = useMutation(deleteAdminAcademicExchangeApplicationRef)
+  return useCallback((id: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ id: id as any, sessionToken } as any)
+  }, [remove])
 }
 
 // ==================== 报销资料表格 ====================

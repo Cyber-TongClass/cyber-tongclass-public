@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePublishedReimbursementMaterialTable } from "@/lib/api"
 import {
+  ACADEMIC_EXCHANGE_REIMBURSEMENT_CATEGORY,
   buildReimbursementDisplayRows,
   createDefaultLivingExpenseTableDraft,
   filterReimbursementRows,
@@ -30,6 +31,20 @@ function getFallbackTable(slug: string): ReimbursementMaterialTableDraft | null 
 function getUpdatedLabel(table: ReimbursementMaterialTable | ReimbursementMaterialTableDraft) {
   if ("updatedAt" in table && table.updatedAt) return formatDate(table.updatedAt)
   return "来自当前公开材料"
+}
+
+function getBackLink(table?: ReimbursementMaterialTable | ReimbursementMaterialTableDraft | null) {
+  if (table?.category === ACADEMIC_EXCHANGE_REIMBURSEMENT_CATEGORY) {
+    return {
+      href: "/intranet/reimbursements/academic-exchange",
+      label: "返回学术交流支持",
+    }
+  }
+
+  return {
+    href: "/intranet/materials",
+    label: "返回资料下载",
+  }
 }
 
 export default function ReimbursementMaterialTablePage() {
@@ -60,13 +75,17 @@ export default function ReimbursementMaterialTablePage() {
   }
 
   if (!table) {
+    const backLink = slug === LIVING_EXPENSE_TABLE_SLUG
+      ? { href: "/intranet/reimbursements/academic-exchange", label: "返回学术交流支持" }
+      : getBackLink(table)
+
     return (
       <div className="min-h-screen bg-[hsl(211,30%,97%)] px-4 py-10">
         <div className="mx-auto max-w-3xl space-y-6">
           <Button asChild variant="ghost">
-            <Link href="/intranet/materials">
+            <Link href={backLink.href}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              返回资料下载
+              {backLink.label}
             </Link>
           </Button>
           <Card>
@@ -81,6 +100,8 @@ export default function ReimbursementMaterialTablePage() {
     )
   }
 
+  const backLink = getBackLink(table)
+
   return (
     <div className="min-h-screen bg-[hsl(211,30%,97%)]">
       <section className="bg-primary relative overflow-hidden">
@@ -88,9 +109,9 @@ export default function ReimbursementMaterialTablePage() {
           <div className="absolute left-4 sm:left-6 lg:left-8 top-1/2 -translate-y-1/2 text-[4rem] md:text-[7rem] lg:text-[9rem] font-extrabold uppercase tracking-[0.15em] text-white/5 select-none pointer-events-none whitespace-nowrap leading-none">
             TABLE
           </div>
-          <Link href="/intranet/materials" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white mb-4 transition-colors">
+          <Link href={backLink.href} className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white mb-4 transition-colors">
             <ArrowLeft className="h-4 w-4" />
-            返回资料下载
+            {backLink.label}
           </Link>
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">{table.title}</h1>
           <p className="text-lg text-white/70 max-w-3xl mt-2">

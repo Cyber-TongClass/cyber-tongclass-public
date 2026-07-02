@@ -216,7 +216,7 @@ export default function ReviewerAcademicExchangePage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-950">学术交流支持申请</h1>
-          <p className="mt-1 text-sm text-slate-500">只读查看同学已提交的学术交流支持申请，并按需下载单份申请 PDF。</p>
+          <p className="mt-1 text-sm text-slate-500">只读查看同学已提交的学术交流支持申请，并按需下载单份申请 PDF 或批量下载多份申请。</p>
         </div>
         <Button type="button" onClick={handleBatchExport} disabled={batchExporting || selectedCount === 0}>
           <Archive className="mr-2 h-4 w-4" />

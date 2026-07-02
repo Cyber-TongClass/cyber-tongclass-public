@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createDefaultReimbursementFormDraft, normalizeFormSlug, oaFormStatusLabels } from "@/lib/oa-forms"
 import { useAdminOAForms, useAdminRemoveOAForm, useAdminSetOAFormStatus, useAdminUpsertOAForm } from "@/lib/api"
+import { useAuth } from "@/lib/hooks/use-auth"
 import type { OAForm } from "@/types"
 import { useState } from "react"
 
@@ -22,6 +23,7 @@ function uniqueSuffix() {
 
 export default function AdminReimbursementsPage() {
   const router = useRouter()
+  const { isSuperAdmin } = useAuth()
   const forms = useAdminOAForms({ kind: "reimbursement" }) as OAForm[] | undefined
   const upsert = useAdminUpsertOAForm()
   const setStatus = useAdminSetOAFormStatus()
@@ -91,6 +93,9 @@ export default function AdminReimbursementsPage() {
           <p className="mt-1 text-gray-500">报销模板基于 OA 表单，但拥有独立入口、默认报销字段和补材料审核流程。</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {isSuperAdmin ? (
+            <Button asChild variant="outline"><Link href="/admin/reimbursements/academic-exchange"><Eye className="mr-2 h-4 w-4" />学术交流支持申请</Link></Button>
+          ) : null}
           <Button asChild variant="outline"><Link href="/admin/reimbursements/tables"><TableProperties className="mr-2 h-4 w-4" />报销标准表格</Link></Button>
           <Button type="button" onClick={() => void createForm()}><FilePlus2 className="mr-2 h-4 w-4" />新建报销模板</Button>
         </div>

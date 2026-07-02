@@ -37,6 +37,14 @@ async function getUserBySession(ctx: any, sessionToken?: string) {
   return user
 }
 
+async function requireSuperAdmin(ctx: any, sessionToken?: string) {
+  const user = await getUserBySession(ctx, sessionToken)
+  if (user.role !== "super_admin") {
+    throw new Error("只有超级管理员可以管理学术交流支持申请")
+  }
+  return user
+}
+
 function normalizeOptionalString(value?: string) {
   if (value === undefined) return undefined
   const trimmed = value.trim()
@@ -152,6 +160,52 @@ const expenseItemValidator = v.object({
   note: v.optional(v.string()),
 })
 
+function normalizeExpenseItems(items: Array<{ item: string; amount: number; note?: string }>) {
+  return items
+    .map((item) => ({
+      item: item.item.trim(),
+      amount: item.amount,
+      note: normalizeOptionalString(item.note),
+    }))
+    .filter((item) => item.item && Number.isFinite(item.amount) && item.amount >= 0)
+}
+
+function normalizePositiveInteger(value?: number) {
+  if (value === undefined) return undefined
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error("页数必须是正整数")
+  }
+  return value
+}
+
+const adminApplicationPatchValidator = {
+  applicantName: v.string(),
+  studentId: v.string(),
+  email: v.string(),
+  gender: v.optional(v.string()),
+  phone: v.optional(v.string()),
+  projectCategory: v.string(),
+  projectName: v.string(),
+  exchangeLocation: v.string(),
+  projectTime: v.string(),
+  otherFunding: v.string(),
+  projectPlan: v.string(),
+  expenseItems: v.array(expenseItemValidator),
+  applicationDate: v.string(),
+  paperTitle: v.optional(v.string()),
+  paperAuthors: v.optional(v.array(v.string())),
+  applicantAuthorName: v.optional(v.string()),
+  applicantAuthorIndexLabel: v.optional(v.string()),
+  applicantAffiliation: v.optional(v.string()),
+  totalPages: v.optional(v.number()),
+  bodyPages: v.optional(v.number()),
+  paperPdfUrl: v.optional(v.string()),
+  paperPdfSource: v.optional(v.union(v.literal("url"), v.literal("upload"))),
+  paperPdfFileName: v.optional(v.string()),
+  paperPdfMimeType: v.optional(v.string()),
+  paperPdfSize: v.optional(v.number()),
+}
+
 export const getStudentFormProfile = query({
   args: { sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -242,6 +296,29 @@ export const getApplication = query({
   },
 })
 
+export const listApplicationsForSuperAdmin = query({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireSuperAdmin(ctx, args.sessionToken)
+    return await ctx.db
+      .query("academicExchangeSupportApplications")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .collect()
+  },
+})
+
+export const getApplicationForSuperAdmin = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+    id: v.id("academicExchangeSupportApplications"),
+  },
+  handler: async (ctx, args) => {
+    await requireSuperAdmin(ctx, args.sessionToken)
+    return await ctx.db.get(args.id)
+  },
+})
+
 export const listApplicationsForReviewer = query({
   args: { reviewerSessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -317,6 +394,95 @@ export const logReviewerApplicationDownload = mutation({
   },
 })
 
+export const updateApplicationForSuperAdmin = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    id: v.id("academicExchangeSupportApplications"),
+    ...adminApplicationPatchValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireSuperAdmin(ctx, args.sessionToken)
+    const existing = await ctx.db.get(args.id)
+    if (!existing) {
+      throw new Error("未找到申请记录")
+    }
+
+    const expenseItems = normalizeExpenseItems(args.expenseItems)
+    if (expenseItems.length === 0) {
+      throw new Error("请至少保留一项申请金额")
+    }
+
+    const requiredStrings = [
+      args.applicantName,
+      args.studentId,
+      args.email,
+      args.projectCategory,
+      args.projectName,
+      args.exchangeLocation,
+      args.projectTime,
+      args.otherFunding,
+      args.projectPlan,
+      args.applicationDate,
+    ]
+    if (requiredStrings.some((value) => !value.trim())) {
+      throw new Error("请完整填写申请信息")
+    }
+
+    const paperPdfUrl = normalizeOptionalString(args.paperPdfUrl)
+    if (paperPdfUrl && !/^https?:\/\//i.test(paperPdfUrl)) {
+      throw new Error("论文 PDF 链接必须是 http(s) 链接")
+    }
+
+    await ctx.db.patch(args.id, {
+      applicantName: args.applicantName.trim(),
+      studentId: args.studentId.trim(),
+      email: args.email.trim().toLowerCase(),
+      gender: normalizeOptionalString(args.gender),
+      phone: normalizeOptionalString(args.phone),
+      projectCategory: args.projectCategory.trim(),
+      projectName: args.projectName.trim(),
+      exchangeLocation: args.exchangeLocation.trim(),
+      projectTime: args.projectTime.trim(),
+      otherFunding: args.otherFunding.trim(),
+      projectPlan: args.projectPlan.trim(),
+      expenseItems,
+      totalAmount: expenseItems.reduce((sum, item) => sum + item.amount, 0),
+      applicationDate: args.applicationDate.trim(),
+      paperTitle: normalizeOptionalString(args.paperTitle),
+      paperAuthors: args.paperAuthors?.map((author) => author.trim()).filter(Boolean),
+      applicantAuthorName: normalizeOptionalString(args.applicantAuthorName),
+      applicantAuthorIndexLabel: normalizeOptionalString(args.applicantAuthorIndexLabel),
+      applicantAffiliation: normalizeOptionalString(args.applicantAffiliation),
+      totalPages: normalizePositiveInteger(args.totalPages),
+      bodyPages: normalizePositiveInteger(args.bodyPages),
+      paperPdfUrl,
+      paperPdfSource: args.paperPdfSource,
+      paperPdfFileName: normalizeOptionalString(args.paperPdfFileName),
+      paperPdfMimeType: normalizeOptionalString(args.paperPdfMimeType),
+      paperPdfSize: args.paperPdfSize,
+      updatedAt: Date.now(),
+    })
+
+    return args.id
+  },
+})
+
+export const deleteApplicationForSuperAdmin = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    id: v.id("academicExchangeSupportApplications"),
+  },
+  handler: async (ctx, args) => {
+    await requireSuperAdmin(ctx, args.sessionToken)
+    const existing = await ctx.db.get(args.id)
+    if (!existing) {
+      throw new Error("未找到申请记录")
+    }
+    await ctx.db.delete(args.id)
+    return { success: true }
+  },
+})
+
 export const createApplication = mutation({
   args: {
     sessionToken: v.optional(v.string()),
@@ -368,14 +534,9 @@ export const createApplication = mutation({
     }
 
     const expenseItems = args.expenseItems
-      .map((item) => ({
-        item: item.item.trim(),
-        amount: item.amount,
-        note: normalizeOptionalString(item.note),
-      }))
-      .filter((item) => item.item && Number.isFinite(item.amount) && item.amount >= 0)
+    const normalizedExpenseItems = normalizeExpenseItems(expenseItems)
 
-    if (expenseItems.length === 0) {
+    if (normalizedExpenseItems.length === 0) {
       throw new Error("请至少填写一项申请金额")
     }
 
@@ -450,8 +611,8 @@ export const createApplication = mutation({
       projectTime: args.projectTime.trim(),
       otherFunding: args.otherFunding.trim(),
       projectPlan: args.projectPlan.trim(),
-      expenseItems,
-      totalAmount: expenseItems.reduce((sum, item) => sum + item.amount, 0),
+      expenseItems: normalizedExpenseItems,
+      totalAmount: normalizedExpenseItems.reduce((sum, item) => sum + item.amount, 0),
       applicationDate: args.applicationDate,
       publicationId: requiresPaper ? args.publicationId : undefined,
       paperTitle: requiresPaper ? publication.title : undefined,

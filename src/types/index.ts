@@ -119,6 +119,7 @@ export interface AcademicExchangeSupportApplication {
   status: "submitted"
   submittedAt: number
   createdAt: number
+  updatedAt?: number
 }
 
 export type OAFormStatus = "draft" | "published" | "archived"
