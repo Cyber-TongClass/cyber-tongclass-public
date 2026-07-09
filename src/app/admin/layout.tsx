@@ -18,6 +18,8 @@ import {
   ShieldCheck,
   TableProperties,
   ClipboardList,
+  Trophy,
+  LayoutGrid,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,6 +27,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { useTechDayActorArgs, useTechDayCurrentPrincipal } from "@/lib/api"
+import { canManageCreativeChallenge } from "@/lib/creative-challenge-2026"
 
 const navItems = [
   { href: "/admin", label: "仪表盘", icon: LayoutDashboard },
@@ -36,6 +39,8 @@ const navItems = [
   { href: "/admin/events", label: "活动管理", icon: Calendar },
   { href: "/admin/reimbursements", label: "报销管理", icon: TableProperties },
   { href: "/admin/forms", label: "OA 表单", icon: ClipboardList },
+  { href: "/admin/intranet", label: "内网模块", icon: LayoutGrid },
+  { href: "/admin/creative-challenge-2026", label: "挑战赛", icon: Trophy },
   { href: "/admin/techday/settings", label: "TechDay", icon: Calendar },
   { href: "/admin/treehole", label: "树洞管理", icon: MessageSquare },
   { href: "/admin/feedback", label: "反馈管理", icon: FileText },
@@ -115,7 +120,7 @@ export default function AdminLayout({
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { isAuthenticated, isAdmin, isSuperAdmin, isLoading } = useAuth()
+  const { currentUser, isAuthenticated, isAdmin, isSuperAdmin, isLoading } = useAuth()
   const actorArgs = useTechDayActorArgs()
   const techDayPrincipal = useTechDayCurrentPrincipal(actorArgs)
 
@@ -123,24 +128,28 @@ export default function AdminLayout({
   const isAdminAllowed =
     isSuperAdmin || adminAllowedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   const isTechDayAdminRoute = pathname === "/admin/techday" || pathname.startsWith("/admin/techday/")
+  const isCreativeChallengeAdminRoute =
+    pathname === "/admin/creative-challenge-2026" || pathname.startsWith("/admin/creative-challenge-2026/")
   const isTechDayAdmin = Boolean(
     techDayPrincipal?.techDayUser?.role === "admin" ||
     techDayPrincipal?.mainUser?.role === "admin" ||
     techDayPrincipal?.mainUser?.role === "super_admin"
   )
   const hasTechDayAdminAccess = isTechDayAdminRoute && isTechDayAdmin
+  const hasCreativeChallengeOrganizerAccess = isCreativeChallengeAdminRoute && canManageCreativeChallenge(currentUser)
 
   // Permission check - redirect if not admin
   useEffect(() => {
     if (!isLoading && (!isTechDayAdminRoute || techDayPrincipal !== undefined)) {
       if (hasTechDayAdminAccess) return
+      if (hasCreativeChallengeOrganizerAccess) return
       if (!isAuthenticated) {
         router.push(isTechDayAdminRoute ? "/techday/login" : `/login?next=${encodeURIComponent(pathname)}`)
       } else if (!isAdmin) {
         router.push("/?error=unauthorized")
       }
     }
-  }, [isLoading, isAuthenticated, isAdmin, router, pathname, isTechDayAdminRoute, hasTechDayAdminAccess, techDayPrincipal])
+  }, [isLoading, isAuthenticated, isAdmin, router, pathname, isTechDayAdminRoute, hasTechDayAdminAccess, hasCreativeChallengeOrganizerAccess, techDayPrincipal])
 
   // Show loading while checking auth
   if (isLoading || (isTechDayAdminRoute && techDayPrincipal === undefined)) {
@@ -154,7 +163,7 @@ export default function AdminLayout({
     )
   }
 
-  if (!isAuthenticated && !hasTechDayAdminAccess) {
+  if (!isAuthenticated && !hasTechDayAdminAccess && !hasCreativeChallengeOrganizerAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <Card className="max-w-md w-full">
@@ -172,7 +181,7 @@ export default function AdminLayout({
     )
   }
 
-  if (!isAdmin && !hasTechDayAdminAccess) {
+  if (!isAdmin && !hasTechDayAdminAccess && !hasCreativeChallengeOrganizerAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <Card className="max-w-md w-full">
@@ -190,7 +199,7 @@ export default function AdminLayout({
     )
   }
 
-  if (!isAdminAllowed && !hasTechDayAdminAccess) {
+  if (!isAdminAllowed && !hasTechDayAdminAccess && !hasCreativeChallengeOrganizerAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <Card className="max-w-md w-full">
@@ -210,6 +219,8 @@ export default function AdminLayout({
 
   const visibleNavItems = hasTechDayAdminAccess && !isAdmin
     ? navItems.filter((item) => item.href.startsWith("/admin/techday"))
+    : hasCreativeChallengeOrganizerAccess && !isAdmin
+    ? navItems.filter((item) => item.href === "/admin/creative-challenge-2026")
     : isSuperAdmin
     ? navItems
     : navItems.filter((item) => adminAllowedPrefixes.some((prefix) => item.href === prefix || item.href.startsWith(`${prefix}/`)))

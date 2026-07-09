@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Users, FileText, Calendar, Star, BarChart3, BookOpen, MessageSquare, TableProperties, ClipboardList } from "lucide-react"
+import { Users, FileText, Calendar, Star, BarChart3, BookOpen, MessageSquare, TableProperties, ClipboardList, Trophy, LayoutGrid } from "lucide-react"
 import Link from "next/link"
 import { useUsers, useNews, useEvents, useCourseListWithReviews, usePendingReviews } from "@/lib/api"
 
@@ -118,6 +118,8 @@ export default function AdminDashboard() {
       { href: "/admin/feedback", label: "反馈管理", icon: FileText },
       { href: "/admin/reimbursements", label: "报销管理", icon: TableProperties },
       { href: "/admin/forms", label: "OA 表单", icon: ClipboardList },
+      { href: "/admin/intranet", label: "内网模块", icon: LayoutGrid },
+      { href: "/admin/creative-challenge-2026", label: "挑战赛", icon: Trophy },
     ],
     []
   )
