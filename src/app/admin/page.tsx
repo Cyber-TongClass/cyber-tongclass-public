@@ -98,7 +98,7 @@ export default function AdminDashboard() {
 
     courses.slice(-8).forEach((course: any) => {
       nextActivities.push({
-        key: `course-${course._id}`,
+        key: `course-${course.name}`,
         action: "创建/更新课程",
         user: "管理员",
         timestamp: course.updatedAt || Date.now(),
