@@ -819,7 +819,7 @@ export default function CreativeChallenge2026Page() {
             <CardContent>
               {registrations.length > 0 ? (
                 <div className="space-y-3">
-                  {registrations.slice(0, 4).map((item) => (
+                  {registrations.map((item) => (
                     <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
