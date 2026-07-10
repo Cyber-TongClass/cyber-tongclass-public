@@ -37,33 +37,25 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { useUsers } from "@/lib/api"
+import { useUsers, useCC2026List, useCC2026Set } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import {
   bountyTasks,
-  canManageCreativeChallenge,
+  getCCSessionToken, canManageCreativeChallenge,
   challengeStageDetails,
   createDefaultCreativeChallengeSettings,
-  createCreativeChallengeOrganizerFromUser,
   createRegistrationId,
   formatCreativeChallengeUserName,
   formatCreativeChallengeMembers,
   getCreativeChallengeBountyVoteLimit,
   normalizeCreativeChallengeVoteLimit,
-  readCreativeChallengeOrganizers,
-  readCreativeChallengeSettings,
-  readCreativeChallengeRegistrations,
-  readCreativeChallengeVotes,
   statusBadgeVariants,
   statusLabels,
-  writeCreativeChallengeSettings,
-  writeCreativeChallengeOrganizers,
-  writeCreativeChallengeRegistrations,
-  type CreativeChallengeOrganizer,
   type CreativeChallengeSettings,
-  type CreativeChallengeStage,
   type CreativeChallengeRegistration,
   type CreativeChallengeRegistrationStatus,
+  type CreativeChallengeOrganizer,
+  type CreativeChallengeStage,
 } from "@/lib/creative-challenge-2026"
 import type { User } from "@/types"
 
@@ -125,7 +117,8 @@ function buildPreviewRegistrations(): CreativeChallengeRegistration[] {
       score: null,
       createdAt: now - 2 * 24 * 60 * 60 * 1000,
       updatedAt: now - 2 * 60 * 60 * 1000,
-    },
+      finalSubmittedAt: now - 2 * 60 * 60 * 1000,
+    } as CreativeChallengeRegistration,
     {
       id: createRegistrationId(),
       teamName: "Workflow Lab",
@@ -150,6 +143,41 @@ function buildPreviewRegistrations(): CreativeChallengeRegistration[] {
       bountyTask: "",
       projectSummary: "把活动方案、物资清单、通知文案和时间表规划整合成一个内部工具，用于降低学生工作中的重复沟通成本。",
       techKeywords: "Agent, Next.js, Workflow",
+      githubUrl: "https://github.com/example/class-activity-agent",
+      demoUrl: "",
+      wantsCompute: false,
+      computePlan: "",
+      status: "accepted",
+      adminNote: "",
+      score: null,
+      createdAt: now - 26 * 60 * 60 * 1000,
+      updatedAt: now - 26 * 60 * 60 * 1000,
+      finalSubmittedAt: now - 26 * 60 * 60 * 1000,
+    } as CreativeChallengeRegistration,
+    {
+      id: createRegistrationId(),
+      teamName: "通通猫大队",
+      projectName: "树洞智能情绪分析看板",
+      leaderName: "示例队长 C",
+      leaderStudentId: "2025000003",
+      leaderContact: "demo-c@tongclass.ac.cn",
+      members: [
+        {
+          name: "示例队长 C",
+          role: "",
+          isTongClass: true,
+          studentId: "2025000003",
+        },
+        {
+          name: "示例成员 C2",
+          role: "",
+        },
+      ],
+      freshmen: "",
+      track: "bounty",
+      bountyTask: bountyTasks[3] || bountyTasks[0],
+      projectSummary: "基于树洞帖子做情感分析和主题聚类，生成可视化看板用于了解通班同学的关注热点和情绪趋势。",
+      techKeywords: "NLP, Sentiment, Visualization",
       githubUrl: "",
       demoUrl: "",
       wantsCompute: false,
@@ -157,9 +185,9 @@ function buildPreviewRegistrations(): CreativeChallengeRegistration[] {
       status: "submitted",
       adminNote: "",
       score: null,
-      createdAt: now - 26 * 60 * 60 * 1000,
-      updatedAt: now - 26 * 60 * 60 * 1000,
-    },
+      createdAt: now - 10 * 24 * 60 * 60 * 1000,
+      updatedAt: now - 5 * 60 * 60 * 1000,
+    } as CreativeChallengeRegistration,
   ]
 }
 
@@ -169,19 +197,48 @@ export default function AdminCreativeChallenge2026Page() {
   const [registrations, setRegistrations] = useState<CreativeChallengeRegistration[]>([])
   const [settings, setSettings] = useState<CreativeChallengeSettings>(() => createDefaultCreativeChallengeSettings())
   const [votes, setVotes] = useState<Record<string, number>>({})
-  const [organizers, setOrganizers] = useState<CreativeChallengeOrganizer[]>([])
+  const [organizers, setOrganizers] = useState<string[]>([])
   const [organizerSearch, setOrganizerSearch] = useState("")
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState(ALL_STATUSES)
   const [trackFilter, setTrackFilter] = useState(ALL_TRACKS)
-  const canManageChallenge = canManageCreativeChallenge(currentUser)
+  const setCC2026Mutation = useCC2026Set()
+  const cc2026Organizers = useCC2026List("organizers")
+  const cc2026Settings = useCC2026List("settings")
+  const cc2026Registrations = useCC2026List("registration")
+  const cc2026Votes = useCC2026List("votes")
 
   useEffect(() => {
-    setRegistrations(readCreativeChallengeRegistrations())
-    setSettings(readCreativeChallengeSettings())
-    setVotes(readCreativeChallengeVotes())
-    setOrganizers(readCreativeChallengeOrganizers())
-  }, [])
+    const raw = (cc2026Organizers || []).find((d: any) => d.key === "_")
+    if (raw) {
+      try { setOrganizers(JSON.parse(raw.value)) } catch { setOrganizers([]) }
+    } else {
+      setOrganizers([])
+    }
+  }, [cc2026Organizers])
+
+  useEffect(() => {
+    const raw = (cc2026Settings || []).find((d: any) => d.key === "_")
+    if (raw) {
+      try { setSettings(JSON.parse(raw.value)) } catch { setSettings(createDefaultCreativeChallengeSettings()) }
+    }
+  }, [cc2026Settings])
+
+  useEffect(() => {
+    const doc = (cc2026Registrations || []).find((d: any) => d.key === "_")
+    if (doc) {
+      try { setRegistrations(JSON.parse(doc.value)) } catch { setRegistrations([]) }
+    }
+  }, [cc2026Registrations])
+
+  useEffect(() => {
+    const raw = (cc2026Votes || []).find((d: any) => d.key === "_")
+    if (raw) {
+      try { setVotes(JSON.parse(raw.value)) } catch { setVotes({}) }
+    }
+  }, [cc2026Votes])
+
+  const canManageChallenge = canManageCreativeChallenge(currentUser, organizers)
 
   const filteredRegistrations = useMemo(() => {
     const keyword = search.trim().toLowerCase()
@@ -214,7 +271,14 @@ export default function AdminCreativeChallenge2026Page() {
     }
   }, [registrations])
 
-  const organizerIds = useMemo(() => new Set(organizers.map((item) => item.userId)), [organizers])
+  const organizerIds = useMemo(() => new Set(organizers), [organizers])
+  const organizerUserMap = useMemo(() => {
+    const map = new Map<string, User>()
+    for (const u of (usersData || [])) {
+      map.set(String(u._id), u as User)
+    }
+    return map
+  }, [usersData])
   const organizerCandidates = useMemo(() => {
     const keyword = organizerSearch.trim().toLowerCase()
     if (!keyword) return []
@@ -235,7 +299,13 @@ export default function AdminCreativeChallenge2026Page() {
 
   function persist(nextRegistrations: CreativeChallengeRegistration[]) {
     setRegistrations(nextRegistrations)
-    writeCreativeChallengeRegistrations(nextRegistrations)
+    const st = getCCSessionToken()
+    setCC2026Mutation({
+      collection: "registration",
+      key: "_",
+      value: JSON.stringify(nextRegistrations),
+      sessionToken: st || undefined,
+    })
   }
 
   function updateRegistration(id: string, patch: Partial<CreativeChallengeRegistration>) {
@@ -253,61 +323,80 @@ export default function AdminCreativeChallenge2026Page() {
   }
 
   function seedPreviewData() {
-    const nextRegistrations = [...buildPreviewRegistrations(), ...registrations]
+    const demoIds = new Set(buildPreviewRegistrations().map((r) => r.id))
+    const existing = registrations.filter((r) => demoIds.has(r.id))
+    if (existing.length > 0) {
+      if (!window.confirm("演示数据已存在，重新生成会覆盖现有演示数据。确定继续？")) return
+    }
+    const nextRegistrations = [
+      ...buildPreviewRegistrations(),
+      ...registrations.filter((r) => !demoIds.has(r.id)),
+    ]
     persist(nextRegistrations)
   }
 
-  function updateStage(stage: CreativeChallengeStage) {
-    const nextSettings = {
-      ...settings,
-      stage,
-      updatedAt: Date.now(),
-    }
+  function writeSettings(nextSettings: CreativeChallengeSettings) {
     setSettings(nextSettings)
-    writeCreativeChallengeSettings(nextSettings)
+    const st = getCCSessionToken()
+    setCC2026Mutation({
+      collection: "settings",
+      key: "_",
+      value: JSON.stringify(nextSettings),
+      sessionToken: st || undefined,
+    })
+  }
+
+  function updateStage(stage: CreativeChallengeStage) {
+    writeSettings({ ...settings, stage, updatedAt: Date.now() })
   }
 
   function updateCustomVoteLimit(value: string) {
-    const nextSettings = {
+    writeSettings({
       ...settings,
       customVoteLimit: normalizeCreativeChallengeVoteLimit(value, settings.customVoteLimit),
       updatedAt: Date.now(),
-    }
-    setSettings(nextSettings)
-    writeCreativeChallengeSettings(nextSettings)
+    })
   }
 
   function updateBountyVoteLimit(task: string, value: string) {
-    const nextSettings = {
+    writeSettings({
       ...settings,
       bountyVoteLimits: {
         ...settings.bountyVoteLimits,
         [task]: normalizeCreativeChallengeVoteLimit(value, getCreativeChallengeBountyVoteLimit(settings, task)),
       },
       updatedAt: Date.now(),
-    }
-    setSettings(nextSettings)
-    writeCreativeChallengeSettings(nextSettings)
+    })
   }
 
   function grantOrganizer(user: User) {
     const nextOrganizers = [
-      createCreativeChallengeOrganizerFromUser(user),
-      ...organizers.filter((item) => item.userId !== String(user._id)),
+      ...organizers.filter((id) => id !== String(user._id)),
+      String(user._id),
     ]
+    const sessionToken = getCCSessionToken()
     setOrganizers(nextOrganizers)
-    writeCreativeChallengeOrganizers(nextOrganizers)
+    setCC2026Mutation({
+      collection: "organizers",
+      key: "_",
+      value: JSON.stringify(nextOrganizers),
+      sessionToken: sessionToken || undefined,
+    })
     setOrganizerSearch("")
   }
 
   function revokeOrganizer(userId: string) {
-    const target = organizers.find((item) => item.userId === userId)
-    if (!target) return
-    if (!window.confirm(`确认取消「${target.name}」的挑战赛后台管理权限吗？`)) return
+    if (!window.confirm("确认取消该用户的挑战赛后台管理权限吗？")) return
 
-    const nextOrganizers = organizers.filter((item) => item.userId !== userId)
+    const nextOrganizers = organizers.filter((id) => id !== userId)
+    const sessionToken = getCCSessionToken()
     setOrganizers(nextOrganizers)
-    writeCreativeChallengeOrganizers(nextOrganizers)
+    setCC2026Mutation({
+      collection: "organizers",
+      key: "_",
+      value: JSON.stringify(nextOrganizers),
+      sessionToken: sessionToken || undefined,
+    })
   }
 
   function exportCsv() {
@@ -603,20 +692,23 @@ export default function AdminCreativeChallenge2026Page() {
                 </div>
                 {organizers.length > 0 ? (
                   <div className="space-y-2">
-                    {organizers.map((organizer) => (
-                      <div key={organizer.userId} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
-                        <div className="min-w-0">
-                          <div className="font-medium text-slate-950">{organizer.name}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {organizer.studentId || "无学号"} · {organizer.username || organizer.email || organizer.userId}
-                          </div>
-                        </div>
-                        <Button type="button" size="sm" variant="destructive" onClick={() => revokeOrganizer(organizer.userId)}>
-                          <UserMinus className="mr-2 h-4 w-4" />
-                          取消
-                        </Button>
-                      </div>
-                    ))}
+                    {organizers.map((organizerId) => {
+                       const u = organizerUserMap.get(organizerId)
+                       const name = u?.chineseName || u?.englishName || organizerId
+                       return (
+                       <div key={organizerId} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                         <div className="min-w-0">
+                           <div className="font-medium text-slate-950">{name}</div>
+                           <div className="mt-1 text-xs text-slate-500">
+                             {u?.studentId || "无学号"} · {u?.username || u?.email || organizerId}
+                           </div>
+                         </div>
+                         <Button type="button" size="sm" variant="destructive" onClick={() => revokeOrganizer(organizerId)}>
+                           <UserMinus className="mr-2 h-4 w-4" />
+                           取消
+                         </Button>
+                       </div>
+                     )})}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">

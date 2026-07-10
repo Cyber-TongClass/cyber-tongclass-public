@@ -1307,3 +1307,29 @@ export function useCreateTechDayReviewerInvite() {
 export function useDeleteTechDayReviewerInvite() {
   return useMutation(techdayApi.techday.admin.deleteReviewerInvite)
 }
+
+// ---------- CC2026 Store ----------
+
+export function useCC2026Get(collection: string, key: string) {
+  return useQuery(api.cc2026.get, { collection, key })
+}
+
+export function useCC2026List(collection: string) {
+  return useQuery(api.cc2026.list, { collection })
+}
+
+export function useCC2026ListAll() {
+  return useQuery(api.cc2026.listAll, {})
+}
+
+export function useCC2026Set() {
+  return useMutation(api.cc2026.set)
+}
+
+export function useCC2026BatchSet() {
+  return useMutation(api.cc2026.batchSet)
+}
+
+export function useCC2026Remove() {
+  return useMutation(api.cc2026.remove)
+}

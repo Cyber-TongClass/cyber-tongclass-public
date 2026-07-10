@@ -15,19 +15,41 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useCC2026List, useCC2026Set } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { getCCSessionToken } from "@/lib/creative-challenge-2026"
 import {
   createDefaultIntranetModuleSettings,
   defaultIntranetModules,
   normalizeIntranetModuleSettings,
-  readIntranetModuleSettings,
-  writeIntranetModuleSettings,
   type IntranetModuleSetting,
 } from "@/lib/intranet-modules"
 
 export default function AdminIntranetModulesPage() {
   const { isSuperAdmin } = useAuth()
-  const [settings, setSettings] = useState<IntranetModuleSetting[]>(() => readIntranetModuleSettings())
+  const setCC2026Mutation = useCC2026Set()
+  const cc2026IntranetModules = useCC2026List("intranet_modules")
+  const [settings, setSettings] = useState<IntranetModuleSetting[]>([])
+
+  useEffect(() => {
+    const raw = (cc2026IntranetModules || []).find((d: any) => d.key === "_")
+    if (raw) {
+      try { setSettings(normalizeIntranetModuleSettings(JSON.parse(raw.value))) } catch { setSettings(createDefaultIntranetModuleSettings()) }
+    } else {
+      setSettings(createDefaultIntranetModuleSettings())
+    }
+  }, [cc2026IntranetModules])
+
+  function persistSettings(normalizedSettings: IntranetModuleSetting[]) {
+    setSettings(normalizedSettings)
+    const st = getCCSessionToken()
+    setCC2026Mutation({
+      collection: "intranet_modules",
+      key: "_",
+      value: JSON.stringify(normalizedSettings),
+      sessionToken: st || undefined,
+    })
+  }
   const [message, setMessage] = useState("")
 
   const modulesById = useMemo(
@@ -36,14 +58,9 @@ export default function AdminIntranetModulesPage() {
   )
   const visibleCount = settings.filter((item) => item.visible).length
 
-  useEffect(() => {
-    setSettings(readIntranetModuleSettings())
-  }, [])
-
   function persist(nextSettings: IntranetModuleSetting[], nextMessage = "内网模块设置已保存。") {
     const normalizedSettings = normalizeIntranetModuleSettings(nextSettings)
-    setSettings(normalizedSettings)
-    writeIntranetModuleSettings(normalizedSettings)
+    persistSettings(normalizedSettings)
     setMessage(nextMessage)
   }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react"
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -36,11 +36,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useUsers } from "@/lib/api"
+import { useUsers, useCC2026List, useCC2026Set, useCC2026Get, useCC2026BatchSet } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import {
   bountyTasks,
   bountyTaskRequirements,
+  getCCSessionToken, canManageCreativeChallenge,
   challengeMilestones,
   challengeTracks,
   createDefaultCreativeChallengeSettings,
@@ -48,15 +49,8 @@ import {
   daysUntilSubmitDeadline,
   challengeStageDetails,
   getCreativeChallengeBountyVoteLimit,
-  readCreativeChallengeSettings,
-  readCreativeChallengeRegistrations,
-  readCreativeChallengeVotes,
-  readMyCreativeChallengeVotes,
   statusBadgeVariants,
   submissionChecklist,
-  writeCreativeChallengeVotes,
-  writeMyCreativeChallengeVotes,
-  writeCreativeChallengeRegistrations,
   type CreativeChallengeSettings,
   type CreativeChallengeMember,
   type CreativeChallengeRegistration,
@@ -119,6 +113,18 @@ function compactDate(timestamp: number) {
 
 export default function CreativeChallenge2026Page() {
   const { currentUser, isSuperAdmin } = useAuth()
+  const cc2026Organizers = useCC2026List("organizers")
+  const cc2026OrganizerUserIds = (cc2026Organizers || [])
+    .filter((d: any) => d.key === "_")
+    .flatMap((d: any) => {
+      try { return JSON.parse(d.value) } catch { return [] }
+    }) as string[]
+  const cc2026Settings = useCC2026List("settings")
+  const cc2026Registrations = useCC2026List("registration")
+  const cc2026Votes = useCC2026List("votes")
+  const cc2026MyVotes = useCC2026Get("my_votes", currentUser ? String(currentUser._id) : "_")
+  const setCC2026Mutation = useCC2026Set()
+  const batchSetCC2026 = useCC2026BatchSet()
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const projectSummaryTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [draft, setDraft] = useState<RegistrationDraft>(emptyDraft)
@@ -130,13 +136,39 @@ export default function CreativeChallenge2026Page() {
   const [message, setMessage] = useState("")
   const [selectedBountyTask, setSelectedBountyTask] = useState<string | null>(null)
   const [hasUnresolvedMemberMatch, setHasUnresolvedMemberMatch] = useState(false)
+  const [showcaseTrackFilter, setShowcaseTrackFilter] = useState<string>("all")
+  const [showcaseSortDir, setShowcaseSortDir] = useState<"desc" | "asc">("desc")
 
   const stageDetails = challengeStageDetails[settings.stage]
   const canRegister = settings.stage === "registration"
   const canShowcase = settings.stage === "showcase" || settings.stage === "results"
   const canVote = settings.stage === "showcase"
   const daysLeft = useMemo(() => daysUntilSubmitDeadline(), [])
-  const localPublishedProjects = registrations.filter((item) => item.finalSubmittedAt).slice(0, 6)
+  const localPublishedProjects = useMemo(() => {
+    let published = registrations.filter((item) => item.finalSubmittedAt)
+    if (showcaseTrackFilter !== "all") {
+      published = published.filter((p) => p.track === showcaseTrackFilter)
+    }
+    if (!canShowcase) {
+      // Registration phase: order by createdAt ascending (oldest first)
+      return published.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+    }
+    if (canVote) {
+      // Voting phase: no vote-based order to avoid Matthew effect
+      // Group by track, random order within each
+      const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5)
+      const custom = shuffle(published.filter((p) => p.track === "custom"))
+      const bounty = shuffle(published.filter((p) => p.track === "bounty"))
+      return [...custom, ...bounty]
+    }
+    // Results phase: sort by votes within each track
+    const sorter = showcaseSortDir === "desc"
+      ? (a: any, b: any) => (votes[b.id] || 0) - (votes[a.id] || 0)
+      : (a: any, b: any) => (votes[a.id] || 0) - (votes[b.id] || 0)
+    const custom = published.filter((p) => p.track === "custom").sort(sorter)
+    const bounty = published.filter((p) => p.track === "bounty").sort(sorter)
+    return [...custom, ...bounty]
+  }, [registrations, votes, canVote, showcaseTrackFilter, showcaseSortDir])
   const registrationsById = useMemo(
     () => new Map(registrations.map((item) => [item.id, item])),
     [registrations]
@@ -147,11 +179,41 @@ export default function CreativeChallenge2026Page() {
   )
 
   useEffect(() => {
-    setRegistrations(readCreativeChallengeRegistrations())
-    setSettings(readCreativeChallengeSettings())
-    setVotes(readCreativeChallengeVotes())
-    setMyVotes(readMyCreativeChallengeVotes())
-  }, [])
+    // Read settings from Convex
+    const raw = (cc2026Settings || []).find((d: any) => d.key === "_")
+    if (raw) {
+      try { setSettings(JSON.parse(raw.value)) } catch { setSettings(createDefaultCreativeChallengeSettings()) }
+    } else {
+      setSettings(createDefaultCreativeChallengeSettings())
+    }
+  }, [cc2026Settings])
+
+  useEffect(() => {
+    // Read registrations from Convex
+    const doc = (cc2026Registrations || []).find((d: any) => d.key === "_")
+    if (doc) {
+      try { setRegistrations(JSON.parse(doc.value)) } catch { setRegistrations([]) }
+    }
+  }, [cc2026Registrations])
+
+  useEffect(() => {
+    // Read votes from Convex
+    const raw = (cc2026Votes || []).find((d: any) => d.key === "_")
+    if (raw) {
+      try { setVotes(JSON.parse(raw.value)) } catch { setVotes({}) }
+    } else {
+      setVotes({})
+    }
+  }, [cc2026Votes])
+
+  useEffect(() => {
+    // Read my_votes from Convex
+    if (cc2026MyVotes) {
+      try { setMyVotes(JSON.parse(cc2026MyVotes)) } catch { setMyVotes([]) }
+    } else {
+      setMyVotes([])
+    }
+  }, [cc2026MyVotes])
 
   useEffect(() => {
     if (projectSummaryTextareaRef.current) {
@@ -163,16 +225,51 @@ export default function CreativeChallenge2026Page() {
     if (!currentUser) return
 
     const currentName = [currentUser.chineseName, currentUser.englishName].filter(Boolean).join(" / ")
-    setDraft((prev) => ({
-      ...prev,
-      leaderName: prev.leaderName || currentName || currentUser.username || "",
-      leaderStudentId: prev.leaderStudentId || currentUser.studentId || "",
-      leaderContact: prev.leaderContact || currentUser.email || currentUser.personalEmail || "",
-    }))
+    setDraft((prev) => {
+      const next = {
+        ...prev,
+        leaderName: prev.leaderName || currentName || currentUser.username || "",
+        leaderStudentId: prev.leaderStudentId || currentUser.studentId || "",
+        leaderContact: prev.leaderContact || currentUser.email || currentUser.personalEmail || "",
+      }
+
+      const isAlreadyMember = prev.members.some(
+        (m) =>
+          (m.studentId && m.studentId === currentUser.studentId) ||
+          (m.name && m.name === currentName) ||
+          (m.name && currentUser.chineseName && m.name.includes(currentUser.chineseName))
+      )
+      if (!isAlreadyMember) {
+        next.members = [
+          {
+            name: currentName || currentUser.chineseName || currentUser.username || "",
+            role: "队长",
+            isTongClass: true,
+            userId: String(currentUser._id),
+            username: currentUser.username,
+            studentId: currentUser.studentId,
+          },
+          ...prev.members,
+        ]
+      }
+
+      return next
+    })
   }, [currentUser])
 
   function updateDraft<K extends keyof RegistrationDraft>(key: K, value: RegistrationDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function persistRegistrations(nextRegistrations: CreativeChallengeRegistration[]) {
+    setRegistrations(nextRegistrations)
+    const st = getCCSessionToken()
+    setCC2026Mutation({
+      collection: "registration",
+      key: "_",
+      value: JSON.stringify(nextRegistrations),
+      sessionToken: st || undefined,
+    })
   }
 
   function autoResizeTextarea(element: HTMLTextAreaElement) {
@@ -240,7 +337,7 @@ export default function CreativeChallenge2026Page() {
           : item
       )
       setRegistrations(nextRegistrations)
-      writeCreativeChallengeRegistrations(nextRegistrations)
+      persistRegistrations(nextRegistrations)
       setEditingRegistrationId(null)
       setMessage("报名信息已更新。")
       setDraft((prev) => ({
@@ -266,8 +363,7 @@ export default function CreativeChallenge2026Page() {
     }
 
     const nextRegistrations = [nextRegistration, ...registrations]
-    setRegistrations(nextRegistrations)
-    writeCreativeChallengeRegistrations(nextRegistrations)
+    persistRegistrations(nextRegistrations)
     setMessage("报名已保存。之后可在“编辑和提交已有项目”中补充 GitHub、Demo 并最终提交。")
     setDraft((prev) => ({
       ...emptyDraft,
@@ -340,6 +436,18 @@ export default function CreativeChallenge2026Page() {
     }).length
   }
 
+  function persistVotes(nextVotes: Record<string, number>, nextMyVotes: string[]) {
+    setVotes(nextVotes)
+    setMyVotes(nextMyVotes)
+    batchSetCC2026({
+      entries: [
+        { collection: "votes", key: "_", value: JSON.stringify(nextVotes) },
+        { collection: "my_votes", key: currentUser ? String(currentUser._id) : "_", value: JSON.stringify(nextMyVotes) },
+      ],
+      sessionToken: getCCSessionToken() || undefined,
+    })
+  }
+
   function voteForProject(project: CreativeChallengeRegistration) {
     if (!canVote) return
     if (myVotes.includes(project.id)) return
@@ -357,10 +465,7 @@ export default function CreativeChallenge2026Page() {
     }
     const nextMyVotes = [...myVotes, project.id]
 
-    setVotes(nextVotes)
-    setMyVotes(nextMyVotes)
-    writeCreativeChallengeVotes(nextVotes)
-    writeMyCreativeChallengeVotes(nextMyVotes)
+    persistVotes(nextVotes, nextMyVotes)
     setMessage(`已为「${project.projectName}」投票。`)
   }
 
@@ -423,7 +528,7 @@ export default function CreativeChallenge2026Page() {
                     </a>
                   </Button>
                 ) : null}
-                {isSuperAdmin ? (
+                {isSuperAdmin || canManageCreativeChallenge(currentUser, cc2026OrganizerUserIds) ? (
                   <Button asChild variant="outline">
                     <Link href="/admin/creative-challenge-2026">
                       <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -590,18 +695,63 @@ export default function CreativeChallenge2026Page() {
                   作品展示与投票
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                {localPublishedProjects.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {localPublishedProjects.map((item) => {
+               <CardContent>
+                 {canShowcase ? (
+                   <div className="flex items-center justify-between gap-3 mb-5">
+                     <div className="flex items-center gap-2">
+                       {[
+                         { value: "all", label: "全部作品" },
+                         { value: "custom", label: "自定义开发" },
+                         { value: "bounty", label: "悬赏任务" },
+                       ].map((tab) => (
+                         <button
+                           key={tab.value}
+                           onClick={() => setShowcaseTrackFilter(tab.value)}
+                           className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                             showcaseTrackFilter === tab.value
+                               ? "bg-primary text-white"
+                               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                           }`}
+                         >
+                           {tab.label}
+                         </button>
+                       ))}
+                     </div>
+                     {!canVote ? (
+                       <button
+                         onClick={() => setShowcaseSortDir((d) => d === "desc" ? "asc" : "desc")}
+                         className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+                       >
+                         {showcaseSortDir === "desc" ? "票数 ↓" : "票数 ↑"}
+                       </button>
+                     ) : (
+                       <span className="text-xs text-slate-400">随机排序</span>
+                     )}
+                   </div>
+                 ) : null}
+                 {localPublishedProjects.length > 0 ? (
+                  <div className="space-y-4">
+                    {localPublishedProjects.map((item, index) => {
                       const hasVoted = myVotes.includes(item.id)
                       const voteLimit = getVoteLimit(item)
                       const usedVoteCount = getUsedVoteCount(item)
                       const remainingVotes = Math.max(0, voteLimit - usedVoteCount)
                       const voteDisabled = hasVoted || remainingVotes <= 0
+                      const prevTrack = index > 0 ? localPublishedProjects[index - 1].track : null
+                      const trackChanged = prevTrack && prevTrack !== item.track
 
                       return (
-                        <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-5">
+                        <React.Fragment key={item.id}>
+                          {trackChanged && canVote ? (
+                            <div className="flex items-center gap-3 pt-2 -mb-2">
+                              <div className="flex-1 h-px bg-slate-200" />
+                              <Badge variant={item.track === "custom" ? "success" : "warning"} className="rounded-md text-xs">
+                                {item.track === "custom" ? "自定义开发赛道" : "悬赏任务赛道"}
+                              </Badge>
+                              <div className="flex-1 h-px bg-slate-200" />
+                            </div>
+                          ) : null}
+                          <div className="rounded-lg border border-slate-200 bg-white p-5">
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant={item.track === "custom" ? "success" : "warning"} className="rounded-md">
                               {item.track === "custom" ? "自定义开发" : "悬赏任务"}
@@ -650,8 +800,9 @@ export default function CreativeChallenge2026Page() {
                             )}
                           </div>
                         </div>
-                      )
-                    })}
+                      </React.Fragment>
+                    )
+                  })}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center">

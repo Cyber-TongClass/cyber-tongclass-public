@@ -740,4 +740,14 @@ export default defineSchema({
   })
     .index("by_source", ["sourceTable", "sourceId"])
     .index("by_target", ["targetTable", "targetId"]),
+
+  cc2026Store: defineTable({
+    collection: v.string(),
+    key: v.string(),
+    value: v.string(),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.string()),
+  })
+    .index("by_collection_key", ["collection", "key"])
+    .index("by_collection", ["collection"]),
 })

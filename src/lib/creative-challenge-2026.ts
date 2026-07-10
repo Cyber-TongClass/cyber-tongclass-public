@@ -1,11 +1,5 @@
 import type { User } from "@/types"
 
-export const CREATIVE_CHALLENGE_STORAGE_KEY = "tongclass_creative_challenge_2026_registrations"
-export const CREATIVE_CHALLENGE_SETTINGS_STORAGE_KEY = "tongclass_creative_challenge_2026_settings"
-export const CREATIVE_CHALLENGE_VOTES_STORAGE_KEY = "tongclass_creative_challenge_2026_votes"
-export const CREATIVE_CHALLENGE_MY_VOTES_STORAGE_KEY = "tongclass_creative_challenge_2026_my_votes"
-export const CREATIVE_CHALLENGE_ORGANIZERS_STORAGE_KEY = "tongclass_creative_challenge_2026_organizers"
-
 export type CreativeChallengeTrack = "custom" | "bounty"
 export type CreativeChallengeStage = "registration" | "showcase" | "results"
 
@@ -250,42 +244,31 @@ export function normalizeCreativeChallengeOrganizers(value: unknown): CreativeCh
     .filter(Boolean) as CreativeChallengeOrganizer[]
 }
 
-export function readCreativeChallengeOrganizers(): CreativeChallengeOrganizer[] {
-  if (typeof window === "undefined") return []
-
-  try {
-    const raw = window.localStorage.getItem(CREATIVE_CHALLENGE_ORGANIZERS_STORAGE_KEY)
-    if (!raw) return []
-    return normalizeCreativeChallengeOrganizers(JSON.parse(raw))
-  } catch {
-    return []
-  }
+export function getCCSessionToken() {
+  if (typeof window === "undefined") return null
+  return localStorage.getItem("tongclass_session_token")
 }
 
-export function writeCreativeChallengeOrganizers(organizers: CreativeChallengeOrganizer[]) {
-  if (typeof window === "undefined") return
-  window.localStorage.setItem(
-    CREATIVE_CHALLENGE_ORGANIZERS_STORAGE_KEY,
-    JSON.stringify(normalizeCreativeChallengeOrganizers(organizers))
-  )
+export function parseCC2026DocSingle(cc2026List: any[] | undefined, collection: string) {
+  const doc = (cc2026List || []).find((d: any) => d.key === "_")
+  if (!doc) return null
+  try { return JSON.parse(doc.value) } catch { return null }
 }
 
-export function isCreativeChallengeOrganizer(user?: CreativeChallengeUserLike | null) {
-  if (!user) return false
-
+export function isCreativeChallengeOrganizer(
+  user?: CreativeChallengeUserLike | null,
+  cc2026Organizers?: string[] | null
+) {
+  if (!user || !cc2026Organizers || cc2026Organizers.length === 0) return false
   const userId = getUserId(user)
-  const organizers = readCreativeChallengeOrganizers()
-  return organizers.some((organizer) => {
-    if (userId && organizer.userId === userId) return true
-    if (user.username && organizer.username === user.username) return true
-    if (user.studentId && organizer.studentId === user.studentId) return true
-    if (user.email && organizer.email === user.email) return true
-    return false
-  })
+  return userId ? cc2026Organizers.includes(String(userId)) : false
 }
 
-export function canManageCreativeChallenge(user?: CreativeChallengeUserLike | null) {
-  return user?.role === "super_admin" || isCreativeChallengeOrganizer(user)
+export function canManageCreativeChallenge(
+  user?: CreativeChallengeUserLike | null,
+  cc2026Organizers?: string[] | null
+) {
+  return user?.role === "super_admin" || isCreativeChallengeOrganizer(user, cc2026Organizers)
 }
 
 export const submissionChecklist = [
@@ -354,137 +337,6 @@ export function getCurrentChallengePhase(now = new Date()) {
 export function daysUntilSubmitDeadline(now = new Date()) {
   const deadline = new Date(challengeMilestones[2].dateTime).getTime()
   return Math.max(0, Math.ceil((deadline - now.getTime()) / (24 * 60 * 60 * 1000)))
-}
-
-export function readCreativeChallengeRegistrations(): CreativeChallengeRegistration[] {
-  if (typeof window === "undefined") return []
-
-  try {
-    const raw = window.localStorage.getItem(CREATIVE_CHALLENGE_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-
-    return parsed.map((item) => {
-      const record = item && typeof item === "object" ? item as Partial<CreativeChallengeRegistration> : {}
-      const now = Date.now()
-      const status = record.status && record.status in statusLabels ? record.status : "submitted"
-      const track = record.track === "bounty" ? "bounty" : "custom"
-
-      return {
-        id: typeof record.id === "string" ? record.id : createRegistrationId(),
-        teamName: typeof record.teamName === "string" ? record.teamName : "",
-        projectName: typeof record.projectName === "string" ? record.projectName : "",
-        leaderName: typeof record.leaderName === "string" ? record.leaderName : "",
-        leaderStudentId: typeof record.leaderStudentId === "string" ? record.leaderStudentId : "",
-        leaderContact: typeof record.leaderContact === "string" ? record.leaderContact : "",
-        members: normalizeCreativeChallengeMembers(record.members),
-        freshmen: typeof record.freshmen === "string" ? record.freshmen : "",
-        track,
-        bountyTask: typeof record.bountyTask === "string" ? record.bountyTask : "",
-        projectSummary: typeof record.projectSummary === "string" ? record.projectSummary : "",
-        techKeywords: typeof record.techKeywords === "string" ? record.techKeywords : "",
-        githubUrl: typeof record.githubUrl === "string" ? record.githubUrl : "",
-        demoUrl: typeof record.demoUrl === "string" ? record.demoUrl : "",
-        wantsCompute: Boolean(record.wantsCompute),
-        computePlan: typeof record.computePlan === "string" ? record.computePlan : "",
-        computeReportFileName: typeof record.computeReportFileName === "string" ? record.computeReportFileName : undefined,
-        computeReportMimeType: typeof record.computeReportMimeType === "string" ? record.computeReportMimeType : undefined,
-        computeReportSize: typeof record.computeReportSize === "number" ? record.computeReportSize : undefined,
-        computeReportUpdatedAt: typeof record.computeReportUpdatedAt === "number" ? record.computeReportUpdatedAt : undefined,
-        status,
-        adminNote: typeof record.adminNote === "string" ? record.adminNote : "",
-        score: typeof record.score === "number" ? record.score : null,
-        finalSubmittedAt: typeof record.finalSubmittedAt === "number" ? record.finalSubmittedAt : undefined,
-        createdAt: typeof record.createdAt === "number" ? record.createdAt : now,
-        updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : now,
-      }
-    })
-  } catch {
-    return []
-  }
-}
-
-export function writeCreativeChallengeRegistrations(registrations: CreativeChallengeRegistration[]) {
-  if (typeof window === "undefined") return
-  window.localStorage.setItem(CREATIVE_CHALLENGE_STORAGE_KEY, JSON.stringify(registrations))
-}
-
-export function readCreativeChallengeSettings(): CreativeChallengeSettings {
-  const fallback = createDefaultCreativeChallengeSettings()
-
-  if (typeof window === "undefined") return fallback
-
-  try {
-    const raw = window.localStorage.getItem(CREATIVE_CHALLENGE_SETTINGS_STORAGE_KEY)
-    if (!raw) return fallback
-    const parsed = JSON.parse(raw) as Partial<CreativeChallengeSettings>
-    const stage = parsed.stage && parsed.stage in challengeStageDetails ? parsed.stage : fallback.stage
-    const rawBountyVoteLimits =
-      parsed.bountyVoteLimits && typeof parsed.bountyVoteLimits === "object"
-        ? parsed.bountyVoteLimits
-        : {}
-    const bountyVoteLimits = Object.fromEntries(
-      bountyTasks.map((task) => [
-        task,
-        normalizeCreativeChallengeVoteLimit(rawBountyVoteLimits[task], DEFAULT_BOUNTY_TASK_VOTE_LIMIT),
-      ])
-    )
-
-    return {
-      stage,
-      customVoteLimit: normalizeCreativeChallengeVoteLimit(parsed.customVoteLimit, DEFAULT_CUSTOM_VOTE_LIMIT),
-      bountyVoteLimits,
-      updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : fallback.updatedAt,
-    }
-  } catch {
-    return fallback
-  }
-}
-
-export function writeCreativeChallengeSettings(settings: CreativeChallengeSettings) {
-  if (typeof window === "undefined") return
-  window.localStorage.setItem(CREATIVE_CHALLENGE_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
-}
-
-export function readCreativeChallengeVotes(): Record<string, number> {
-  if (typeof window === "undefined") return {}
-
-  try {
-    const raw = window.localStorage.getItem(CREATIVE_CHALLENGE_VOTES_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== "object") return {}
-
-    return Object.fromEntries(
-      Object.entries(parsed).map(([key, value]) => [key, typeof value === "number" ? value : 0])
-    )
-  } catch {
-    return {}
-  }
-}
-
-export function writeCreativeChallengeVotes(votes: Record<string, number>) {
-  if (typeof window === "undefined") return
-  window.localStorage.setItem(CREATIVE_CHALLENGE_VOTES_STORAGE_KEY, JSON.stringify(votes))
-}
-
-export function readMyCreativeChallengeVotes(): string[] {
-  if (typeof window === "undefined") return []
-
-  try {
-    const raw = window.localStorage.getItem(CREATIVE_CHALLENGE_MY_VOTES_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : []
-  } catch {
-    return []
-  }
-}
-
-export function writeMyCreativeChallengeVotes(projectIds: string[]) {
-  if (typeof window === "undefined") return
-  window.localStorage.setItem(CREATIVE_CHALLENGE_MY_VOTES_STORAGE_KEY, JSON.stringify(projectIds))
 }
 
 export function createRegistrationId() {

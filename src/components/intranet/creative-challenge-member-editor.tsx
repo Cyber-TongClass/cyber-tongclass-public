@@ -243,114 +243,149 @@ export function CreativeChallengeMemberEditor({
 
           return (
             <div key={row.key} className="rounded-lg border border-slate-200 bg-white p-3">
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-                <label className="relative block">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    value={row.name}
-                    onChange={(event) => handleNameChange(row.key, event.target.value)}
-                    placeholder={index === 0 ? "搜索并确认一位核心成员" : "搜索成员姓名"}
-                    className="pl-9"
-                    required={index === 0}
-                  />
-                </label>
-
-                {rows.length > 1 ? (
-                  <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.key)}>
-                    <Trash2 className="h-4 w-4 text-red-600" />
-                  </Button>
-                ) : null}
-              </div>
-
-              {(row.message || displayedUser || candidates.length > 0) && (
-                <div
-                  className={cn(
-                    "mt-3 rounded-md border p-3 text-sm",
-                    pendingExactUser || candidates.length > 0
-                      ? "border-amber-200 bg-amber-50 text-amber-800"
-                      : confirmedUser
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                      : "border-slate-200 bg-slate-50 text-slate-600"
-                  )}
-                >
-                  {displayedUser ? (
-                    <div className="mb-2 flex flex-wrap items-center gap-3">
-                      <div className="h-10 w-10 overflow-hidden rounded-full bg-primary/10 text-primary">
-                        {photo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={photo} alt={displayedUser.englishName} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center font-bold">
-                            {(displayedUser.chineseName || displayedUser.englishName || "T").slice(0, 1).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900">{displayUserName(displayedUser)}</p>
-                        <p className="text-xs text-slate-500">{displayedUser.studentId} · {displayedUser.email}</p>
-                      </div>
-                      {pendingExactUser ? (
-                        <>
-                          <Button type="button" size="sm" onClick={() => confirmUser(row, pendingExactUser)}>
-                            是他/她
-                          </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => declineExactMatch(row, pendingExactUser)}>
-                            不是他/她
-                          </Button>
-                        </>
-                      ) : null}
-                      {confirmedUser ? (
-                        <Button type="button" size="sm" variant="outline" onClick={() => declineExactMatch(row, confirmedUser)}>
-                          取消关联
-                        </Button>
-                      ) : null}
-                      {isDeclinedExactMatch && exactUser ? (
-                        <Button type="button" size="sm" onClick={() => confirmUser(row, exactUser)}>
-                          改为是他/她
-                        </Button>
-                      ) : null}
+              {confirmedUser ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {index === 0 ? (
+                      <span className="flex-shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">队长</span>
+                    ) : null}
+                    <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-emerald-100 text-emerald-700">
+                      {confirmedUser.realPhoto || confirmedUser.avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={confirmedUser.realPhoto || confirmedUser.avatar} alt={confirmedUser.englishName} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center font-bold text-sm">
+                          {(confirmedUser.chineseName || confirmedUser.englishName || "T").slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
                     </div>
-                  ) : null}
-
-                  {!confirmedUser && candidates.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="font-medium">候选通班成员</p>
-                      <div className="grid gap-2">
-                        {candidates.map((user) => (
-                          <button
-                            key={String(user._id)}
-                            type="button"
-                            onClick={() => confirmUser(row, user)}
-                            className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate font-semibold text-slate-900">{displayUserName(user)}</span>
-                              <span className="block truncate text-xs text-slate-500">{user.studentId} · {user.email}</span>
-                            </span>
-                            <span className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-medium text-primary">
-                              <UserCheck className="h-3.5 w-3.5" />
-                              确认
-                            </span>
-                          </button>
-                        ))}
-                      </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{displayUserName(confirmedUser)}</p>
+                      <p className="text-xs text-slate-500">{confirmedUser.studentId} · {confirmedUser.email}</p>
                     </div>
-                  ) : null}
-
-                  {pendingExactUser ? <p>检测到同名通班成员，请确认是不是他/她。</p> : null}
-                  {row.message ? <p>{row.message}</p> : null}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {index !== 0 ? (
+                      <Button type="button" size="sm" variant="outline" onClick={() => declineExactMatch(row, confirmedUser)}>
+                        取消关联
+                      </Button>
+                    ) : null}
+                    {rows.length > 1 && index !== 0 ? (
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.key)}>
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                    <div className="flex items-center gap-2">
+                      {index === 0 ? (
+                        <span className="flex-shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">队长</span>
+                      ) : null}
+                      <label className="relative block flex-1">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Input
+                          value={row.name}
+                          onChange={(event) => handleNameChange(row.key, event.target.value)}
+                          placeholder={index === 0 ? "队长（已自动填充）" : "搜索成员姓名"}
+                          className="pl-9"
+                          required={index === 0}
+                        />
+                      </label>
+                    </div>
+                    {rows.length > 1 && index !== 0 ? (
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.key)}>
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {(row.message || displayedUser || candidates.length > 0) && (
+                    <div
+                      className={cn(
+                        "mt-3 rounded-md border p-3 text-sm",
+                        pendingExactUser || candidates.length > 0
+                          ? "border-amber-200 bg-amber-50 text-amber-800"
+                          : "border-slate-200 bg-slate-50 text-slate-600"
+                      )}
+                    >
+                      {displayedUser ? (
+                        <div className="mb-2 flex flex-wrap items-center gap-3">
+                          <div className="h-10 w-10 overflow-hidden rounded-full bg-primary/10 text-primary">
+                            {photo ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={photo} alt={displayedUser.englishName} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center font-bold">
+                                {(displayedUser.chineseName || displayedUser.englishName || "T").slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900">{displayUserName(displayedUser)}</p>
+                            <p className="text-xs text-slate-500">{displayedUser.studentId} · {displayedUser.email}</p>
+                          </div>
+                          {pendingExactUser ? (
+                            <>
+                              <Button type="button" size="sm" onClick={() => confirmUser(row, pendingExactUser)}>
+                                是他/她
+                              </Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => declineExactMatch(row, pendingExactUser)}>
+                                不是他/她
+                              </Button>
+                            </>
+                          ) : null}
+                          {isDeclinedExactMatch && exactUser ? (
+                            <Button type="button" size="sm" onClick={() => confirmUser(row, exactUser)}>
+                              改为是他/她
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {!confirmedUser && candidates.length > 0 ? (
+                        <div className="space-y-2">
+                          <p className="font-medium">候选通班成员</p>
+                          <div className="grid gap-2">
+                            {candidates.map((user) => (
+                              <button
+                                key={String(user._id)}
+                                type="button"
+                                onClick={() => confirmUser(row, user)}
+                                className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate font-semibold text-slate-900">{displayUserName(user)}</span>
+                                  <span className="block truncate text-xs text-slate-500">{user.studentId} · {user.email}</span>
+                                </span>
+                                <span className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-medium text-primary">
+                                  <UserCheck className="h-3.5 w-3.5" />
+                                  确认
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {pendingExactUser ? <p>检测到同名通班成员，请确认是不是他/她。</p> : null}
+                      {row.message ? <p>{row.message}</p> : null}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )
         })}
       </div>
 
-      <Button type="button" variant="outline" onClick={addRow} disabled={rows.length >= maxMembers - 1}>
+      <Button type="button" variant="outline" onClick={addRow} disabled={rows.length >= maxMembers}>
         <Plus className="mr-2 h-4 w-4" />
         添加核心成员
       </Button>
-      {rows.length >= maxMembers - 1 ? <p className="text-xs text-slate-500">除队长外最多添加 {maxMembers - 1} 位核心成员。</p> : null}
+      {rows.length >= maxMembers ? <p className="text-xs text-slate-500">已到达核心成员人数上限。</p> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </div>
   )

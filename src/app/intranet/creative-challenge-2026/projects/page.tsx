@@ -20,14 +20,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { useCC2026List, useCC2026Set } from "@/lib/api"
 import {
   formatCreativeChallengeMembers,
   challengeStageDetails,
   createDefaultCreativeChallengeSettings,
-  readCreativeChallengeSettings,
-  readCreativeChallengeRegistrations,
+  getCCSessionToken,
   statusBadgeVariants,
-  writeCreativeChallengeRegistrations,
   type CreativeChallengeSettings,
   type CreativeChallengeRegistration,
 } from "@/lib/creative-challenge-2026"
@@ -97,6 +96,9 @@ export default function CreativeChallengeProjectsPage() {
   const searchParams = useSearchParams()
   const requestedProjectId = searchParams.get("project")
   const summaryRef = useRef<HTMLTextAreaElement | null>(null)
+  const setCC2026Mutation = useCC2026Set()
+  const cc2026Settings = useCC2026List("settings")
+  const cc2026Registrations = useCC2026List("registration")
   const [registrations, setRegistrations] = useState<CreativeChallengeRegistration[]>([])
   const [settings, setSettings] = useState<CreativeChallengeSettings>(() => createDefaultCreativeChallengeSettings())
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -113,14 +115,21 @@ export default function CreativeChallengeProjectsPage() {
   const stageDetails = challengeStageDetails[settings.stage]
 
   useEffect(() => {
-    const records = readCreativeChallengeRegistrations()
+    const raw = (cc2026Settings || []).find((d: any) => d.key === "_")
+    if (raw) {
+      try { setSettings(JSON.parse(raw.value)) } catch { setSettings(createDefaultCreativeChallengeSettings()) }
+    }
+  }, [cc2026Settings])
+
+  useEffect(() => {
+    const doc = (cc2026Registrations || []).find((d: any) => d.key === "_")
+    const records = doc ? (() => { try { return JSON.parse(doc.value) } catch { return [] } })() : []
     setRegistrations(records)
-    setSettings(readCreativeChallengeSettings())
 
     const requestedRecord = requestedProjectId
-      ? records.find((item) => item.id === requestedProjectId)
+      ? records.find((item: any) => item.id === requestedProjectId)
       : null
-    const fallbackRecord = records.find((item) => !item.finalSubmittedAt) || records[0] || null
+    const fallbackRecord = records.find((item: any) => !item.finalSubmittedAt) || records[0] || null
     const nextSelected = requestedRecord || fallbackRecord
     setSelectedId(nextSelected?.id || null)
     setDraft(nextSelected ? {
@@ -130,7 +139,7 @@ export default function CreativeChallengeProjectsPage() {
     } : emptyMaterialDraft)
     setComputeReportFile(null)
     setComputeReportFileError(null)
-  }, [requestedProjectId])
+  }, [cc2026Registrations, requestedProjectId])
 
   useEffect(() => {
     if (summaryRef.current) {
@@ -156,7 +165,13 @@ export default function CreativeChallengeProjectsPage() {
 
   function persist(nextRegistrations: CreativeChallengeRegistration[]) {
     setRegistrations(nextRegistrations)
-    writeCreativeChallengeRegistrations(nextRegistrations)
+    const st = getCCSessionToken()
+    setCC2026Mutation({
+      collection: "registration",
+      key: "_",
+      value: JSON.stringify(nextRegistrations),
+      sessionToken: st || undefined,
+    })
   }
 
   function updateComputeReportFile(file: File | null) {

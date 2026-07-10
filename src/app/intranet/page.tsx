@@ -3,18 +3,31 @@
 import { useEffect, useState } from "react"
 import { IntranetSectionCard } from "@/components/intranet/intranet-section-card"
 import {
+  createDefaultIntranetModuleSettings,
+  normalizeIntranetModuleSettings,
+  defaultIntranetModules,
   getConfiguredIntranetModules,
   type IntranetModuleDefinition,
 } from "@/lib/intranet-modules"
+import { useCC2026List } from "@/lib/api"
 
 export default function IntranetPage() {
-  const [intranetSections, setIntranetSections] = useState<IntranetModuleDefinition[]>(() =>
-    getConfiguredIntranetModules()
-  )
+  const cc2026Modules = useCC2026List("intranet_modules")
+  const [intranetSections, setIntranetSections] = useState<IntranetModuleDefinition[]>([])
 
   useEffect(() => {
-    setIntranetSections(getConfiguredIntranetModules())
-  }, [])
+    const raw = (cc2026Modules || []).find((d: any) => d.key === "_")
+    if (raw) {
+      try {
+        const settings = normalizeIntranetModuleSettings(JSON.parse(raw.value))
+        setIntranetSections(getConfiguredIntranetModules(settings))
+      } catch {
+        setIntranetSections(getConfiguredIntranetModules(createDefaultIntranetModuleSettings()))
+      }
+    } else {
+      setIntranetSections(getConfiguredIntranetModules())
+    }
+  }, [cc2026Modules])
 
   return (
     <div className="min-h-screen bg-white">

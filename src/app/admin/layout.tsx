@@ -28,6 +28,7 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { useTechDayActorArgs, useTechDayCurrentPrincipal } from "@/lib/api"
 import { canManageCreativeChallenge } from "@/lib/creative-challenge-2026"
+import { useCC2026List } from "@/lib/api"
 
 const navItems = [
   { href: "/admin", label: "仪表盘", icon: LayoutDashboard },
@@ -121,6 +122,12 @@ export default function AdminLayout({
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { currentUser, isAuthenticated, isAdmin, isSuperAdmin, isLoading } = useAuth()
+  const cc2026Organizers = useCC2026List("organizers")
+  const cc2026OrganizerUserIds = (cc2026Organizers || [])
+    .filter((d: any) => d.key === "_")
+    .flatMap((d: any) => {
+      try { return JSON.parse(d.value) } catch { return [] }
+    }) as string[]
   const actorArgs = useTechDayActorArgs()
   const techDayPrincipal = useTechDayCurrentPrincipal(actorArgs)
 
@@ -136,7 +143,7 @@ export default function AdminLayout({
     techDayPrincipal?.mainUser?.role === "super_admin"
   )
   const hasTechDayAdminAccess = isTechDayAdminRoute && isTechDayAdmin
-  const hasCreativeChallengeOrganizerAccess = isCreativeChallengeAdminRoute && canManageCreativeChallenge(currentUser)
+  const hasCreativeChallengeOrganizerAccess = isCreativeChallengeAdminRoute && canManageCreativeChallenge(currentUser, cc2026OrganizerUserIds)
 
   // Permission check - redirect if not admin
   useEffect(() => {
@@ -223,7 +230,10 @@ export default function AdminLayout({
     ? navItems.filter((item) => item.href === "/admin/creative-challenge-2026")
     : isSuperAdmin
     ? navItems
-    : navItems.filter((item) => adminAllowedPrefixes.some((prefix) => item.href === prefix || item.href.startsWith(`${prefix}/`)))
+    : navItems.filter((item) => {
+        if (hasCreativeChallengeOrganizerAccess && isAdmin && item.href === "/admin/creative-challenge-2026") return true
+        return adminAllowedPrefixes.some((prefix) => item.href === prefix || item.href.startsWith(`${prefix}/`))
+      })
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
