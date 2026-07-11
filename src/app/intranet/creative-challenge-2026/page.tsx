@@ -495,7 +495,7 @@ export default function CreativeChallenge2026Page() {
                 智慧通班创意开发挑战赛2026
               </h1>
               <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600 md:text-lg">
-                面向通班在读本科生、校友和 2026 级通班意向新生的内部开发大赛，征集可落地的编程工具、系统功能、AI 应用和创意作品，欢迎积极参加赢大奖！
+                面向通班在读本科生、校友和 2026 级通班意向新生的内部开发大赛，征集可落地的编程工具、系统功能、AI 应用和创意作品，欢迎积极参加赢取五万大奖！
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Button asChild variant="outline">

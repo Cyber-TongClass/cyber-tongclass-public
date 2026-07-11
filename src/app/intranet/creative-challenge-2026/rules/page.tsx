@@ -289,7 +289,7 @@ export default function CreativeChallengeRulesPage() {
         <SectionCard title="经费与奖项设置" icon={<Award className="h-5 w-5 text-primary" />}>
           <CheckList items={awardItems} />
           <p>
-            除等级奖外，可考虑为完成有效作品提交的参赛队伍设置参与奖。参与奖可优先考虑采用新一批院办文创产品，以鼓励更多同学参与开发实践。
+            除等级奖外，可为完成有效作品提交的参赛队伍设置参与奖。
           </p>
         </SectionCard>
 
@@ -298,13 +298,13 @@ export default function CreativeChallengeRulesPage() {
             <div className="rounded-lg border border-slate-200 bg-white p-4">
               <h2 className="font-semibold text-slate-950">项目开发费用报销</h2>
               <p className="mt-2">
-                若作品开发过程中确需调用付费 API、租用服务器、租用显卡或购买必要的开发资源，组委会可根据实际情况给予一定支持，优先提供赞助商。申请报销的队伍需提前说明资源用途、预计金额和与项目开发的对应关系，并在作品提交时提供相关使用说明及费用凭证。报销范围和上限由组委会结合预算统一确定。
+                若开发过程中需使用算力，由组委会统一安排提供，具体流程后发。申请报销的队伍需提前说明资源用途、预计金额和与项目开发的对应关系，并在作品提交时提供相关使用说明及费用凭证。报销范围和上限由组委会结合预算统一确定。
               </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-white p-4">
               <h2 className="font-semibold text-slate-950">获奖证书制作</h2>
               <p className="mt-2">
-                本次比赛将为获奖队伍制作获奖证书。证书内容可包括比赛名称、获奖赛道、获奖等级、作品名称、团队成员姓名及颁发单位等信息，用于表彰同学在创新开发和工程实践中的优秀表现。
+                本次比赛将为获奖队伍制作获奖证书。证书内容包括比赛名称、获奖赛道、获奖等级、作品名称、团队成员姓名及颁发单位等信息，用于表彰同学在创新开发和工程实践中的优秀表现。
               </p>
             </div>
           </div>
