@@ -1333,3 +1333,36 @@ export function useCC2026BatchSet() {
 export function useCC2026Remove() {
   return useMutation(api.cc2026.remove)
 }
+
+export function useCC2026MyRegistrations() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.cc2026.listMyRegistrations, sessionToken ? { sessionToken } : "skip")
+}
+
+export function useCC2026PublishedRegistrations() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.cc2026.listPublishedRegistrations, sessionToken ? { sessionToken } : "skip")
+}
+
+export function useCC2026ManageRegistrations(enabled = true) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.cc2026.listManageRegistrations, sessionToken && enabled ? { sessionToken } : "skip")
+}
+
+export function useCC2026UpsertRegistration() {
+  const upsert = useMutation(api.cc2026.upsertRegistration)
+  return useCallback((registration: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return upsert({ registration, sessionToken } as any)
+  }, [upsert])
+}
+
+export function useCC2026RemoveRegistration() {
+  const remove = useMutation(api.cc2026.removeRegistration)
+  return useCallback((id: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ id, sessionToken } as any)
+  }, [remove])
+}

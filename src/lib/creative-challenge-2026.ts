@@ -21,6 +21,8 @@ export type CreativeChallengeMember = {
 
 export type CreativeChallengeRegistration = {
   id: string
+  ownerUserId?: string
+  submitterUserId?: string
   teamName: string
   projectName: string
   leaderName: string
@@ -253,6 +255,49 @@ export function parseCC2026DocSingle(cc2026List: any[] | undefined, collection: 
   const doc = (cc2026List || []).find((d: any) => d.key === "_")
   if (!doc) return null
   try { return JSON.parse(doc.value) } catch { return null }
+}
+
+function isCreativeChallengeRegistration(value: unknown): value is CreativeChallengeRegistration {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as Partial<CreativeChallengeRegistration>).id === "string"
+  )
+}
+
+function preferNewerRegistration(
+  current: CreativeChallengeRegistration | undefined,
+  next: CreativeChallengeRegistration
+) {
+  if (!current) return next
+  return (next.updatedAt || 0) >= (current.updatedAt || 0) ? next : current
+}
+
+export function parseCreativeChallengeRegistrations(cc2026List: any[] | undefined): CreativeChallengeRegistration[] {
+  const byId = new Map<string, CreativeChallengeRegistration>()
+
+  for (const doc of cc2026List || []) {
+    try {
+      const parsed = JSON.parse(doc.value)
+
+      if (doc.key === "_" && Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (isCreativeChallengeRegistration(item)) {
+            byId.set(item.id, preferNewerRegistration(byId.get(item.id), item))
+          }
+        }
+        continue
+      }
+
+      if (isCreativeChallengeRegistration(parsed)) {
+        byId.set(parsed.id, preferNewerRegistration(byId.get(parsed.id), parsed))
+      }
+    } catch {
+      // Ignore malformed legacy entries so one bad row does not hide the rest.
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 }
 
 export function isCreativeChallengeOrganizer(

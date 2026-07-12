@@ -20,12 +20,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useCC2026List, useCC2026Set } from "@/lib/api"
+import { useCC2026List, useCC2026MyRegistrations, useCC2026UpsertRegistration } from "@/lib/api"
 import {
   formatCreativeChallengeMembers,
   challengeStageDetails,
   createDefaultCreativeChallengeSettings,
-  getCCSessionToken,
   statusBadgeVariants,
   type CreativeChallengeSettings,
   type CreativeChallengeRegistration,
@@ -96,9 +95,9 @@ export default function CreativeChallengeProjectsPage() {
   const searchParams = useSearchParams()
   const requestedProjectId = searchParams.get("project")
   const summaryRef = useRef<HTMLTextAreaElement | null>(null)
-  const setCC2026Mutation = useCC2026Set()
+  const upsertCC2026Registration = useCC2026UpsertRegistration()
   const cc2026Settings = useCC2026List("settings")
-  const cc2026Registrations = useCC2026List("registration")
+  const cc2026Registrations = useCC2026MyRegistrations()
   const [registrations, setRegistrations] = useState<CreativeChallengeRegistration[]>([])
   const [settings, setSettings] = useState<CreativeChallengeSettings>(() => createDefaultCreativeChallengeSettings())
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -106,6 +105,7 @@ export default function CreativeChallengeProjectsPage() {
   const [computeReportFile, setComputeReportFile] = useState<File | null>(null)
   const [computeReportFileError, setComputeReportFileError] = useState<string | null>(null)
   const [message, setMessage] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
 
   const selectedRegistration = useMemo(
     () => registrations.find((item) => item.id === selectedId) || null,
@@ -122,8 +122,7 @@ export default function CreativeChallengeProjectsPage() {
   }, [cc2026Settings])
 
   useEffect(() => {
-    const doc = (cc2026Registrations || []).find((d: any) => d.key === "_")
-    const records = doc ? (() => { try { return JSON.parse(doc.value) } catch { return [] } })() : []
+    const records = (cc2026Registrations || []) as CreativeChallengeRegistration[]
     setRegistrations(records)
 
     const requestedRecord = requestedProjectId
@@ -163,15 +162,9 @@ export default function CreativeChallengeProjectsPage() {
     setDraft((prev) => ({ ...prev, [key]: value }))
   }
 
-  function persist(nextRegistrations: CreativeChallengeRegistration[]) {
-    setRegistrations(nextRegistrations)
-    const st = getCCSessionToken()
-    setCC2026Mutation({
-      collection: "registration",
-      key: "_",
-      value: JSON.stringify(nextRegistrations),
-      sessionToken: st || undefined,
-    })
+  async function persistRegistration(nextRegistration: CreativeChallengeRegistration, nextRegistrations: CreativeChallengeRegistration[]) {
+    const savedRegistration = await upsertCC2026Registration(nextRegistration as unknown as Record<string, unknown>)
+    setRegistrations(nextRegistrations.map((item) => item.id === nextRegistration.id ? savedRegistration as CreativeChallengeRegistration : item))
   }
 
   function updateComputeReportFile(file: File | null) {
@@ -179,8 +172,9 @@ export default function CreativeChallengeProjectsPage() {
     setComputeReportFileError(validateComputeReportPdf(file))
   }
 
-  function saveMaterials() {
+  async function saveMaterials() {
     if (!selectedRegistration) return
+    if (isSaving) return
     if (!canEdit) {
       setMessage("报名和最终提交已截止，当前阶段不能再修改项目材料。")
       return
@@ -195,25 +189,33 @@ export default function CreativeChallengeProjectsPage() {
     }
 
     const now = Date.now()
+    const updatedRegistration = {
+      ...selectedRegistration,
+      projectSummary: draft.projectSummary,
+      githubUrl: draft.githubUrl,
+      demoUrl: draft.demoUrl,
+      ...(computeReportFile ? getComputeReportPatch(computeReportFile) : {}),
+      updatedAt: now,
+    }
     const nextRegistrations = registrations.map((item) =>
-      item.id === selectedRegistration.id
-        ? {
-            ...item,
-            projectSummary: draft.projectSummary,
-            githubUrl: draft.githubUrl,
-            demoUrl: draft.demoUrl,
-            ...(computeReportFile ? getComputeReportPatch(computeReportFile) : {}),
-            updatedAt: now,
-          }
-        : item
+      item.id === selectedRegistration.id ? updatedRegistration : item
     )
-    persist(nextRegistrations)
-    setComputeReportFile(null)
-    setMessage("项目材料已保存。")
+    setIsSaving(true)
+    setMessage("正在保存项目材料...")
+    try {
+      await persistRegistration(updatedRegistration, nextRegistrations)
+      setComputeReportFile(null)
+      setMessage("项目材料已保存。")
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "项目材料保存失败，请稍后重试。")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  function finalSubmit() {
+  async function finalSubmit() {
     if (!selectedRegistration) return
+    if (isSaving) return
     if (!canEdit) {
       setMessage("报名和最终提交已截止，当前阶段不能再最终提交。")
       return
@@ -241,22 +243,29 @@ export default function CreativeChallengeProjectsPage() {
     if (!window.confirm("确认最终提交吗？提交后将不能再修改报名信息和项目材料。")) return
 
     const now = Date.now()
+    const updatedRegistration = {
+      ...selectedRegistration,
+      projectSummary: draft.projectSummary,
+      githubUrl: draft.githubUrl,
+      demoUrl: draft.demoUrl,
+      ...(computeReportFile ? getComputeReportPatch(computeReportFile) : {}),
+      finalSubmittedAt: now,
+      updatedAt: now,
+    }
     const nextRegistrations = registrations.map((item) =>
-      item.id === selectedRegistration.id
-        ? {
-            ...item,
-            projectSummary: draft.projectSummary,
-            githubUrl: draft.githubUrl,
-            demoUrl: draft.demoUrl,
-            ...(computeReportFile ? getComputeReportPatch(computeReportFile) : {}),
-            finalSubmittedAt: now,
-            updatedAt: now,
-          }
-        : item
+      item.id === selectedRegistration.id ? updatedRegistration : item
     )
-    persist(nextRegistrations)
-    setComputeReportFile(null)
-    setMessage("项目已最终提交。")
+    setIsSaving(true)
+    setMessage("正在最终提交...")
+    try {
+      await persistRegistration(updatedRegistration, nextRegistrations)
+      setComputeReportFile(null)
+      setMessage("项目已最终提交。")
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "最终提交失败，请稍后重试。")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -378,7 +387,7 @@ export default function CreativeChallengeProjectsPage() {
                   </div>
                 </div>
 
-                <fieldset disabled={Boolean(selectedRegistration.finalSubmittedAt) || !canEdit} className="space-y-4 disabled:opacity-70">
+                <fieldset disabled={Boolean(selectedRegistration.finalSubmittedAt) || !canEdit || isSaving} className="space-y-4 disabled:opacity-70">
                   <label className="block space-y-1.5">
                     <span className="text-sm font-medium text-slate-700">作品简介</span>
                     <Textarea
@@ -440,13 +449,13 @@ export default function CreativeChallengeProjectsPage() {
                 <div className="flex flex-wrap gap-2">
                   {!selectedRegistration.finalSubmittedAt && canEdit ? (
                     <>
-                      <Button type="button" onClick={saveMaterials}>
+                      <Button type="button" onClick={saveMaterials} disabled={isSaving}>
                         <Save className="mr-2 h-4 w-4" />
-                        保存材料
+                        {isSaving ? "保存中..." : "保存材料"}
                       </Button>
-                      <Button type="button" variant="outline" onClick={finalSubmit}>
+                      <Button type="button" variant="outline" onClick={finalSubmit} disabled={isSaving}>
                         <Send className="mr-2 h-4 w-4" />
-                        最终提交
+                        {isSaving ? "提交中..." : "最终提交"}
                       </Button>
                     </>
                   ) : (

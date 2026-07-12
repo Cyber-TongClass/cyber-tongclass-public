@@ -37,7 +37,14 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { useUsers, useCC2026List, useCC2026Set } from "@/lib/api"
+import {
+  useUsers,
+  useCC2026List,
+  useCC2026Set,
+  useCC2026ManageRegistrations,
+  useCC2026UpsertRegistration,
+  useCC2026RemoveRegistration,
+} from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import {
   bountyTasks,
@@ -202,10 +209,13 @@ export default function AdminCreativeChallenge2026Page() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState(ALL_STATUSES)
   const [trackFilter, setTrackFilter] = useState(ALL_TRACKS)
+  const canManageChallenge = canManageCreativeChallenge(currentUser, organizers)
   const setCC2026Mutation = useCC2026Set()
+  const upsertCC2026Registration = useCC2026UpsertRegistration()
+  const removeCC2026Registration = useCC2026RemoveRegistration()
   const cc2026Organizers = useCC2026List("organizers")
   const cc2026Settings = useCC2026List("settings")
-  const cc2026Registrations = useCC2026List("registration")
+  const cc2026Registrations = useCC2026ManageRegistrations(canManageChallenge)
   const cc2026Votes = useCC2026List("votes")
 
   useEffect(() => {
@@ -225,10 +235,7 @@ export default function AdminCreativeChallenge2026Page() {
   }, [cc2026Settings])
 
   useEffect(() => {
-    const doc = (cc2026Registrations || []).find((d: any) => d.key === "_")
-    if (doc) {
-      try { setRegistrations(JSON.parse(doc.value)) } catch { setRegistrations([]) }
-    }
+    setRegistrations((cc2026Registrations || []) as CreativeChallengeRegistration[])
   }, [cc2026Registrations])
 
   useEffect(() => {
@@ -237,8 +244,6 @@ export default function AdminCreativeChallenge2026Page() {
       try { setVotes(JSON.parse(raw.value)) } catch { setVotes({}) }
     }
   }, [cc2026Votes])
-
-  const canManageChallenge = canManageCreativeChallenge(currentUser, organizers)
 
   const filteredRegistrations = useMemo(() => {
     const keyword = search.trim().toLowerCase()
@@ -297,42 +302,58 @@ export default function AdminCreativeChallenge2026Page() {
       .slice(0, 6)
   }, [organizerIds, organizerSearch, usersData])
 
-  function persist(nextRegistrations: CreativeChallengeRegistration[]) {
+  async function persist(
+    nextRegistrations: CreativeChallengeRegistration[],
+    changedRegistration?: CreativeChallengeRegistration | CreativeChallengeRegistration[]
+  ) {
     setRegistrations(nextRegistrations)
-    const st = getCCSessionToken()
-    setCC2026Mutation({
-      collection: "registration",
-      key: "_",
-      value: JSON.stringify(nextRegistrations),
-      sessionToken: st || undefined,
-    })
+    const changedRegistrations = Array.isArray(changedRegistration)
+      ? changedRegistration
+      : changedRegistration
+        ? [changedRegistration]
+        : []
+    await Promise.all(changedRegistrations.map((registration) =>
+      upsertCC2026Registration(registration as unknown as Record<string, unknown>)
+    ))
   }
 
   function updateRegistration(id: string, patch: Partial<CreativeChallengeRegistration>) {
+    const updatedRegistration = registrations.find((item) => item.id === id)
+    if (!updatedRegistration) return
+    const nextRegistration = { ...updatedRegistration, ...patch, updatedAt: Date.now() }
     const nextRegistrations = registrations.map((item) =>
-      item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item
+      item.id === id ? nextRegistration : item
     )
-    persist(nextRegistrations)
+    persist(nextRegistrations, nextRegistration).catch((error) => {
+      window.alert(error instanceof Error ? error.message : "保存报名记录失败")
+    })
   }
 
   function removeRegistration(id: string) {
     const target = registrations.find((item) => item.id === id)
     if (!target) return
     if (!window.confirm(`确认删除「${target.projectName}」的报名记录吗？`)) return
-    persist(registrations.filter((item) => item.id !== id))
+    const nextRegistrations = registrations.filter((item) => item.id !== id)
+    setRegistrations(nextRegistrations)
+    removeCC2026Registration(id).catch((error) => {
+      window.alert(error instanceof Error ? error.message : "删除报名记录失败")
+    })
   }
 
   function seedPreviewData() {
-    const demoIds = new Set(buildPreviewRegistrations().map((r) => r.id))
+    const previewRegistrations = buildPreviewRegistrations()
+    const demoIds = new Set(previewRegistrations.map((r) => r.id))
     const existing = registrations.filter((r) => demoIds.has(r.id))
     if (existing.length > 0) {
       if (!window.confirm("演示数据已存在，重新生成会覆盖现有演示数据。确定继续？")) return
     }
     const nextRegistrations = [
-      ...buildPreviewRegistrations(),
+      ...previewRegistrations,
       ...registrations.filter((r) => !demoIds.has(r.id)),
     ]
-    persist(nextRegistrations)
+    persist(nextRegistrations, previewRegistrations).catch((error) => {
+      window.alert(error instanceof Error ? error.message : "写入演示报名记录失败")
+    })
   }
 
   function writeSettings(nextSettings: CreativeChallengeSettings) {

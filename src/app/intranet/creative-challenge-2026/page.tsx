@@ -36,7 +36,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useUsers, useCC2026List, useCC2026Set, useCC2026Get, useCC2026BatchSet } from "@/lib/api"
+import {
+  useUsers,
+  useCC2026List,
+  useCC2026Get,
+  useCC2026BatchSet,
+  useCC2026MyRegistrations,
+  useCC2026PublishedRegistrations,
+  useCC2026UpsertRegistration,
+} from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import {
   bountyTasks,
@@ -120,15 +128,17 @@ export default function CreativeChallenge2026Page() {
       try { return JSON.parse(d.value) } catch { return [] }
     }) as string[]
   const cc2026Settings = useCC2026List("settings")
-  const cc2026Registrations = useCC2026List("registration")
+  const cc2026MyRegistrations = useCC2026MyRegistrations()
+  const cc2026PublishedRegistrations = useCC2026PublishedRegistrations()
   const cc2026Votes = useCC2026List("votes")
   const cc2026MyVotes = useCC2026Get("my_votes", currentUser ? String(currentUser._id) : "_")
-  const setCC2026Mutation = useCC2026Set()
+  const upsertCC2026Registration = useCC2026UpsertRegistration()
   const batchSetCC2026 = useCC2026BatchSet()
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const projectSummaryTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [draft, setDraft] = useState<RegistrationDraft>(emptyDraft)
   const [registrations, setRegistrations] = useState<CreativeChallengeRegistration[]>([])
+  const [publishedRegistrations, setPublishedRegistrations] = useState<CreativeChallengeRegistration[]>([])
   const [settings, setSettings] = useState<CreativeChallengeSettings>(() => createDefaultCreativeChallengeSettings())
   const [votes, setVotes] = useState<Record<string, number>>({})
   const [myVotes, setMyVotes] = useState<string[]>([])
@@ -138,6 +148,7 @@ export default function CreativeChallenge2026Page() {
   const [hasUnresolvedMemberMatch, setHasUnresolvedMemberMatch] = useState(false)
   const [showcaseTrackFilter, setShowcaseTrackFilter] = useState<string>("all")
   const [showcaseSortDir, setShowcaseSortDir] = useState<"desc" | "asc">("desc")
+  const [isSavingRegistration, setIsSavingRegistration] = useState(false)
 
   const stageDetails = challengeStageDetails[settings.stage]
   const canRegister = settings.stage === "registration"
@@ -145,7 +156,7 @@ export default function CreativeChallenge2026Page() {
   const canVote = settings.stage === "showcase"
   const daysLeft = useMemo(() => daysUntilSubmitDeadline(), [])
   const localPublishedProjects = useMemo(() => {
-    let published = registrations.filter((item) => item.finalSubmittedAt)
+    let published = publishedRegistrations.filter((item) => item.finalSubmittedAt)
     if (showcaseTrackFilter !== "all") {
       published = published.filter((p) => p.track === showcaseTrackFilter)
     }
@@ -168,10 +179,10 @@ export default function CreativeChallenge2026Page() {
     const custom = published.filter((p) => p.track === "custom").sort(sorter)
     const bounty = published.filter((p) => p.track === "bounty").sort(sorter)
     return [...custom, ...bounty]
-  }, [registrations, votes, canVote, showcaseTrackFilter, showcaseSortDir])
+  }, [publishedRegistrations, votes, canShowcase, canVote, showcaseTrackFilter, showcaseSortDir])
   const registrationsById = useMemo(
-    () => new Map(registrations.map((item) => [item.id, item])),
-    [registrations]
+    () => new Map(publishedRegistrations.map((item) => [item.id, item])),
+    [publishedRegistrations]
   )
   const selectedBountyTaskRequirement = useMemo(
     () => bountyTaskRequirements.find((item) => item.title === selectedBountyTask) || null,
@@ -190,11 +201,12 @@ export default function CreativeChallenge2026Page() {
 
   useEffect(() => {
     // Read registrations from Convex
-    const doc = (cc2026Registrations || []).find((d: any) => d.key === "_")
-    if (doc) {
-      try { setRegistrations(JSON.parse(doc.value)) } catch { setRegistrations([]) }
-    }
-  }, [cc2026Registrations])
+    setRegistrations((cc2026MyRegistrations || []) as CreativeChallengeRegistration[])
+  }, [cc2026MyRegistrations])
+
+  useEffect(() => {
+    setPublishedRegistrations((cc2026PublishedRegistrations || []) as CreativeChallengeRegistration[])
+  }, [cc2026PublishedRegistrations])
 
   useEffect(() => {
     // Read votes from Convex
@@ -261,15 +273,9 @@ export default function CreativeChallenge2026Page() {
     setDraft((prev) => ({ ...prev, [key]: value }))
   }
 
-  function persistRegistrations(nextRegistrations: CreativeChallengeRegistration[]) {
-    setRegistrations(nextRegistrations)
-    const st = getCCSessionToken()
-    setCC2026Mutation({
-      collection: "registration",
-      key: "_",
-      value: JSON.stringify(nextRegistrations),
-      sessionToken: st || undefined,
-    })
+  async function persistRegistration(nextRegistration: CreativeChallengeRegistration, nextRegistrations: CreativeChallengeRegistration[]) {
+    const savedRegistration = await upsertCC2026Registration(nextRegistration as unknown as Record<string, unknown>)
+    setRegistrations(nextRegistrations.map((item) => item.id === nextRegistration.id ? savedRegistration as CreativeChallengeRegistration : item))
   }
 
   function autoResizeTextarea(element: HTMLTextAreaElement) {
@@ -277,8 +283,9 @@ export default function CreativeChallenge2026Page() {
     element.style.height = `${element.scrollHeight}px`
   }
 
-  function submitRegistration(event: FormEvent<HTMLFormElement>) {
+  async function submitRegistration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (isSavingRegistration) return
 
     if (!canRegister) {
       setMessage("报名和最终提交已截止，当前阶段不能再提交或修改项目。")
@@ -326,26 +333,32 @@ export default function CreativeChallenge2026Page() {
         return
       }
 
+      const updatedRegistration = {
+        ...target,
+        ...draft,
+        bountyTask: draft.track === "bounty" ? draft.bountyTask : "",
+        updatedAt: now,
+      }
       const nextRegistrations = registrations.map((item) =>
-        item.id === editingRegistrationId
-          ? {
-              ...item,
-              ...draft,
-              bountyTask: draft.track === "bounty" ? draft.bountyTask : "",
-              updatedAt: now,
-            }
-          : item
+        item.id === editingRegistrationId ? updatedRegistration : item
       )
-      setRegistrations(nextRegistrations)
-      persistRegistrations(nextRegistrations)
-      setEditingRegistrationId(null)
-      setMessage("报名信息已更新。")
-      setDraft((prev) => ({
-        ...emptyDraft,
-        leaderName: prev.leaderName,
-        leaderStudentId: prev.leaderStudentId,
-        leaderContact: prev.leaderContact,
-      }))
+      setIsSavingRegistration(true)
+      setMessage("正在保存报名信息...")
+      try {
+        await persistRegistration(updatedRegistration, nextRegistrations)
+        setEditingRegistrationId(null)
+        setMessage("报名信息已更新。")
+        setDraft((prev) => ({
+          ...emptyDraft,
+          leaderName: prev.leaderName,
+          leaderStudentId: prev.leaderStudentId,
+          leaderContact: prev.leaderContact,
+        }))
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "报名保存失败，请稍后重试。")
+      } finally {
+        setIsSavingRegistration(false)
+      }
       return
     }
 
@@ -363,14 +376,22 @@ export default function CreativeChallenge2026Page() {
     }
 
     const nextRegistrations = [nextRegistration, ...registrations]
-    persistRegistrations(nextRegistrations)
-    setMessage("报名已保存。之后可在“编辑和提交已有项目”中补充 GitHub、Demo 并最终提交。")
-    setDraft((prev) => ({
-      ...emptyDraft,
-      leaderName: prev.leaderName,
-      leaderStudentId: prev.leaderStudentId,
-      leaderContact: prev.leaderContact,
-    }))
+    setIsSavingRegistration(true)
+    setMessage("正在保存报名...")
+    try {
+      await persistRegistration(nextRegistration, nextRegistrations)
+      setMessage("报名已保存。之后可在“编辑和提交已有项目”中补充 GitHub、Demo 并最终提交。")
+      setDraft((prev) => ({
+        ...emptyDraft,
+        leaderName: prev.leaderName,
+        leaderStudentId: prev.leaderStudentId,
+        leaderContact: prev.leaderContact,
+      }))
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "报名保存失败，请稍后重试。")
+    } finally {
+      setIsSavingRegistration(false)
+    }
   }
 
   function startEditRegistration(registration: CreativeChallengeRegistration) {
@@ -941,9 +962,9 @@ export default function CreativeChallenge2026Page() {
                   <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">{message}</p>
                 ) : null}
 
-                <Button type="submit" className="w-full">
+                <Button type="submit" className="w-full" disabled={isSavingRegistration}>
                   <Rocket className="mr-2 h-4 w-4" />
-                  {editingRegistrationId ? "保存报名修改" : "保存报名"}
+                  {isSavingRegistration ? "保存中..." : editingRegistrationId ? "保存报名修改" : "保存报名"}
                 </Button>
                 {editingRegistrationId ? (
                   <Button type="button" variant="outline" className="w-full" onClick={cancelEditRegistration}>
