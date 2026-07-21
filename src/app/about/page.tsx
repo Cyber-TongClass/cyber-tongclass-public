@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import { useState } from "react"
 import { 
   GraduationCap, 
   Users, 
@@ -9,12 +10,87 @@ import {
   MapPin, 
   ExternalLink,
   Award,
-  Group
+  Group,
+  ChevronDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+const thuDepartments = [
+  {
+    title: "通班文化建设委员会",
+    desc: "班级文化建设与集体认同凝聚的重要力量，负责组织通班同学开展文体活动、学术交流与班级文化产品设计，营造积极向上、团结协作的班级氛围。",
+    items: [
+      "组织新生班会、破冰活动与班委选拔",
+      "策划春游、体育联谊赛、清北通班联合团建等活动",
+      "设计班级 LOGO、班服、鼠标垫等文创产品",
+      "组织师生餐叙交流，促进师生深入沟通",
+      "打造具有清华通班特色的文化品牌与集体记忆",
+    ],
+  },
+  {
+    title: "通班信息网络技术委员会",
+    desc: "班级数字平台与科研技术支持的核心部门，负责官方网站、公众号、服务器与学生账号等信息化资源的维护管理，为同学们的科研学习和信息交流提供稳定可靠的技术保障。",
+    items: [
+      "维护和更新清华通班官方网站与公众号",
+      "管理清华通班服务器及学生账号",
+      "支撑同学们科研学习中的算力与信息化需求",
+      "建设班级数字平台，服务学术发展与日常交流",
+      "保障班级信息发布与技术资源运行稳定",
+    ],
+  },
+  {
+    title: "通班顾问委员会",
+    desc: "由高年级同学和优秀毕业生组成的经验支持力量，为班级建设、学业发展、科研实践与活动组织提供建议和传承支持。",
+    items: [
+      "为班级组织建设提供经验传承",
+      "为低年级同学提供学业、科研与发展建议",
+      "支持小班主任制度与新生培养工作",
+      "协助推动清华通班自治体系持续完善",
+    ],
+  },
+]
+
+const thuResearchCards = [
+  {
+    title: "通班学术发展与科研实践",
+    desc: "学术氛围建设与科研能力培养的重要平台，依托清华大学与北京市通用人工智能研究院资源，组织讲座、培训、参观、暑期科研实践等活动，帮助同学们拓宽视野、启迪科研、深入课题。",
+    items: [
+      "组织 TongTalk 学术讲座，分享 PyTorch、Linux、服务器使用与机器学习前沿等内容",
+      "参与通用人工智能研究院科研素养系列培训",
+      "组织新生参观通用人工智能研究院展厅及机器人实验室",
+      "开展暑期科研实践，参与多领域课题研究",
+      "推动优秀项目继续孵化，已有成果转化为论文在投",
+      "介绍实践基地重点课题与导师研究方向，衔接本研贯通培养",
+    ],
+  },
+  {
+    title: "通班科研成果",
+    desc: "在教学资源、实践平台与科研训练的共同支撑下，清华通班学生在国际学术舞台上崭露头角，展现出扎实的科研能力与创新潜力。",
+    items: [
+      "清华通班学生已在国际顶级会议与期刊发表论文 50 余篇",
+      "另有 10 余篇论文在审稿中",
+      "多位同学在因材施教计划年会中获得“优秀成果奖”与“最佳成果奖”",
+      "首届清华通班毕业成果展集中展示学生科研成果",
+      "多位同学持续参与通用人工智能相关前沿课题研究",
+    ],
+  },
+  {
+    title: "通班小班主任制度",
+    desc: "由高年级优秀学长担任小班主任，为低年级同学提供学业引导、科研启蒙与活动支持，帮助新同学更快融入清华通班集体。",
+    items: [
+      "设立“小班主任”岗位，传承高年级经验",
+      "为低年级同学提供学业与生活支持",
+      "协助开展新生班会、破冰活动与班级建设",
+      "2023 级清华通班小班主任为刘宇学长",
+      "2024 级清华通班小班主任为曹智昊学长",
+    ],
+  },
+]
+
 export default function AboutPage() {
+  const [isThuResearchOpen, setIsThuResearchOpen] = useState(false)
+
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section */}
@@ -275,8 +351,67 @@ export default function AboutPage() {
                 </div>
               </div>
 
-              <h3 className="text-lg font-extrabold text-slate-900 mb-3 mt-10">清华通班</h3>
-              <p className="text-sm text-slate-500">暂无详细组织信息。</p>
+              <h3 className="text-lg font-extrabold text-slate-900 mb-5 mt-10">清华通班</h3>
+              <div className="grid md:grid-cols-[1fr_2fr] gap-5">
+                <div className="bg-white p-6 shadow-sm relative border-l-[4px] border-[hsl(350,55%,40%)]">
+                  <h4 className="text-base font-extrabold text-[hsl(350,55%,40%)] mb-3">通班自治委员会</h4>
+                  <p className="text-sm text-slate-600 leading-relaxed mb-4">
+                    清华通班学生组织的统筹与执行机构，负责班级文化建设、技术支持、学术交流与学生活动的组织协调，保障班级运行高效有序，形成自主、成熟、富有特色的学生自治体系。
+                  </p>
+                  <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4 leading-relaxed">
+                    <li>统筹班级年度活动规划，定期召开委员会议与班委会议</li>
+                    <li>协调文化建设委员会与信息网络技术委员会开展工作</li>
+                    <li>推动新生融入、师生交流、科研实践与班级团建等重点事务</li>
+                    <li>传承高年级经验，完善“小班主任”支持机制</li>
+                    <li>凝聚班级认同，展示清华通班学生风貌</li>
+                  </ul>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {thuDepartments.map((dept) => (
+                    <div key={dept.title} className="group bg-white p-5 shadow-sm hover:shadow-md transition-shadow duration-300 relative">
+                      <div className="absolute top-0 left-0 w-8 h-1 bg-[hsl(350,55%,40%)]"></div>
+                      <h4 className="text-sm font-extrabold text-slate-900 mb-2 mt-1">{dept.title}</h4>
+                      <p className="text-xs text-slate-600 leading-relaxed mb-2">{dept.desc}</p>
+                      <ul className="text-[11px] text-slate-500 space-y-0.5 list-disc pl-3.5 leading-relaxed">
+                        {dept.items.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <button
+                  type="button"
+                  onClick={() => setIsThuResearchOpen((isOpen) => !isOpen)}
+                  aria-expanded={isThuResearchOpen}
+                  aria-controls="thu-research-details"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isThuResearchOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+                  通班学术发展与科研实践
+                </button>
+
+                {isThuResearchOpen && (
+                  <div id="thu-research-details" className="grid md:grid-cols-3 gap-5 mt-4">
+                    {thuResearchCards.map((card) => (
+                      <div key={card.title} className="group bg-white p-5 shadow-sm hover:shadow-md transition-shadow duration-300 relative">
+                        <div className="absolute top-0 left-0 w-8 h-1 bg-[hsl(350,55%,40%)]"></div>
+                        <h4 className="text-sm font-extrabold text-slate-900 mb-2 mt-1">{card.title}</h4>
+                        <p className="text-xs text-slate-600 leading-relaxed mb-2">{card.desc}</p>
+                        <ul className="text-[11px] text-slate-500 space-y-0.5 list-disc pl-3.5 leading-relaxed">
+                          {card.items.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </TabsContent>
 
