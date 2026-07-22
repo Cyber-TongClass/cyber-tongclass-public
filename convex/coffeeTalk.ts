@@ -460,3 +460,56 @@ export const listNotifications = query({
     })))
   },
 })
+
+/**
+ * Marks a single current-user notification as read. An unknown or someone
+ * else's ID intentionally has the same idempotent outcome, so this endpoint
+ * cannot be used to probe another account's notification IDs.
+ */
+export const markNotificationRead = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    notificationId: v.id("notifications"),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const notification = await ctx.db.get(args.notificationId) as {
+      userId: any
+      readAt?: number
+    } | null
+
+    if (!notification || String(notification.userId) !== String(actor._id)) {
+      return { updated: false }
+    }
+    if (notification.readAt !== undefined) {
+      return { updated: false }
+    }
+
+    const now = Date.now()
+    await ctx.db.patch(args.notificationId, { readAt: now })
+    return { updated: true }
+  },
+})
+
+/** Marks every unread Coffee Talk notification owned by the current session. */
+export const markAllNotificationsRead = mutation({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_createdAt", (index: any) => index.eq("userId", actor._id))
+      .collect() as { _id: any; readAt?: number }[]
+    const unreadNotifications = notifications.filter((notification) => notification.readAt === undefined)
+
+    if (unreadNotifications.length === 0) {
+      return { updatedCount: 0 }
+    }
+
+    const now = Date.now()
+    await Promise.all(unreadNotifications.map((notification) => (
+      ctx.db.patch(notification._id, { readAt: now })
+    )))
+    return { updatedCount: unreadNotifications.length }
+  },
+})

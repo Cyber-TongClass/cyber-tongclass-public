@@ -48,3 +48,13 @@ test("Coffee Talk notifications route applicants and explicitly bound teachers t
   assert.match(source, /"\/services\/coffee-talk\/manage"/)
   assert.match(source, /return Promise\.all\(notifications\.map/)
 })
+
+test("Coffee Talk notifications can only be marked read by the current session owner", () => {
+  const source = readFileSync(backendPath, "utf8")
+
+  assert.match(source, /export const markNotificationRead\s*=\s*mutation/)
+  assert.match(source, /export const markAllNotificationsRead\s*=\s*mutation/)
+  assert.match(source, /notificationId:\s*v\.id\("notifications"\)/)
+  assert.match(source, /String\(notification\.userId\)\s*!==\s*String\(actor\._id\)/)
+  assert.match(source, /readAt:\s*now/)
+})
