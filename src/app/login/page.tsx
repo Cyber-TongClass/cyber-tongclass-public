@@ -60,8 +60,8 @@ function LoginForm() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
-            <h1 className="text-3xl font-extrabold text-primary">通用人工智能实验班</h1>
-            <p className="text-slate-600 mt-1">Tong Class Official Website</p>
+            <h1 className="text-2xl font-extrabold text-primary sm:text-3xl">北京大学人工智能研究院综合服务系统</h1>
+            <p className="mt-1 text-slate-600">Artificial Intelligence Agora</p>
           </Link>
         </div>
 
