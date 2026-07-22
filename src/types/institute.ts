@@ -1,5 +1,7 @@
 export type InstitutePersonKind = "teacher" | "graduate"
 
+export type PublicResearchGroupMembershipRole = "leader" | "faculty" | "graduate" | "member"
+
 export type InstitutePublicLinkKind =
   | "homepage"
   | "scholar"
@@ -33,6 +35,22 @@ export type PublicInstitutePerson = {
   publicEmail?: string
   coffeeTalkOpen?: boolean
   isDemo: boolean
+  researchGroupMemberships?: PublicInstitutePersonResearchGroupMembership[]
+}
+
+/**
+ * A deliberately narrow public projection used inside relationship lists.
+ * It excludes contact and account fields even when a full public profile may
+ * independently publish an explicit contact channel.
+ */
+export type PublicInstitutePersonReference = {
+  slug: string
+  kind: InstitutePersonKind
+  nameZh: string
+  nameEn: string
+  titleZh?: string
+  titleEn?: string
+  isDemo: boolean
 }
 
 export type PublicInstituteResearchGroupReference = {
@@ -40,6 +58,16 @@ export type PublicInstituteResearchGroupReference = {
   nameZh: string
   nameEn: string
   isDemo: boolean
+}
+
+export type PublicInstitutePersonResearchGroupMembership = {
+  role: PublicResearchGroupMembershipRole
+  researchGroup: PublicInstituteResearchGroupReference
+}
+
+export type PublicResearchGroupMember = {
+  role: PublicResearchGroupMembershipRole
+  person: PublicInstitutePersonReference
 }
 
 export type PublicResearchGroup = {
@@ -56,6 +84,7 @@ export type PublicResearchGroup = {
   recruitmentEn?: string
   isDemo: boolean
   leader?: PublicInstitutePerson
+  members?: PublicResearchGroupMember[]
 }
 
 export type PublicInstituteResearch = {

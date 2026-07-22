@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatCurrency, formatDate } from "@/lib/academic-exchange"
 import { getAcademicExchangePaperPdfLabel } from "@/lib/academic-exchange-pdf-source"
+import { reviewerAccessHeaders, useReviewerAccess, type ReviewerAccess } from "@/app/reviewer/reviewer-access-context"
 import type { AcademicExchangeSupportApplication } from "@/types"
 
 function getDownloadFileName(response: Response, fallback: string) {
@@ -22,9 +23,13 @@ function getDownloadFileName(response: Response, fallback: string) {
   }
 }
 
-async function downloadReviewerPdf(application: AcademicExchangeSupportApplication) {
+async function downloadReviewerPdf(
+  application: AcademicExchangeSupportApplication,
+  reviewerAccess: ReviewerAccess,
+) {
   const response = await fetch(`/api/reviewer/academic-exchange/${application._id}/pdf`, {
     method: "POST",
+    headers: reviewerAccessHeaders(reviewerAccess),
   })
 
   if (!response.ok) {
@@ -45,11 +50,12 @@ async function downloadReviewerPdf(application: AcademicExchangeSupportApplicati
 
 async function downloadSelectedApplicationsZip(
   applicationIds: string[],
+  reviewerAccess: ReviewerAccess,
   onProgress: (progress: number | null) => void
 ) {
   const response = await fetch("/api/reviewer/academic-exchange/export", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: reviewerAccessHeaders(reviewerAccess, { "Content-Type": "application/json" }),
     body: JSON.stringify({ applicationIds }),
   })
 
@@ -105,6 +111,7 @@ async function downloadSelectedApplicationsZip(
 }
 
 export default function ReviewerAcademicExchangePage() {
+  const reviewerAccess = useReviewerAccess()
   const [applications, setApplications] = useState<AcademicExchangeSupportApplication[] | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [message, setMessage] = useState("")
@@ -118,7 +125,10 @@ export default function ReviewerAcademicExchangePage() {
     async function loadApplications() {
       setMessage("")
       try {
-        const response = await fetch("/api/reviewer/academic-exchange", { cache: "no-store" })
+        const response = await fetch("/api/reviewer/academic-exchange", {
+          cache: "no-store",
+          headers: reviewerAccessHeaders(reviewerAccess),
+        })
         const payload = await response.json().catch(() => null)
         if (!response.ok) {
           setMessage(payload?.message || "无法读取申请列表")
@@ -133,7 +143,7 @@ export default function ReviewerAcademicExchangePage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reviewerAccess])
 
   const filteredApplications = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -182,7 +192,7 @@ export default function ReviewerAcademicExchangePage() {
     setMessage("")
     setDownloadingId(application._id)
     try {
-      await downloadReviewerPdf(application)
+      await downloadReviewerPdf(application, reviewerAccess)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "PDF 下载失败")
     } finally {
@@ -201,7 +211,7 @@ export default function ReviewerAcademicExchangePage() {
     setBatchExporting(true)
     setBatchProgress(null)
     try {
-      await downloadSelectedApplicationsZip(ids, setBatchProgress)
+      await downloadSelectedApplicationsZip(ids, reviewerAccess, setBatchProgress)
       setMessage(`已导出 ${ids.length} 条申请记录。`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "批量导出失败")

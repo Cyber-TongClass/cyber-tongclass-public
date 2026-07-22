@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
-import { REVIEWER_SESSION_COOKIE } from "@/lib/server/reviewer-session"
 import { fetchUploadedAcademicExchangePaperPdf } from "@/lib/server/academic-exchange-paper-pdf"
 import { buildAcademicExchangePdf, sanitizeAcademicExchangePdfFileName } from "@/lib/server/academic-exchange-pdf"
+import {
+  getReviewerAccessCredentials,
+  reviewerAccessErrorMessage,
+  reviewerAccessErrorStatus,
+  toAcademicExchangeAccessArgs,
+} from "../../../_lib/access"
 
 export const runtime = "nodejs"
 
@@ -14,28 +19,38 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const reviewerSessionToken = request.cookies.get(REVIEWER_SESSION_COOKIE)?.value || ""
-    if (!reviewerSessionToken) {
-      return NextResponse.json({ ok: false, message: "请先登录 Reviewer 账号" }, { status: 401 })
-    }
+  let accessArgs: ReturnType<typeof toAcademicExchangeAccessArgs>
+  let application: any
+  let client: ReturnType<typeof getConvexHttpClient>
 
+  try {
+    const credentials = getReviewerAccessCredentials(request)
     const params = await context.params
-    const client = getConvexHttpClient()
-    const application = await client.query(getApplicationRef, {
-      reviewerSessionToken,
+    accessArgs = toAcademicExchangeAccessArgs(credentials)
+    client = getConvexHttpClient()
+    application = await client.query(getApplicationRef, {
+      ...accessArgs,
       id: params.id as any,
     } as any)
+  } catch (error) {
+    return NextResponse.json({
+      ok: false,
+      message: reviewerAccessErrorMessage(error, "当前账号没有 Reviewer 访问权限"),
+    }, {
+      status: reviewerAccessErrorStatus(error, 401),
+    })
+  }
 
-    if (!application) {
-      return NextResponse.json({ ok: false, message: "未找到申请记录" }, { status: 404 })
-    }
+  if (!application) {
+    return NextResponse.json({ ok: false, message: "未找到申请记录" }, { status: 404 })
+  }
 
-    const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, { reviewerSessionToken })
+  try {
+    const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, accessArgs)
     const pdfBytes = await buildAcademicExchangePdf(application, { paperPdfBytes })
     await client.mutation(logDownloadRef, {
-      reviewerSessionToken,
-      id: params.id as any,
+      ...accessArgs,
+      id: application._id as any,
     } as any)
 
     const applicantName = sanitizeAcademicExchangePdfFileName(application.applicantName || "申请人")
@@ -48,11 +63,10 @@ export async function POST(
         "cache-control": "no-store",
       },
     })
-  } catch (error) {
-    console.error("reviewer academic exchange pdf export error", error)
+  } catch {
     return NextResponse.json({
       ok: false,
-      message: error instanceof Error ? error.message : "PDF 导出失败",
+      message: "PDF 导出失败",
     }, { status: 500 })
   }
 }

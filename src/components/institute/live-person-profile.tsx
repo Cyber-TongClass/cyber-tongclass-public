@@ -9,7 +9,11 @@ import {
   demoResearchOutputs,
   getDemoPerson,
 } from "@/components/institute/demo-directory-data"
-import { toDirectoryPerson, toDirectoryResearchGroup } from "@/components/institute/live-directory-view-model"
+import {
+  toDirectoryPerson,
+  toDirectoryResearchGroup,
+  toDirectoryResearchGroupMember,
+} from "@/components/institute/live-directory-view-model"
 import { PersonProfile } from "@/components/institute/person-profile"
 import { usePublicInstitutePerson, usePublicResearchGroups } from "@/lib/api"
 import type { PublicInstitutePerson, PublicResearchGroup } from "@/types/institute"
@@ -51,21 +55,52 @@ export function LivePersonProfile({ slug }: LivePersonProfileProps) {
   if (person === null) {
     const demoPerson = getDemoPerson(slug)
     if (!demoPerson) return <PublicPersonNotFound />
+    const relatedDemoGroups = demoResearchGroups.filter((group) => group.memberSlugs.includes(demoPerson.slug))
+    const relatedGraduateMembers = demoPerson.kind === "teacher"
+      ? relatedDemoGroups.flatMap((group) => demoPeople
+        .filter((member) => member.kind === "graduate" && group.memberSlugs.includes(member.slug))
+        .map((member) => ({
+          person: member,
+          groupSlug: group.slug,
+          groupNameZh: group.nameZh,
+          roleLabel: "研究生",
+        })))
+      : []
 
     return (
       <PersonProfile
         person={demoPerson}
-        groups={demoResearchGroups}
+        groups={relatedDemoGroups}
         outputs={demoResearchOutputs}
         updates={demoDirectoryUpdates}
+        relatedGraduateMembers={relatedGraduateMembers}
       />
     )
   }
 
   const directoryPerson = toDirectoryPerson(person)
-  const relatedGroups = groups
-    .filter((group) => group.leader?.slug === person.slug)
+  const relatedGroupSlugs = new Set(
+    (person.researchGroupMemberships ?? []).map((membership) => membership.researchGroup.slug),
+  )
+  const relatedPublicGroups = groups
+    .filter((group) => relatedGroupSlugs.has(group.slug))
+  const relatedGroups = relatedPublicGroups
     .map(toDirectoryResearchGroup)
+  const relatedGraduateMembers = person.kind === "teacher"
+    ? relatedPublicGroups.flatMap((group) => (group.members ?? [])
+      .filter((member) => member.person.kind === "graduate")
+      .map((member) => ({
+        ...toDirectoryResearchGroupMember(member),
+        groupSlug: group.slug,
+        groupNameZh: group.nameZh,
+      })))
+    : []
 
-  return <PersonProfile person={directoryPerson} groups={relatedGroups} />
+  return (
+    <PersonProfile
+      person={directoryPerson}
+      groups={relatedGroups}
+      relatedGraduateMembers={relatedGraduateMembers}
+    />
+  )
 }

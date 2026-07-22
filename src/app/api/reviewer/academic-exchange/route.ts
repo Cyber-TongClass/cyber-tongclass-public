@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
-import { REVIEWER_SESSION_COOKIE } from "@/lib/server/reviewer-session"
+import {
+  getReviewerAccessCredentials,
+  reviewerAccessErrorMessage,
+  reviewerAccessErrorStatus,
+  toAcademicExchangeAccessArgs,
+} from "../_lib/access"
 
 export const runtime = "nodejs"
 
@@ -9,18 +14,21 @@ const listApplicationsRef = makeFunctionReference<"query">("academicExchange:lis
 
 export async function GET(request: NextRequest) {
   try {
-    const reviewerSessionToken = request.cookies.get(REVIEWER_SESSION_COOKIE)?.value || ""
-    if (!reviewerSessionToken) {
-      return NextResponse.json({ ok: false, message: "请先登录 Reviewer 账号" }, { status: 401 })
-    }
-
+    const credentials = getReviewerAccessCredentials(request)
     const client = getConvexHttpClient()
-    const applications = await client.query(listApplicationsRef, { reviewerSessionToken } as any)
-    return NextResponse.json({ ok: true, applications })
+    const applications = await client.query(
+      listApplicationsRef,
+      toAcademicExchangeAccessArgs(credentials) as any,
+    )
+    return NextResponse.json({ ok: true, applications }, {
+      headers: { "cache-control": "no-store" },
+    })
   } catch (error) {
     return NextResponse.json({
       ok: false,
-      message: error instanceof Error ? error.message : "无法读取申请列表",
-    }, { status: 401 })
+      message: reviewerAccessErrorMessage(error, "当前账号没有 Reviewer 访问权限"),
+    }, {
+      status: reviewerAccessErrorStatus(error, 401),
+    })
   }
 }

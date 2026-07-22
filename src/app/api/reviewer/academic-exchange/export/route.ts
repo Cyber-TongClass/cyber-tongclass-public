@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
-import { REVIEWER_SESSION_COOKIE } from "@/lib/server/reviewer-session"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
 import { getAcademicExchangePaperPdfLabel } from "@/lib/academic-exchange-pdf-source"
 import { fetchUploadedAcademicExchangePaperPdf } from "@/lib/server/academic-exchange-paper-pdf"
 import { buildAcademicExchangePdf, sanitizeAcademicExchangePdfFileName } from "@/lib/server/academic-exchange-pdf"
 import { buildSimpleXlsx } from "@/lib/server/simple-xlsx"
 import { buildSimpleZip } from "@/lib/server/simple-zip"
+import {
+  getReviewerAccessCredentials,
+  reviewerAccessErrorMessage,
+  reviewerAccessErrorStatus,
+  toAcademicExchangeAccessArgs,
+} from "../../_lib/access"
 
 export const runtime = "nodejs"
 
@@ -90,30 +95,41 @@ function todayCompact() {
 }
 
 export async function POST(request: NextRequest) {
+  let accessArgs: ReturnType<typeof toAcademicExchangeAccessArgs>
+  let allApplications: any[]
+  let client: ReturnType<typeof getConvexHttpClient>
+
   try {
-    const reviewerSessionToken = request.cookies.get(REVIEWER_SESSION_COOKIE)?.value || ""
-    if (!reviewerSessionToken) {
-      return NextResponse.json({ ok: false, message: "请先登录 Reviewer 账号" }, { status: 401 })
-    }
+    const credentials = getReviewerAccessCredentials(request)
+    accessArgs = toAcademicExchangeAccessArgs(credentials)
+    client = getConvexHttpClient()
+    allApplications = await client.query(listApplicationsRef, accessArgs as any) as any[]
+  } catch (error) {
+    return NextResponse.json({
+      ok: false,
+      message: reviewerAccessErrorMessage(error, "当前账号没有 Reviewer 访问权限"),
+    }, {
+      status: reviewerAccessErrorStatus(error, 401),
+    })
+  }
 
-    const body = await request.json().catch(() => ({}))
-    const selectedIds = Array.isArray(body?.applicationIds)
-      ? body.applicationIds.map((id: unknown) => String(id)).filter(Boolean)
-      : []
+  const body = await request.json().catch(() => ({}))
+  const selectedIds = Array.isArray(body?.applicationIds)
+    ? body.applicationIds.map((id: unknown) => String(id)).filter(Boolean)
+    : []
 
-    if (selectedIds.length === 0) {
-      return NextResponse.json({ ok: false, message: "请先选择至少一条申请记录" }, { status: 400 })
-    }
+  if (selectedIds.length === 0) {
+    return NextResponse.json({ ok: false, message: "请先选择至少一条申请记录" }, { status: 400 })
+  }
 
-    const client = getConvexHttpClient()
-    const allApplications = await client.query(listApplicationsRef, { reviewerSessionToken } as any)
-    const byId = new Map((allApplications || []).map((application: any) => [String(application._id), application]))
-    const applications = selectedIds.map((id: string) => byId.get(id)).filter(Boolean)
+  const byId = new Map((allApplications || []).map((application: any) => [String(application._id), application]))
+  const applications = selectedIds.map((id: string) => byId.get(id)).filter(Boolean)
 
-    if (applications.length !== selectedIds.length) {
-      return NextResponse.json({ ok: false, message: "部分申请记录不存在或无权访问" }, { status: 404 })
-    }
+  if (applications.length !== selectedIds.length) {
+    return NextResponse.json({ ok: false, message: "部分申请记录不存在或无权访问" }, { status: 404 })
+  }
 
+  try {
     const folderName = `学术交流支持申请导出-${todayCompact()}`
     const xlsxEntries = buildSimpleXlsx(buildSummaryRows(applications, allApplications || []))
     const xlsxBuffer = buildSimpleZip(xlsxEntries)
@@ -125,7 +141,7 @@ export async function POST(request: NextRequest) {
     ]
 
     for (const application of applications) {
-      const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, { reviewerSessionToken })
+      const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, accessArgs)
       const pdfBytes = await buildAcademicExchangePdf(application, { paperPdfBytes })
       const applicantName = sanitizeAcademicExchangePdfFileName(application.applicantName || "申请人")
       const projectName = sanitizeAcademicExchangePdfFileName(application.projectName || String(application._id))
@@ -134,7 +150,7 @@ export async function POST(request: NextRequest) {
         data: Buffer.from(pdfBytes),
       })
       await client.mutation(logDownloadRef, {
-        reviewerSessionToken,
+        ...accessArgs,
         id: application._id as any,
       } as any)
     }
@@ -150,11 +166,10 @@ export async function POST(request: NextRequest) {
         "cache-control": "no-store",
       },
     })
-  } catch (error) {
-    console.error("reviewer academic exchange batch export error", error)
+  } catch {
     return NextResponse.json({
       ok: false,
-      message: error instanceof Error ? error.message : "批量导出失败",
+      message: "批量导出失败",
     }, { status: 500 })
   }
 }

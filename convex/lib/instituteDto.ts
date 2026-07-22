@@ -4,9 +4,13 @@ import type {
   InstitutePublicLinkKind,
   InstituteResearchGroupLink,
   PublicInstitutePerson,
+  PublicInstitutePersonReference,
+  PublicInstitutePersonResearchGroupMembership,
   PublicInstituteResearch,
   PublicInstituteResearchGroupReference,
   PublicInstituteUpdate,
+  PublicResearchGroupMember,
+  PublicResearchGroupMembershipRole,
   PublicResearchGroup,
 } from "../../src/types/institute"
 
@@ -78,8 +82,20 @@ export type InstituteContentRelationSources = {
 
 export type InstituteGroupMembershipRecord = {
   personId: string
-  role: "leader" | "faculty" | "graduate" | "member"
+  researchGroupId?: string
+  role: PublicResearchGroupMembershipRole
+  isPrimary?: boolean
   endedAt?: number
+}
+
+export type InstitutePublicPersonResearchGroupMembershipSource = {
+  role: PublicResearchGroupMembershipRole
+  researchGroup: ResearchGroupRecord
+}
+
+export type InstitutePublicResearchGroupMemberSource = {
+  role: PublicResearchGroupMembershipRole
+  person: InstitutePersonRecord
 }
 
 function copyStringList(values: readonly string[]): string[] {
@@ -112,7 +128,45 @@ function copyResearchGroupLinks(
   }))
 }
 
-export function toPublicInstitutePerson(person: InstitutePersonRecord): PublicInstitutePerson {
+export function toPublicInstitutePersonReference(
+  person: InstitutePersonRecord,
+): PublicInstitutePersonReference {
+  const dto: PublicInstitutePersonReference = {
+    slug: person.slug,
+    kind: person.kind,
+    nameZh: person.nameZh,
+    nameEn: person.nameEn,
+    isDemo: person.isDemo,
+  }
+
+  if (person.titleZh !== undefined) dto.titleZh = person.titleZh
+  if (person.titleEn !== undefined) dto.titleEn = person.titleEn
+
+  return dto
+}
+
+function toPublicPersonResearchGroupMembership(
+  source: InstitutePublicPersonResearchGroupMembershipSource,
+): PublicInstitutePersonResearchGroupMembership {
+  return {
+    role: source.role,
+    researchGroup: toPublicResearchGroupReference(source.researchGroup),
+  }
+}
+
+function toPublicResearchGroupMember(
+  source: InstitutePublicResearchGroupMemberSource,
+): PublicResearchGroupMember {
+  return {
+    role: source.role,
+    person: toPublicInstitutePersonReference(source.person),
+  }
+}
+
+export function toPublicInstitutePerson(
+  person: InstitutePersonRecord,
+  researchGroupMemberships?: readonly InstitutePublicPersonResearchGroupMembershipSource[],
+): PublicInstitutePerson {
   const dto: PublicInstitutePerson = {
     slug: person.slug,
     kind: person.kind,
@@ -130,6 +184,10 @@ export function toPublicInstitutePerson(person: InstitutePersonRecord): PublicIn
   if (person.photoUrl !== undefined) dto.photoUrl = person.photoUrl
   if (person.publicEmail !== undefined) dto.publicEmail = person.publicEmail
   if (person.coffeeTalkOpen !== undefined) dto.coffeeTalkOpen = person.coffeeTalkOpen
+  if (researchGroupMemberships !== undefined) {
+    dto.researchGroupMemberships = researchGroupMemberships
+      .map((membership) => toPublicPersonResearchGroupMembership(membership))
+  }
 
   return dto
 }
@@ -148,6 +206,7 @@ export function toPublicResearchGroupReference(
 export function toPublicResearchGroup(
   group: ResearchGroupRecord,
   leader?: InstitutePersonRecord,
+  members?: readonly InstitutePublicResearchGroupMemberSource[],
 ): PublicResearchGroup {
   const dto: PublicResearchGroup = {
     slug: group.slug,
@@ -165,6 +224,7 @@ export function toPublicResearchGroup(
   if (group.recruitmentZh !== undefined) dto.recruitmentZh = group.recruitmentZh
   if (group.recruitmentEn !== undefined) dto.recruitmentEn = group.recruitmentEn
   if (leader !== undefined) dto.leader = toPublicInstitutePerson(leader)
+  if (members !== undefined) dto.members = members.map((member) => toPublicResearchGroupMember(member))
 
   return dto
 }

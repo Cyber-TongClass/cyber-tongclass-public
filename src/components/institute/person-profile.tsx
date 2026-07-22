@@ -8,14 +8,28 @@ import type {
 } from "@/components/institute/demo-directory-data"
 import { ResearchOutputList } from "@/components/institute/research-output-list"
 
+type RelatedGraduateMember = {
+  person: PublicDirectoryPerson
+  groupSlug: string
+  groupNameZh: string
+  roleLabel: string
+}
+
 type PersonProfileProps = {
   person: PublicDirectoryPerson
   groups?: readonly PublicResearchGroup[]
   outputs?: readonly PublicResearchOutput[]
   updates?: readonly PublicDirectoryUpdate[]
+  relatedGraduateMembers?: readonly RelatedGraduateMember[]
 }
 
-export function PersonProfile({ person, groups = [], outputs = [], updates = [] }: PersonProfileProps) {
+export function PersonProfile({
+  person,
+  groups = [],
+  outputs = [],
+  updates = [],
+  relatedGraduateMembers = [],
+}: PersonProfileProps) {
   const Icon = person.kind === "teacher" ? UserRound : GraduationCap
   const publicGroups = groups.filter(
     (group) => group.visibility === "public" && (
@@ -110,6 +124,32 @@ export function PersonProfile({ person, groups = [], outputs = [], updates = [] 
 
           <ResearchOutputList outputs={relatedOutputs} />
         </div>
+
+        {person.kind === "teacher" ? (
+          <section aria-labelledby="person-graduate-members-title" className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+            <h2 id="person-graduate-members-title" className="text-xl font-extrabold tracking-tight text-slate-900">相关团队的公开研究生</h2>
+            {relatedGraduateMembers.length > 0 ? (
+              <ul className="mt-5 grid gap-3 sm:grid-cols-2" aria-label="相关团队的公开研究生">
+                {relatedGraduateMembers.map((membership) => (
+                  <li key={`${membership.groupSlug}:${membership.person.slug}`}>
+                    <Link
+                      href={`/people/${membership.person.slug}`}
+                      className="group block rounded-lg border border-slate-200 p-4 transition-colors hover:border-sky-300 hover:bg-sky-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    >
+                      <span className="block text-sm font-bold text-slate-900">{membership.person.nameZh}</span>
+                      <span className="mt-1 block text-xs text-slate-500">{membership.person.title}</span>
+                      <span className="mt-2 block text-xs font-semibold text-primary">
+                        {membership.groupNameZh} · {membership.roleLabel}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-5 text-sm leading-6 text-slate-600">暂未发布相关团队的公开研究生资料。</p>
+            )}
+          </section>
+        ) : null}
 
         <section aria-labelledby="person-updates-title" className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
           <h2 id="person-updates-title" className="text-xl font-extrabold tracking-tight text-slate-900">相关动态</h2>

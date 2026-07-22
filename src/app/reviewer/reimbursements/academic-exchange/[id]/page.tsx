@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatCurrency, formatDate, formatPaperAuthors } from "@/lib/academic-exchange"
 import { getAcademicExchangePaperPdfLabel, hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
+import { reviewerAccessHeaders, useReviewerAccess, type ReviewerAccess } from "@/app/reviewer/reviewer-access-context"
 import type { AcademicExchangeSupportApplication } from "@/types"
 
 function Field({ label, value }: { label: string; value?: ReactNode }) {
@@ -31,9 +32,13 @@ function getDownloadFileName(response: Response, fallback: string) {
   }
 }
 
-async function downloadReviewerPdf(application: AcademicExchangeSupportApplication) {
+async function downloadReviewerPdf(
+  application: AcademicExchangeSupportApplication,
+  reviewerAccess: ReviewerAccess,
+) {
   const response = await fetch(`/api/reviewer/academic-exchange/${application._id}/pdf`, {
     method: "POST",
+    headers: reviewerAccessHeaders(reviewerAccess),
   })
 
   if (!response.ok) {
@@ -53,6 +58,7 @@ async function downloadReviewerPdf(application: AcademicExchangeSupportApplicati
 }
 
 export default function ReviewerAcademicExchangeDetailPage() {
+  const reviewerAccess = useReviewerAccess()
   const params = useParams<{ id: string }>()
   const [application, setApplication] = useState<AcademicExchangeSupportApplication | null | undefined>(undefined)
   const [message, setMessage] = useState("")
@@ -63,7 +69,10 @@ export default function ReviewerAcademicExchangeDetailPage() {
     async function loadApplication() {
       setMessage("")
       try {
-        const response = await fetch(`/api/reviewer/academic-exchange/${params.id}`, { cache: "no-store" })
+        const response = await fetch(`/api/reviewer/academic-exchange/${params.id}`, {
+          cache: "no-store",
+          headers: reviewerAccessHeaders(reviewerAccess),
+        })
         const payload = await response.json().catch(() => null)
         if (!response.ok) {
           setMessage(payload?.message || "无法读取申请详情")
@@ -82,14 +91,14 @@ export default function ReviewerAcademicExchangeDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [params.id])
+  }, [params.id, reviewerAccess])
 
   const handleDownload = async () => {
     if (!application) return
     setMessage("")
     setDownloading(true)
     try {
-      await downloadReviewerPdf(application)
+      await downloadReviewerPdf(application, reviewerAccess)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "PDF 下载失败")
     } finally {

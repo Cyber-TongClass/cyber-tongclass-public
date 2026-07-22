@@ -9,7 +9,11 @@ import {
   getDemoPerson,
   getDemoResearchGroup,
 } from "@/components/institute/demo-directory-data"
-import { toDirectoryPerson, toDirectoryResearchGroup } from "@/components/institute/live-directory-view-model"
+import {
+  toDirectoryPerson,
+  toDirectoryResearchGroup,
+  toDirectoryResearchGroupMember,
+} from "@/components/institute/live-directory-view-model"
 import { ResearchGroupProfile } from "@/components/institute/research-group-profile"
 import { usePublicResearchGroup } from "@/lib/api"
 import type { PublicResearchGroup } from "@/types/institute"
@@ -66,6 +70,7 @@ export function LiveResearchGroupProfile({ slug }: LiveResearchGroupProfileProps
     <ResearchGroupProfile
       group={toDirectoryResearchGroup(group)}
       leader={group.leader ? toDirectoryPerson(group.leader) : undefined}
+      memberRoles={(group.members ?? []).map(toDirectoryResearchGroupMember)}
     />
   )
 }

@@ -8,10 +8,16 @@ import type {
 } from "@/components/institute/demo-directory-data"
 import { ResearchOutputList } from "@/components/institute/research-output-list"
 
+type PublicGroupMember = {
+  person: PublicDirectoryPerson
+  roleLabel?: string
+}
+
 type ResearchGroupProfileProps = {
   group: PublicResearchGroup
   leader?: PublicDirectoryPerson
   members?: readonly PublicDirectoryPerson[]
+  memberRoles?: readonly PublicGroupMember[]
   outputs?: readonly PublicResearchOutput[]
   updates?: readonly PublicDirectoryUpdate[]
 }
@@ -20,10 +26,19 @@ export function ResearchGroupProfile({
   group,
   leader,
   members = [],
+  memberRoles,
   outputs = [],
   updates = [],
 }: ResearchGroupProfileProps) {
-  const publicMembers = members.filter((member) => member.visibility === "public" && group.memberSlugs.includes(member.slug))
+  const membershipMembers = memberRoles === undefined
+    ? members
+      .filter((member) => member.visibility === "public" && group.memberSlugs.includes(member.slug))
+      .map((member) => ({ person: member }))
+    : memberRoles.filter((member) => member.person.visibility === "public")
+  const publicMembers = membershipMembers.filter((member) => member.person.slug !== leader?.slug)
+  const leaderRoleLabel = memberRoles
+    ?.find((member) => member.person.slug === leader?.slug)
+    ?.roleLabel ?? "公开负责人"
   const relatedOutputs = outputs.filter((output) => output.groupSlugs.includes(group.slug))
   const relatedUpdates = updates.filter((update) => update.relatedGroupSlugs.includes(group.slug))
 
@@ -84,7 +99,7 @@ export function ResearchGroupProfile({
                 href={`/people/${leader.slug}`}
                 className="mt-5 block rounded-lg border border-sky-100 bg-sky-50/60 p-4 transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               >
-                <span className="text-xs font-semibold text-primary">公开负责人</span>
+                <span className="text-xs font-semibold text-primary">{leaderRoleLabel}</span>
                 <span className="mt-1 block text-sm font-bold text-slate-900">{leader.nameZh}</span>
                 <span className="mt-1 block text-xs text-slate-500">{leader.nameEn}</span>
               </Link>
@@ -92,14 +107,16 @@ export function ResearchGroupProfile({
             {publicMembers.length > 0 ? (
               <ul className="mt-3 space-y-2" aria-label="公开成员">
                 {publicMembers.map((member) => (
-                  <li key={member.slug}>
+                  <li key={member.person.slug}>
                     <Link
-                      href={`/people/${member.slug}`}
+                      href={`/people/${member.person.slug}`}
                       className="group flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 transition-colors hover:border-sky-300 hover:bg-sky-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                     >
                       <span>
-                        <span className="block text-sm font-bold text-slate-900">{member.nameZh}</span>
-                        <span className="mt-1 block text-xs text-slate-500">{member.title}</span>
+                        <span className="block text-sm font-bold text-slate-900">{member.person.nameZh}</span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                          {member.person.title}{member.roleLabel ? ` · ${member.roleLabel}` : ""}
+                        </span>
                       </span>
                       <ArrowRight className="h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                     </Link>

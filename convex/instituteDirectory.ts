@@ -3,10 +3,15 @@ import { v } from "convex/values"
 import {
   toPublicInstitutePerson,
   toPublicResearchGroup,
+  type InstitutePublicPersonResearchGroupMembershipSource,
+  type InstitutePublicResearchGroupMemberSource,
   type InstitutePersonRecord,
   type ResearchGroupRecord,
 } from "./lib/instituteDto"
-import type { InstitutePersonKind } from "../src/types/institute"
+import type {
+  InstitutePersonKind,
+  PublicResearchGroupMembershipRole,
+} from "../src/types/institute"
 
 const DEFAULT_PUBLIC_LIMIT = 48
 const MAX_PUBLIC_LIMIT = 100
@@ -22,6 +27,15 @@ type StoredResearchGroup = ResearchGroupRecord & {
   visibility: "public" | "hidden"
   displayOrder: number
   leaderPersonId: string
+}
+
+type StoredResearchGroupMembership = {
+  personId: string
+  researchGroupId: string
+  role: PublicResearchGroupMembershipRole
+  endedAt?: number
+  visibility: "public" | "hidden"
+  sortOrder: number
 }
 
 function normalizePublicText(value?: string): string {
@@ -108,6 +122,56 @@ async function getPublicLeader(ctx: any, leaderPersonId: string): Promise<Instit
   return record as StoredInstitutePerson
 }
 
+function isPublicActiveMembership(membership: StoredResearchGroupMembership): boolean {
+  return membership.visibility === "public" && membership.endedAt === undefined
+}
+
+async function getPublicResearchGroupMembers(
+  ctx: any,
+  researchGroupId: string,
+): Promise<InstitutePublicResearchGroupMemberSource[]> {
+  const memberships = await ctx.db
+    .query("researchGroupMemberships")
+    .withIndex("by_group_order", (index: any) => index.eq("researchGroupId", researchGroupId))
+    .collect() as StoredResearchGroupMembership[]
+  const members: InstitutePublicResearchGroupMemberSource[] = []
+
+  for (const membership of memberships) {
+    if (!isPublicActiveMembership(membership)) continue
+    const person = await ctx.db.get(membership.personId)
+    if (!person || person.visibility !== "public") continue
+    members.push({
+      role: membership.role,
+      person: person as StoredInstitutePerson,
+    })
+  }
+
+  return members
+}
+
+async function getPublicPersonResearchGroupMemberships(
+  ctx: any,
+  personId: string,
+): Promise<InstitutePublicPersonResearchGroupMembershipSource[]> {
+  const memberships = await ctx.db
+    .query("researchGroupMemberships")
+    .withIndex("by_person_order", (index: any) => index.eq("personId", personId))
+    .collect() as StoredResearchGroupMembership[]
+  const relationships: InstitutePublicPersonResearchGroupMembershipSource[] = []
+
+  for (const membership of memberships) {
+    if (!isPublicActiveMembership(membership)) continue
+    const group = await ctx.db.get(membership.researchGroupId)
+    if (!group || group.visibility !== "public") continue
+    relationships.push({
+      role: membership.role,
+      researchGroup: group as StoredResearchGroup,
+    })
+  }
+
+  return relationships
+}
+
 /**
  * AIA's fast-pass directory deliberately exports public reads only. Write
  * endpoints remain absent until the session and authorization foundation is
@@ -156,7 +220,11 @@ export const getPublicPerson = queryGeneric({
       .first()
 
     if (!record || record.visibility !== "public") return null
-    return toPublicInstitutePerson(record as StoredInstitutePerson)
+    const person = record as StoredInstitutePerson
+    return toPublicInstitutePerson(
+      person,
+      await getPublicPersonResearchGroupMemberships(ctx, person._id),
+    )
   },
 })
 
@@ -178,9 +246,13 @@ export const listPublicResearchGroups = queryGeneric({
       .filter((group) => researchGroupMatches(group, researchArea, searchQuery))
       .slice(0, limit)
 
-    return Promise.all(groups.map(async (group) => (
-      toPublicResearchGroup(group, await getPublicLeader(ctx, group.leaderPersonId))
-    )))
+    return Promise.all(groups.map(async (group) => {
+      const [leader, members] = await Promise.all([
+        getPublicLeader(ctx, group.leaderPersonId),
+        getPublicResearchGroupMembers(ctx, group._id),
+      ])
+      return toPublicResearchGroup(group, leader, members)
+    }))
   },
 })
 
@@ -197,6 +269,10 @@ export const getPublicResearchGroup = queryGeneric({
 
     if (!record || record.visibility !== "public") return null
     const group = record as StoredResearchGroup
-    return toPublicResearchGroup(group, await getPublicLeader(ctx, group.leaderPersonId))
+    const [leader, members] = await Promise.all([
+      getPublicLeader(ctx, group.leaderPersonId),
+      getPublicResearchGroupMembers(ctx, group._id),
+    ])
+    return toPublicResearchGroup(group, leader, members)
   },
 })
