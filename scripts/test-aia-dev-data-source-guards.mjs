@@ -196,6 +196,11 @@ test("snapshot manifests count documents and storage without exposing fixture va
     })
     assert.match(manifest.sha256, /^[a-f0-9]{64}$/)
     assert.match(manifest.logicalDigest, /^[a-f0-9]{64}$/)
+    assert.match(manifest.dataLogicalDigest, /^[a-f0-9]{64}$/)
+    assert.deepEqual(manifest.dataTableDocumentLineCounts, {
+      announcements: 1,
+      students: 2,
+    })
     assert.ok(manifest.archiveBytes > 0)
     for (const value of [secretEmail, secretUrl, secretToken, "fixture-only body"]) {
       assert.ok(!serialized.includes(value))
@@ -230,9 +235,10 @@ test("logical snapshot digest detects changed JSON with matching document and st
     assert.deepEqual(expected.tableDocumentLineCounts, actual.tableDocumentLineCounts)
     assert.deepEqual(expected.nativeStorage, actual.nativeStorage)
     assert.notEqual(expected.logicalDigest, actual.logicalDigest)
+    assert.notEqual(expected.dataLogicalDigest, actual.dataLogicalDigest)
     assert.deepEqual(compareSnapshotManifests(expected, actual), {
       equal: false,
-      differences: ["logicalDigest"],
+      differences: ["dataLogicalDigest"],
     })
 
     const result = spawnSync(
@@ -293,6 +299,30 @@ test("compares logical snapshot data rather than archive serialization", () => {
   assert.deepEqual(compareSnapshotManifests(expected, storageDifference), {
     equal: false,
     differences: ["nativeStorage.fileCount"],
+  })
+})
+
+test("accepts an equivalent import when the target deployment has only extra empty schema tables", () => {
+  const expected = {
+    sha256: "a".repeat(64),
+    archiveBytes: 10,
+    logicalDigest: "c".repeat(64),
+    dataLogicalDigest: "d".repeat(64),
+    tableDocumentLineCounts: { _tables: 41, students: 2 },
+    dataTableDocumentLineCounts: { students: 2 },
+    nativeStorage: { fileCount: 0, totalBytes: 0 },
+  }
+  const targetWithExtraEmptySchemaTables = {
+    ...expected,
+    sha256: "b".repeat(64),
+    archiveBytes: 11,
+    logicalDigest: "e".repeat(64),
+    tableDocumentLineCounts: { _tables: 49, newFeatureTable: 0, students: 2 },
+  }
+
+  assert.deepEqual(compareSnapshotManifests(expected, targetWithExtraEmptySchemaTables), {
+    equal: true,
+    differences: [],
   })
 })
 

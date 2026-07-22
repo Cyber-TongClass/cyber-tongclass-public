@@ -298,6 +298,8 @@ export async function makeSnapshotManifest(snapshotPath) {
   const { tableEntries, storageEntries } = await listArchiveEntries(snapshotPath)
   const tableDocumentLineCounts = Object.create(null)
   const tableDigests = []
+  const dataTableDocumentLineCounts = Object.create(null)
+  const dataTableDigests = []
 
   for (const [tableName, archiveEntry] of [...tableEntries.entries()].sort(([left], [right]) => (
     left.localeCompare(right)
@@ -305,6 +307,13 @@ export async function makeSnapshotManifest(snapshotPath) {
     const table = await digestDocumentTable(snapshotPath, archiveEntry)
     tableDocumentLineCounts[tableName] = table.documentLines
     tableDigests.push(sha256(`table\u0000${tableName}\u0000${table.digest}`))
+    // `_tables` records schema metadata and a target deployment can legitimately
+    // have additional empty tables after an application upgrade. The data
+    // comparison therefore covers only non-empty application tables.
+    if (tableName !== "_tables" && table.documentLines > 0) {
+      dataTableDocumentLineCounts[tableName] = table.documentLines
+      dataTableDigests.push(sha256(`table\u0000${tableName}\u0000${table.digest}`))
+    }
   }
 
   let totalBytes = 0
@@ -322,11 +331,17 @@ export async function makeSnapshotManifest(snapshotPath) {
     hashDigests("tables", tableDigests),
     hashDigests("storage", storageDigests),
   ])
+  const dataLogicalDigest = hashDigests("snapshot-data", [
+    hashDigests("tables", dataTableDigests),
+    hashDigests("storage", storageDigests),
+  ])
 
   return {
     ...archive,
     logicalDigest,
+    dataLogicalDigest,
     tableDocumentLineCounts: Object.fromEntries(Object.entries(tableDocumentLineCounts)),
+    dataTableDocumentLineCounts: Object.fromEntries(Object.entries(dataTableDocumentLineCounts)),
     nativeStorage: {
       fileCount: storageEntries.size,
       totalBytes,
@@ -343,7 +358,9 @@ export function assertSnapshotManifest(value) {
     "sha256",
     "archiveBytes",
     "logicalDigest",
+    "dataLogicalDigest",
     "tableDocumentLineCounts",
+    "dataTableDocumentLineCounts",
     "nativeStorage",
   ])
   if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
@@ -362,12 +379,43 @@ export function assertSnapshotManifest(value) {
     fail("AIA_SNAPSHOT_MANIFEST_INVALID")
   }
 
+  const hasDataLogicalDigest = Object.hasOwn(value, "dataLogicalDigest")
+  const hasDataTableDocumentLineCounts = Object.hasOwn(value, "dataTableDocumentLineCounts")
+  if (hasDataLogicalDigest !== hasDataTableDocumentLineCounts) {
+    fail("AIA_SNAPSHOT_MANIFEST_INVALID")
+  }
+  if (
+    hasDataLogicalDigest
+    && (
+      typeof value.dataLogicalDigest !== "string"
+      || !SHA256.test(value.dataLogicalDigest)
+      || !isPlainObject(value.dataTableDocumentLineCounts)
+    )
+  ) {
+    fail("AIA_SNAPSHOT_MANIFEST_INVALID")
+  }
+
   const tableDocumentLineCounts = Object.create(null)
   for (const [tableName, documentLines] of Object.entries(value.tableDocumentLineCounts)) {
     if (!SAFE_TABLE_NAME.test(tableName) || !isSafeCount(documentLines)) {
       fail("AIA_SNAPSHOT_MANIFEST_INVALID")
     }
     tableDocumentLineCounts[tableName] = documentLines
+  }
+
+  const dataTableDocumentLineCounts = Object.create(null)
+  if (hasDataTableDocumentLineCounts) {
+    for (const [tableName, documentLines] of Object.entries(value.dataTableDocumentLineCounts)) {
+      if (
+        tableName === "_tables"
+        || !SAFE_TABLE_NAME.test(tableName)
+        || !Number.isSafeInteger(documentLines)
+        || documentLines <= 0
+      ) {
+        fail("AIA_SNAPSHOT_MANIFEST_INVALID")
+      }
+      dataTableDocumentLineCounts[tableName] = documentLines
+    }
   }
 
   const storageKeys = Object.keys(value.nativeStorage)
@@ -385,6 +433,14 @@ export function assertSnapshotManifest(value) {
     sha256: value.sha256,
     archiveBytes: value.archiveBytes,
     logicalDigest: value.logicalDigest,
+    ...(hasDataLogicalDigest
+      ? {
+        dataLogicalDigest: value.dataLogicalDigest,
+        dataTableDocumentLineCounts: Object.fromEntries(
+          Object.entries(dataTableDocumentLineCounts).sort(([left], [right]) => left.localeCompare(right)),
+        ),
+      }
+      : {}),
     tableDocumentLineCounts: Object.fromEntries(
       Object.entries(tableDocumentLineCounts).sort(([left], [right]) => left.localeCompare(right)),
     ),
@@ -400,7 +456,18 @@ export function compareSnapshotManifests(expected, actual) {
   const actualManifest = assertSnapshotManifest(actual)
   const differences = []
 
-  if (
+  const compareDataOnly = (
+    Object.hasOwn(expectedManifest, "dataLogicalDigest")
+    && Object.hasOwn(actualManifest, "dataLogicalDigest")
+  )
+  if (compareDataOnly) {
+    if (
+      JSON.stringify(expectedManifest.dataTableDocumentLineCounts)
+      !== JSON.stringify(actualManifest.dataTableDocumentLineCounts)
+    ) {
+      differences.push("dataTableDocumentLineCounts")
+    }
+  } else if (
     JSON.stringify(expectedManifest.tableDocumentLineCounts)
     !== JSON.stringify(actualManifest.tableDocumentLineCounts)
   ) {
@@ -412,7 +479,11 @@ export function compareSnapshotManifests(expected, actual) {
   if (expectedManifest.nativeStorage.totalBytes !== actualManifest.nativeStorage.totalBytes) {
     differences.push("nativeStorage.totalBytes")
   }
-  if (expectedManifest.logicalDigest !== actualManifest.logicalDigest) {
+  if (compareDataOnly) {
+    if (expectedManifest.dataLogicalDigest !== actualManifest.dataLogicalDigest) {
+      differences.push("dataLogicalDigest")
+    }
+  } else if (expectedManifest.logicalDigest !== actualManifest.logicalDigest) {
     differences.push("logicalDigest")
   }
 
