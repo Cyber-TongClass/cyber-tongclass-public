@@ -111,8 +111,12 @@ export default defineSchema({
     year: v.number(),
     abstract: v.string(),
     url: v.optional(v.string()),
+    doi: v.optional(v.string()),
     category: v.string(),
     subCategory: v.optional(v.string()),
+    // Existing records without a scope remain Tong Class content.
+    siteScope: v.optional(v.union(v.literal("tong_class"), v.literal("institute"))),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("hidden"))),
     userId: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -120,6 +124,8 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_year", ["year"])
     .index("by_category", ["category"])
+    .index("by_siteScope_visibility_year", ["siteScope", "visibility", "year"])
+    .index("by_doi", ["doi"])
     .searchIndex("search_title", { searchField: "title" }),
 
   publicationVenues: defineTable({
@@ -184,13 +190,137 @@ export default defineSchema({
     category: v.string(),
     publishedAt: v.number(),
     isPublished: v.boolean(),
+    // Existing records without a scope remain Tong Class content.
+    siteScope: v.optional(v.union(v.literal("tong_class"), v.literal("institute"))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_publishedAt", ["publishedAt"])
     .index("by_category", ["category"])
     .index("by_author", ["authorId"])
+    .index("by_siteScope_isPublished_publishedAt", ["siteScope", "isPublished", "publishedAt"])
     .searchIndex("search_title", { searchField: "title" }),
+
+  // Institute directory records intentionally remain separate from login accounts.
+  institutePeople: defineTable({
+    slug: v.string(),
+    kind: v.union(v.literal("teacher"), v.literal("graduate")),
+    nameZh: v.string(),
+    nameEn: v.string(),
+    titleZh: v.optional(v.string()),
+    titleEn: v.optional(v.string()),
+    bioZh: v.optional(v.string()),
+    bioEn: v.optional(v.string()),
+    photoUrl: v.optional(v.string()),
+    researchAreas: v.array(v.string()),
+    publicLinks: v.array(v.object({
+      kind: v.union(
+        v.literal("homepage"),
+        v.literal("scholar"),
+        v.literal("orcid"),
+        v.literal("github"),
+        v.literal("other"),
+      ),
+      label: v.string(),
+      href: v.string(),
+    })),
+    publicEmail: v.optional(v.string()),
+    coffeeTalkOpen: v.optional(v.boolean()),
+    visibility: v.union(v.literal("public"), v.literal("hidden")),
+    displayOrder: v.number(),
+    isDemo: v.boolean(),
+    accountUserId: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_visibility_kind_order", ["visibility", "kind", "displayOrder"])
+    .index("by_accountUserId", ["accountUserId"]),
+
+  researchGroups: defineTable({
+    slug: v.string(),
+    nameZh: v.string(),
+    nameEn: v.string(),
+    summaryZh: v.optional(v.string()),
+    summaryEn: v.optional(v.string()),
+    descriptionZh: v.optional(v.string()),
+    descriptionEn: v.optional(v.string()),
+    leaderPersonId: v.id("institutePeople"),
+    researchAreas: v.array(v.string()),
+    publicLinks: v.array(v.object({
+      label: v.string(),
+      href: v.string(),
+    })),
+    recruitmentZh: v.optional(v.string()),
+    recruitmentEn: v.optional(v.string()),
+    visibility: v.union(v.literal("public"), v.literal("hidden")),
+    displayOrder: v.number(),
+    isDemo: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_visibility_order", ["visibility", "displayOrder"])
+    .index("by_leaderPersonId", ["leaderPersonId"]),
+
+  researchGroupMemberships: defineTable({
+    personId: v.id("institutePeople"),
+    researchGroupId: v.id("researchGroups"),
+    role: v.union(
+      v.literal("leader"),
+      v.literal("faculty"),
+      v.literal("graduate"),
+      v.literal("member"),
+    ),
+    isPrimary: v.boolean(),
+    startedAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+    visibility: v.union(v.literal("public"), v.literal("hidden")),
+    sortOrder: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_person_group", ["personId", "researchGroupId"])
+    .index("by_group_order", ["researchGroupId", "sortOrder"])
+    .index("by_person_order", ["personId", "sortOrder"]),
+
+  publicationAuthorships: defineTable({
+    publicationId: v.id("publications"),
+    personId: v.id("institutePeople"),
+    role: v.union(
+      v.literal("author"),
+      v.literal("corresponding_author"),
+      v.literal("advisor"),
+    ),
+    authorOrder: v.number(),
+    isPrimary: v.optional(v.boolean()),
+    naturalKey: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_naturalKey", ["naturalKey"])
+    .index("by_publication_person", ["publicationId", "personId"])
+    .index("by_person_publication", ["personId", "publicationId"])
+    .index("by_publication_order", ["publicationId", "authorOrder"]),
+
+  contentMentions: defineTable({
+    contentType: v.union(v.literal("publication"), v.literal("news")),
+    contentId: v.union(v.id("publications"), v.id("news")),
+    targetType: v.union(v.literal("person"), v.literal("researchGroup")),
+    targetId: v.union(v.id("institutePeople"), v.id("researchGroups")),
+    relation: v.union(
+      v.literal("featured"),
+      v.literal("related"),
+      v.literal("contributor"),
+    ),
+    sortOrder: v.number(),
+    naturalKey: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_naturalKey", ["naturalKey"])
+    .index("by_content", ["contentType", "contentId", "sortOrder"])
+    .index("by_target", ["targetType", "targetId", "sortOrder"]),
 
   // Events table
   events: defineTable({
