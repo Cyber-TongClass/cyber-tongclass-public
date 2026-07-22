@@ -5,6 +5,8 @@ import Link from "next/link"
 import { LogIn, Menu, X } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useRef, useState } from "react"
+import { NotificationBell } from "@/components/notifications/notification-bell"
+import { useCoffeeTalkNotifications, useTongClassSessionToken } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 const navigation = [
@@ -23,9 +25,14 @@ const isActivePath = (pathname: string, href: string) =>
 
 export function AiaNavbar() {
   const pathname = usePathname() || "/"
+  const sessionToken = useTongClassSessionToken()
+  const notifications = useCoffeeTalkNotifications()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
   const mobileMenuId = "aia-mobile-navigation"
+  const unreadNotificationCount = Array.isArray(notifications)
+    ? notifications.filter((notification: { readAt?: number }) => notification.readAt === undefined).length
+    : 0
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false)
 
@@ -87,13 +94,17 @@ export function AiaNavbar() {
         </nav>
 
         <div className="hidden shrink-0 items-center lg:flex">
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--aia-red)/0.3)] px-3 py-2 text-sm font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:bg-[hsl(var(--aia-red)/0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--aia-red))] focus-visible:ring-offset-2"
-          >
-            <LogIn className="h-4 w-4" aria-hidden="true" />
-            登录
-          </Link>
+          {sessionToken ? (
+            <NotificationBell unreadCount={unreadNotificationCount} href="/notifications" label="通知" />
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--aia-red)/0.3)] px-3 py-2 text-sm font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:bg-[hsl(var(--aia-red)/0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--aia-red))] focus-visible:ring-offset-2"
+            >
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+              登录
+            </Link>
+          )}
         </div>
 
         <button
