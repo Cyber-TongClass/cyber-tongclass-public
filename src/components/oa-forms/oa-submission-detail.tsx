@@ -90,9 +90,10 @@ function ApprovalTimeline({ submission }: { submission: OAFormSubmission }) {
   const timeline = getApprovalTimeline(submission)
 
   return (
-    <ol className="relative space-y-6 before:absolute before:bottom-4 before:left-[15px] before:top-4 before:w-px before:bg-slate-200">
-      {timeline.map((node) => (
+    <ol className="relative space-y-6">
+      {timeline.map((node, index) => (
         <li key={node.label} className="relative flex gap-3">
+          {index < timeline.length - 1 ? <span className="absolute bottom-[-36px] left-[5.5px] top-3 w-px bg-slate-200" aria-hidden="true" /> : null}
           <span className={`relative z-10 mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 ${getTimelineDotClass(node.state)}`} aria-hidden="true" />
           <div className="min-w-0 flex-1 pb-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -136,26 +137,28 @@ export function OAFormSubmissionDetail({ submission, snapshot, fallbackForm, all
           <Badge variant={statusVariant(submission.reviewStatus)}>{oaReviewStatusLabels[submission.reviewStatus]}</Badge>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-x-8 gap-y-4 md:grid-cols-2">
+          <dl className="grid gap-x-8 gap-y-4 md:grid-cols-2">
             {fields.map((field) => (
               <div key={field.id} className={field.type === "table" || field.type === "textarea" || field.type === "file" ? "space-y-1 md:col-span-2" : "space-y-1"}>
                 <dt className="text-xs font-medium text-slate-500">{field.label}</dt>
                 <dd className="break-words text-sm text-slate-900"><AnswerValue field={field} submissionId={submission._id} value={submission.answers?.[field.id]} /></dd>
               </div>
             ))}
-          </div>
+          </dl>
         </CardContent>
       </Card>
 
       {hasResults ? (
         <Card className="border-blue-200 bg-blue-50/40">
           <CardHeader><CardTitle className="text-lg">处理结果</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            {visibleResultFields.map((field: OAResultField) => {
-              const value = submission.resultValues?.[field.id]
-              if (value === undefined || value === null || value === "") return null
-              return <div key={field.id} className="space-y-1"><dt className="text-xs font-medium text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap text-sm text-slate-900">{typeof value === "object" ? "复杂内容无法显示" : String(value)}</dd></div>
-            })}
+          <CardContent>
+            <dl className="grid gap-4 md:grid-cols-2">
+              {visibleResultFields.map((field: OAResultField) => {
+                const value = submission.resultValues?.[field.id]
+                if (value === undefined || value === null || value === "") return null
+                return <div key={field.id} className="space-y-1"><dt className="text-xs font-medium text-slate-500">{field.label}</dt><dd className="whitespace-pre-wrap text-sm text-slate-900">{typeof value === "object" ? "复杂内容无法显示" : String(value)}</dd></div>
+              })}
+            </dl>
           </CardContent>
         </Card>
       ) : null}
