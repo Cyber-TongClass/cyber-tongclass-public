@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, Archive, Clock } from "lucide-react"
+import { ArrowLeft, Archive, ClipboardList, Clock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { usePublishedOAForms } from "@/lib/api"
 import { splitOAFormsByCollectionStatus } from "@/lib/oa-forms"
@@ -52,8 +53,15 @@ export default function IntranetFormsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 relative">
           <div className="absolute left-4 sm:left-6 lg:left-8 top-1/2 -translate-y-1/2 text-[4rem] md:text-[7rem] lg:text-[9rem] font-extrabold uppercase tracking-[0.15em] text-white/5 select-none pointer-events-none whitespace-nowrap leading-none">FORMS</div>
           <Link href="/intranet" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white mb-4 transition-colors"><ArrowLeft className="h-4 w-4" />返回内网</Link>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">OA 填报</h1>
-          <p className="text-lg text-white/70 max-w-2xl mt-2">正在发布的问卷、申请、报销和奖学金填报入口。</p>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">OA 填报</h1>
+              <p className="text-lg text-white/70 max-w-2xl mt-2">正在发布的问卷、申请、报销和奖学金填报入口。</p>
+            </div>
+            <Button asChild variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white hover:text-primary">
+              <Link href="/intranet/forms/submissions"><ClipboardList className="mr-2 h-4 w-4" />我的提交</Link>
+            </Button>
+          </div>
         </div>
       </section>
 

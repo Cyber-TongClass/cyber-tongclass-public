@@ -2,12 +2,40 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  formatSubmissionAnswer,
   getApprovalTimeline,
   getSubmissionFormSnapshot,
   getSubmissionTitle,
 } from "../src/lib/oa-submissions.ts";
 
 const submittedAt = 10;
+
+test("formatSubmissionAnswer presents table answers by their defined column labels", () => {
+  const display = formatSubmissionAnswer(
+    {
+      id: "travel",
+      type: "table",
+      label: "行程安排",
+      columns: [
+        { id: "date", label: "日期", type: "date" },
+        { id: "city", label: "城市", type: "text" },
+        { id: "budget", label: "预算", type: "number" },
+      ],
+    },
+    [
+      { date: "2026-07-20", city: "北京", budget: 900 },
+      { date: "2026-07-21", city: "上海", budget: "" },
+    ],
+  );
+
+  assert.equal(display.kind, "table");
+  assert.deepEqual(display.columns, ["日期", "城市", "预算"]);
+  assert.deepEqual(display.rows, [
+    ["2026-07-20", "北京", "900"],
+    ["2026-07-21", "上海", ""],
+  ]);
+  assert.doesNotMatch(JSON.stringify(display), /"date"|"city"|"budget"/);
+});
 
 test("getSubmissionFormSnapshot derives a snapshot for legacy submissions from the current form", () => {
   const fallbackForm = {
