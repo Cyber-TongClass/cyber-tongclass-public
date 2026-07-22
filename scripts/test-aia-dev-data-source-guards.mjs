@@ -1,9 +1,13 @@
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
 import {
+  appendFileSync,
   mkdtempSync,
   mkdirSync,
+  chmodSync,
+  copyFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -14,8 +18,10 @@ import { fileURLToPath } from "node:url"
 import {
   buildConvexExport,
   buildConvexImport,
+  runClone,
   runConvexCommand,
 } from "./aia-dev-data/clone-convex-snapshot.mjs"
+import { runRollback } from "./aia-dev-data/rollback-convex-snapshot.mjs"
 import {
   compareSnapshotManifests,
   makeSnapshotManifest,
@@ -40,26 +46,74 @@ function assertGateError(run) {
   })
 }
 
-function makeFixtureZip(directory) {
-  const input = join(directory, "input")
-  const archive = join(directory, "fixture.zip")
+function assertSnapshotError(error, code) {
+  assert.ok(error instanceof Error)
+  assert.equal(error.message, code)
+  return true
+}
+
+function cloneArgs(envFile, backupDir) {
+  return [
+    "--env-file",
+    envFile,
+    "--source",
+    SOURCE,
+    "--target",
+    TARGET,
+    "--confirm-target",
+    TARGET,
+    "--backup-dir",
+    backupDir,
+  ]
+}
+
+function rollbackArgs(envFile, snapshot, manifest) {
+  return [
+    "--env-file",
+    envFile,
+    "--source",
+    SOURCE,
+    "--target",
+    TARGET,
+    "--confirm-target",
+    TARGET,
+    "--snapshot",
+    snapshot,
+    "--manifest",
+    manifest,
+  ]
+}
+
+function makeFixtureZip(directory, options = {}) {
+  const archiveName = options.archiveName ?? "fixture.zip"
+  const input = join(directory, `input-${archiveName.replace(/[^A-Za-z0-9]/g, "-")}`)
+  const archive = join(directory, archiveName)
   const secretEmail = "fixture.person@example.test"
   const secretUrl = "https://fixture.example.test/private-token"
   const secretToken = "fixture-token-value"
+  const studentDocuments = options.studentDocuments ?? [
+    { email: secretEmail, token: secretToken },
+    { url: secretUrl },
+  ]
+  const announcementDocuments = options.announcementDocuments ?? [
+    { body: "fixture-only body" },
+  ]
+  const storageA = options.storageA ?? "abc"
+  const storageB = options.storageB ?? "defgh"
 
   mkdirSync(join(input, "students"), { recursive: true })
   mkdirSync(join(input, "announcements"), { recursive: true })
   mkdirSync(join(input, "_storage"), { recursive: true })
   writeFileSync(
     join(input, "students", "documents.jsonl"),
-    `${JSON.stringify({ email: secretEmail, token: secretToken })}\n${JSON.stringify({ url: secretUrl })}\n`,
+    `${studentDocuments.map((document) => JSON.stringify(document)).join("\n")}\n`,
   )
   writeFileSync(
     join(input, "announcements", "documents.jsonl"),
-    `${JSON.stringify({ body: "fixture-only body" })}\n`,
+    `${announcementDocuments.map((document) => JSON.stringify(document)).join("\n")}\n`,
   )
-  writeFileSync(join(input, "_storage", "fixture-a"), "abc")
-  writeFileSync(join(input, "_storage", "fixture-b"), "defgh")
+  writeFileSync(join(input, "_storage", "fixture-a"), storageA)
+  writeFileSync(join(input, "_storage", "fixture-b"), storageB)
 
   const result = spawnSync("zip", ["-q", "-r", archive, "students", "announcements", "_storage"], {
     cwd: input,
@@ -140,6 +194,7 @@ test("snapshot manifests count documents and storage without exposing fixture va
       totalBytes: 8,
     })
     assert.match(manifest.sha256, /^[a-f0-9]{64}$/)
+    assert.match(manifest.logicalDigest, /^[a-f0-9]{64}$/)
     assert.ok(manifest.archiveBytes > 0)
     for (const value of [secretEmail, secretUrl, secretToken, "fixture-only body"]) {
       assert.ok(!serialized.includes(value))
@@ -149,10 +204,66 @@ test("snapshot manifests count documents and storage without exposing fixture va
   }
 })
 
+test("logical snapshot digest detects changed JSON with matching document and storage totals", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "aia-logical-digest-"))
+  const envFile = join(directory, ".env.aia-dev.local")
+  const verifier = fileURLToPath(
+    new URL("./aia-dev-data/verify-convex-clone.mjs", import.meta.url),
+  )
+
+  try {
+    writeFileSync(envFile, validEnv)
+    const expectedArchive = makeFixtureZip(directory, {
+      archiveName: "expected.zip",
+      studentDocuments: [{ status: "AAAA" }, { status: "BBBB" }],
+      announcementDocuments: [{ body: "CCCC" }],
+    }).archive
+    const actualArchive = makeFixtureZip(directory, {
+      archiveName: "actual.zip",
+      studentDocuments: [{ status: "ZZZZ" }, { status: "BBBB" }],
+      announcementDocuments: [{ body: "CCCC" }],
+    }).archive
+    const expected = await makeSnapshotManifest(expectedArchive)
+    const actual = await makeSnapshotManifest(actualArchive)
+
+    assert.deepEqual(expected.tableDocumentLineCounts, actual.tableDocumentLineCounts)
+    assert.deepEqual(expected.nativeStorage, actual.nativeStorage)
+    assert.notEqual(expected.logicalDigest, actual.logicalDigest)
+    assert.deepEqual(compareSnapshotManifests(expected, actual), {
+      equal: false,
+      differences: ["logicalDigest"],
+    })
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        verifier,
+        "--env-file",
+        envFile,
+        "--source",
+        SOURCE,
+        "--target",
+        TARGET,
+        "--expected",
+        expectedArchive,
+        "--actual",
+        actualArchive,
+      ],
+      { encoding: "utf8", shell: false },
+    )
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stderr, "AIA_SNAPSHOT_VERIFY_MISMATCH\n")
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 test("compares logical snapshot data rather than archive serialization", () => {
   const expected = {
     sha256: "a".repeat(64),
     archiveBytes: 10,
+    logicalDigest: "c".repeat(64),
     tableDocumentLineCounts: { students: 2 },
     nativeStorage: { fileCount: 1, totalBytes: 4 },
   }
@@ -333,12 +444,14 @@ test("verification exits nonzero when logical snapshot totals differ", () => {
     writeFileSync(expected, `${JSON.stringify({
       sha256: "a".repeat(64),
       archiveBytes: 10,
+      logicalDigest: "c".repeat(64),
       tableDocumentLineCounts: { students: 2 },
       nativeStorage: { fileCount: 1, totalBytes: 4 },
     })}\n`)
     writeFileSync(actual, `${JSON.stringify({
       sha256: "b".repeat(64),
       archiveBytes: 11,
+      logicalDigest: "d".repeat(64),
       tableDocumentLineCounts: { students: 3 },
       nativeStorage: { fileCount: 1, totalBytes: 4 },
     })}\n`)
@@ -363,6 +476,192 @@ test("verification exits nonzero when logical snapshot totals differ", () => {
 
     assert.equal(result.status, 1)
     assert.equal(result.stderr, "AIA_SNAPSHOT_VERIFY_MISMATCH\n")
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("clone refuses an existing backup directory that is broader than owner-private", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "aia-insecure-backup-"))
+  const envFile = join(directory, ".env.aia-dev.local")
+  const backupDir = join(directory, "backup")
+  let spawnCalls = 0
+
+  try {
+    writeFileSync(envFile, validEnv)
+    mkdirSync(backupDir)
+    chmodSync(backupDir, 0o755)
+
+    await assert.rejects(
+      runClone(cloneArgs(envFile, backupDir), {
+        stateDirectory: join(directory, "state"),
+        spawnCommand() {
+          spawnCalls += 1
+          return { status: 0 }
+        },
+      }),
+      (error) => assertSnapshotError(error, "AIA_SNAPSHOT_BACKUP_DIRECTORY_INSECURE"),
+    )
+    assert.equal(spawnCalls, 0)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("a failed clone import records an unknown target state and blocks rollback before spawn", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "aia-import-unknown-"))
+  const envFile = join(directory, ".env.aia-dev.local")
+  const backupDir = join(directory, "backup")
+  const stateDirectory = join(directory, "state")
+
+  try {
+    writeFileSync(envFile, validEnv)
+    const { archive } = makeFixtureZip(directory)
+    await assert.rejects(
+      runClone(cloneArgs(envFile, backupDir), {
+        stateDirectory,
+        spawnCommand(_command, args) {
+          if (args[1] === "export") {
+            copyFileSync(archive, args[6])
+            return { status: 0 }
+          }
+          if (args[1] === "import") {
+            return { status: 1 }
+          }
+          throw new Error("unexpected command")
+        },
+      }),
+      (error) => assertSnapshotError(error, "AIA_SNAPSHOT_IMPORT_UNKNOWN"),
+    )
+
+    const manifest = await makeSnapshotManifest(archive)
+    const manifestPath = join(directory, "target-before.manifest.json")
+    writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`)
+    let rollbackSpawnCalls = 0
+
+    await assert.rejects(
+      runRollback(rollbackArgs(envFile, archive, manifestPath), {
+        stateDirectory,
+        spawnCommand() {
+          rollbackSpawnCalls += 1
+          return { status: 0 }
+        },
+      }),
+      (error) => assertSnapshotError(error, "AIA_SNAPSHOT_TARGET_STATE_BLOCKED"),
+    )
+    assert.equal(rollbackSpawnCalls, 0)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("clone aborts when the source snapshot changes after its manifest and before import", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "aia-snapshot-change-"))
+  const envFile = join(directory, ".env.aia-dev.local")
+  const backupDir = join(directory, "backup")
+  let importSpawnCalls = 0
+
+  try {
+    writeFileSync(envFile, validEnv)
+    const initial = makeFixtureZip(directory, {
+      archiveName: "initial.zip",
+      studentDocuments: [{ status: "AAAA" }, { status: "BBBB" }],
+    }).archive
+    const changed = makeFixtureZip(directory, {
+      archiveName: "changed.zip",
+      studentDocuments: [{ status: "ZZZZ" }, { status: "BBBB" }],
+    }).archive
+
+    await assert.rejects(
+      runClone(cloneArgs(envFile, backupDir), {
+        stateDirectory: join(directory, "state"),
+        spawnCommand(_command, args) {
+          if (args[1] === "export") {
+            copyFileSync(initial, args[6])
+            return { status: 0 }
+          }
+          if (args[1] === "import") {
+            importSpawnCalls += 1
+            return { status: 0 }
+          }
+          throw new Error("unexpected command")
+        },
+        beforeImportRecheck({ snapshotPath }) {
+          copyFileSync(changed, snapshotPath)
+          chmodSync(snapshotPath, 0o600)
+        },
+      }),
+      (error) => assertSnapshotError(error, "AIA_SNAPSHOT_IMPORT_SNAPSHOT_CHANGED"),
+    )
+    assert.equal(importSpawnCalls, 0)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("rollback stages an externally supplied snapshot before its target import", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "aia-rollback-staging-"))
+  const envFile = join(directory, ".env.aia-dev.local")
+  const stateDirectory = join(directory, "state")
+
+  try {
+    writeFileSync(envFile, validEnv)
+    const { archive } = makeFixtureZip(directory)
+    chmodSync(archive, 0o644)
+    const manifest = await makeSnapshotManifest(archive)
+    const manifestPath = join(directory, "target-before.manifest.json")
+    writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`)
+    let importedSnapshot
+    let importedSnapshotMode
+
+    await runRollback(rollbackArgs(envFile, archive, manifestPath), {
+      stateDirectory,
+      spawnCommand(_command, args) {
+        if (args[1] === "import") {
+          importedSnapshot = args[4]
+          importedSnapshotMode = statSync(importedSnapshot).mode
+          return { status: 0 }
+        }
+        if (args[1] === "export") {
+          copyFileSync(archive, args[6])
+          chmodSync(args[6], 0o600)
+          return { status: 0 }
+        }
+        throw new Error("unexpected command")
+      },
+    })
+
+    assert.notEqual(importedSnapshot, archive)
+    assert.equal(importedSnapshotMode & 0o077, 0)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("rollback refuses a snapshot whose archive hash changed after its manifest", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "aia-rollback-hash-change-"))
+  const envFile = join(directory, ".env.aia-dev.local")
+  let spawnCalls = 0
+
+  try {
+    writeFileSync(envFile, validEnv)
+    const { archive } = makeFixtureZip(directory)
+    const manifest = await makeSnapshotManifest(archive)
+    const manifestPath = join(directory, "target-before.manifest.json")
+    writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`)
+    appendFileSync(archive, "harmless-trailing-serialization-change")
+
+    await assert.rejects(
+      runRollback(rollbackArgs(envFile, archive, manifestPath), {
+        stateDirectory: join(directory, "state"),
+        spawnCommand() {
+          spawnCalls += 1
+          return { status: 0 }
+        },
+      }),
+      (error) => assertSnapshotError(error, "AIA_SNAPSHOT_IMPORT_SNAPSHOT_CHANGED"),
+    )
+    assert.equal(spawnCalls, 0)
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

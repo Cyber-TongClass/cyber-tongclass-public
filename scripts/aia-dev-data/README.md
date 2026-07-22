@@ -30,7 +30,9 @@ node scripts/aia-dev-data/clone-convex-snapshot.mjs \
   --backup-dir /secure/local/aia-snapshots/clone-2026-07-22
 ```
 
-That directory receives `target-before.zip` and its manifest before the import, plus the source and target-after snapshots and manifests. Manifests contain only a SHA-256, archive size, per-table document-line counts, and native-storage totals; they do not contain exported document values. If clone verification fails, the command stops with `AIA_SNAPSHOT_VERIFY_MISMATCH`. It never performs an automatic rollback.
+That directory receives `target-before.zip` and its manifest before the import, plus the source and target-after snapshots and manifests. Manifests contain only archive and logical SHA-256 digests, archive size, per-table document-line counts, and native-storage totals; they do not contain exported document values or archive entry names. If clone verification fails, the command stops with `AIA_SNAPSHOT_VERIFY_MISMATCH`. It never performs an automatic rollback.
+
+If an import reports an unknown or pending state, do not retry clone or start rollback automatically. The private local state journal deliberately blocks another target import until an operator investigates the prior result.
 
 To manually roll the development target back to the pre-import backup, use that target backup and its matching manifest. Rollback imports only `bold-sandpiper-236`, then re-exports and logically verifies it. Run exactly:
 

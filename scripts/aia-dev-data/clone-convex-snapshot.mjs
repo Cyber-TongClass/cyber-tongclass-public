@@ -1,11 +1,6 @@
 import { spawnSync } from "node:child_process"
 import {
-  chmodSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
   readFileSync,
-  readdirSync,
   writeFileSync,
 } from "node:fs"
 import { join, resolve } from "node:path"
@@ -14,6 +9,12 @@ import {
   parseDotEnv,
   validateTargetConfig,
 } from "./lib/target-gate.mjs"
+import {
+  acquireTargetImport,
+  ensureEmptyPrivateBackupDirectory,
+  recheckImportSnapshot,
+  securePrivateRegularFile,
+} from "./lib/import-safety.mjs"
 import {
   AIA_SOURCE_DEPLOYMENT,
   AIA_TARGET_DEPLOYMENT,
@@ -87,24 +88,6 @@ function loadAndValidate(args) {
   })
 }
 
-function ensureEmptyBackupDirectory(backupDir) {
-  try {
-    if (existsSync(backupDir)) {
-      const details = lstatSync(backupDir)
-      if (!details.isDirectory() || details.isSymbolicLink() || readdirSync(backupDir).length > 0) {
-        fail("AIA_SNAPSHOT_BACKUP_DIRECTORY_NOT_EMPTY")
-      }
-      return
-    }
-    mkdirSync(backupDir, { recursive: true, mode: 0o700 })
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("AIA_")) {
-      throw error
-    }
-    fail("AIA_SNAPSHOT_BACKUP_DIRECTORY_INVALID")
-  }
-}
-
 function assertConvexCommand(command) {
   const isExport = (
     command.length === 7
@@ -148,14 +131,6 @@ export function runConvexCommand(command, spawnCommand = spawnSync) {
   }
 }
 
-function secureFile(path) {
-  try {
-    chmodSync(path, 0o600)
-  } catch {
-    fail("AIA_SNAPSHOT_ARCHIVE_WRITE_FAILED")
-  }
-}
-
 function writeManifest(path, manifest) {
   const safeManifest = assertSnapshotManifest(manifest)
   try {
@@ -175,7 +150,7 @@ function logManifest(label, manifest) {
 
 async function exportAndManifest(label, deployment, archivePath, manifestPath, spawnCommand) {
   runConvexCommand(buildConvexExport(deployment, archivePath), spawnCommand)
-  secureFile(archivePath)
+  securePrivateRegularFile(archivePath)
   const manifest = await makeSnapshotManifest(archivePath)
   writeManifest(manifestPath, manifest)
   logManifest(label, manifest)
@@ -187,7 +162,7 @@ export async function runClone(argv = process.argv.slice(2), options = {}) {
   loadAndValidate(args)
 
   const spawnCommand = options.spawnCommand ?? spawnSync
-  ensureEmptyBackupDirectory(args.backupDir)
+  ensureEmptyPrivateBackupDirectory(args.backupDir)
 
   const targetBeforeArchive = join(args.backupDir, "target-before.zip")
   const targetBeforeManifest = join(args.backupDir, "target-before.manifest.json")
@@ -211,17 +186,50 @@ export async function runClone(argv = process.argv.slice(2), options = {}) {
     spawnCommand,
   )
 
-  runConvexCommand(buildConvexImport(AIA_TARGET_DEPLOYMENT, sourceArchive), spawnCommand)
-  const targetAfterManifestData = await exportAndManifest(
-    "clone target-after",
-    AIA_TARGET_DEPLOYMENT,
-    targetAfterArchive,
-    targetAfterManifest,
-    spawnCommand,
-  )
+  let operation
+  let importAttempted = false
+  let journalFinalized = false
+  try {
+    operation = acquireTargetImport(options)
+    if (typeof options.beforeImportRecheck === "function") {
+      options.beforeImportRecheck({ snapshotPath: sourceArchive })
+    }
+    await recheckImportSnapshot(sourceArchive, sourceManifestData)
+    importAttempted = true
+    try {
+      runConvexCommand(buildConvexImport(AIA_TARGET_DEPLOYMENT, sourceArchive), spawnCommand)
+    } catch {
+      operation.markUnknown()
+      journalFinalized = true
+      fail("AIA_SNAPSHOT_IMPORT_UNKNOWN")
+    }
 
-  if (!compareSnapshotManifests(sourceManifestData, targetAfterManifestData).equal) {
-    fail("AIA_SNAPSHOT_VERIFY_MISMATCH")
+    const targetAfterManifestData = await exportAndManifest(
+      "clone target-after",
+      AIA_TARGET_DEPLOYMENT,
+      targetAfterArchive,
+      targetAfterManifest,
+      spawnCommand,
+    )
+    if (!compareSnapshotManifests(sourceManifestData, targetAfterManifestData).equal) {
+      fail("AIA_SNAPSHOT_VERIFY_MISMATCH")
+    }
+    operation.markVerified()
+    journalFinalized = true
+  } catch (error) {
+    if (operation && !journalFinalized) {
+      if (importAttempted) {
+        operation.markUnknown()
+      } else {
+        operation.cancelBeforeImport()
+      }
+      journalFinalized = true
+    }
+    throw error
+  } finally {
+    if (operation) {
+      operation.release()
+    }
   }
 }
 

@@ -9,6 +9,7 @@ export const AIA_TARGET_DEPLOYMENT = "bold-sandpiper-236"
 const SAFE_TABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
 const SAFE_STORAGE_ENTRY = /^_storage(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)+$/
 const SHA256 = /^[a-f0-9]{64}$/
+const MAX_DOCUMENT_LINE_LENGTH = 16 * 1024 * 1024
 
 function fail(code) {
   throw new Error(code)
@@ -81,25 +82,87 @@ function runArchiveCommand(args, onData) {
   })
 }
 
-function lineCounter() {
-  let count = 0
-  let hasNonWhitespace = false
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex")
+}
+
+function canonicalizeJson(value) {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value)
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalizeJson(item)).join(",")}]`
+  }
+
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalizeJson(value[key])}`)
+    .join(",")}}`
+}
+
+function hashDigests(label, digests) {
+  const hash = createHash("sha256")
+  hash.update(`${label}\u0000`)
+  for (const digest of [...digests].sort()) {
+    hash.update(digest)
+    hash.update("\u0000")
+  }
+  return hash.digest("hex")
+}
+
+function documentDigestCounter() {
+  const decoder = new TextDecoder("utf-8", { fatal: true })
+  const documentDigests = []
+  let documentLines = 0
+  let firstLine = true
+  let pending = ""
+
+  const processLine = (line) => {
+    const normalized = firstLine ? line.replace(/^\uFEFF/, "") : line
+    firstLine = false
+    if (!normalized.trim()) {
+      return
+    }
+
+    let parsed
+    try {
+      parsed = JSON.parse(normalized)
+      documentDigests.push(sha256(canonicalizeJson(parsed)))
+    } catch {
+      fail("AIA_SNAPSHOT_MANIFEST_ARCHIVE_INVALID")
+    }
+    documentLines += 1
+  }
+
+  const processPendingLines = (isFinal = false) => {
+    let newlineIndex = pending.indexOf("\n")
+    while (newlineIndex !== -1) {
+      processLine(pending.slice(0, newlineIndex).replace(/\r$/, ""))
+      pending = pending.slice(newlineIndex + 1)
+      newlineIndex = pending.indexOf("\n")
+    }
+
+    if (isFinal && pending) {
+      processLine(pending.replace(/\r$/, ""))
+      pending = ""
+    }
+    if (pending.length > MAX_DOCUMENT_LINE_LENGTH) {
+      fail("AIA_SNAPSHOT_MANIFEST_ARCHIVE_INVALID")
+    }
+  }
 
   return {
     write(chunk) {
-      for (const byte of chunk) {
-        if (byte === 0x0a) {
-          if (hasNonWhitespace) {
-            count += 1
-          }
-          hasNonWhitespace = false
-        } else if (byte !== 0x0d && byte !== 0x09 && byte !== 0x20) {
-          hasNonWhitespace = true
-        }
-      }
+      pending += decoder.decode(chunk, { stream: true })
+      processPendingLines()
     },
     value() {
-      return count + Number(hasNonWhitespace)
+      pending += decoder.decode()
+      processPendingLines(true)
+      return {
+        documentLines,
+        digest: hashDigests("documents", documentDigests),
+      }
     },
   }
 }
@@ -193,27 +256,37 @@ async function listArchiveEntries(snapshotPath) {
   return { tableEntries, storageEntries }
 }
 
-async function countDocumentLines(snapshotPath, archiveEntry) {
-  const counter = lineCounter()
+async function digestDocumentTable(snapshotPath, archiveEntry) {
+  const counter = documentDigestCounter()
   await runArchiveCommand(["-p", snapshotPath, archiveEntry], (chunk) => {
     counter.write(chunk)
   })
-  const count = counter.value()
-  if (!isSafeCount(count)) {
+  const result = counter.value()
+  if (!isSafeCount(result.documentLines)) {
     fail("AIA_SNAPSHOT_MANIFEST_ARCHIVE_INVALID")
   }
-  return count
+  return result
 }
 
-async function countStorageBytes(snapshotPath, archiveEntry) {
+async function digestStorageEntry(snapshotPath, archiveEntry) {
   let totalBytes = 0
+  const contentHash = createHash("sha256")
   await runArchiveCommand(["-p", snapshotPath, archiveEntry], (chunk) => {
     totalBytes += chunk.length
+    contentHash.update(chunk)
     if (!isSafeCount(totalBytes)) {
       fail("AIA_SNAPSHOT_MANIFEST_ARCHIVE_INVALID")
     }
   })
-  return totalBytes
+  const entryHash = createHash("sha256")
+  entryHash.update("storage\u0000")
+  entryHash.update(archiveEntry)
+  entryHash.update("\u0000")
+  entryHash.update(contentHash.digest("hex"))
+  return {
+    totalBytes,
+    digest: entryHash.digest("hex"),
+  }
 }
 
 export async function makeSnapshotManifest(snapshotPath) {
@@ -224,23 +297,35 @@ export async function makeSnapshotManifest(snapshotPath) {
   const archive = await hashArchive(snapshotPath)
   const { tableEntries, storageEntries } = await listArchiveEntries(snapshotPath)
   const tableDocumentLineCounts = Object.create(null)
+  const tableDigests = []
 
   for (const [tableName, archiveEntry] of [...tableEntries.entries()].sort(([left], [right]) => (
     left.localeCompare(right)
   ))) {
-    tableDocumentLineCounts[tableName] = await countDocumentLines(snapshotPath, archiveEntry)
+    const table = await digestDocumentTable(snapshotPath, archiveEntry)
+    tableDocumentLineCounts[tableName] = table.documentLines
+    tableDigests.push(sha256(`table\u0000${tableName}\u0000${table.digest}`))
   }
 
   let totalBytes = 0
+  const storageDigests = []
   for (const archiveEntry of storageEntries) {
-    totalBytes += await countStorageBytes(snapshotPath, archiveEntry)
+    const storage = await digestStorageEntry(snapshotPath, archiveEntry)
+    totalBytes += storage.totalBytes
+    storageDigests.push(storage.digest)
     if (!isSafeCount(totalBytes)) {
       fail("AIA_SNAPSHOT_MANIFEST_ARCHIVE_INVALID")
     }
   }
 
+  const logicalDigest = hashDigests("snapshot", [
+    hashDigests("tables", tableDigests),
+    hashDigests("storage", storageDigests),
+  ])
+
   return {
     ...archive,
+    logicalDigest,
     tableDocumentLineCounts: Object.fromEntries(Object.entries(tableDocumentLineCounts)),
     nativeStorage: {
       fileCount: storageEntries.size,
@@ -257,6 +342,7 @@ export function assertSnapshotManifest(value) {
   const allowedKeys = new Set([
     "sha256",
     "archiveBytes",
+    "logicalDigest",
     "tableDocumentLineCounts",
     "nativeStorage",
   ])
@@ -268,6 +354,8 @@ export function assertSnapshotManifest(value) {
     typeof value.sha256 !== "string"
     || !SHA256.test(value.sha256)
     || !isSafeCount(value.archiveBytes)
+    || typeof value.logicalDigest !== "string"
+    || !SHA256.test(value.logicalDigest)
     || !isPlainObject(value.tableDocumentLineCounts)
     || !isPlainObject(value.nativeStorage)
   ) {
@@ -296,6 +384,7 @@ export function assertSnapshotManifest(value) {
   return {
     sha256: value.sha256,
     archiveBytes: value.archiveBytes,
+    logicalDigest: value.logicalDigest,
     tableDocumentLineCounts: Object.fromEntries(
       Object.entries(tableDocumentLineCounts).sort(([left], [right]) => left.localeCompare(right)),
     ),
@@ -322,6 +411,9 @@ export function compareSnapshotManifests(expected, actual) {
   }
   if (expectedManifest.nativeStorage.totalBytes !== actualManifest.nativeStorage.totalBytes) {
     differences.push("nativeStorage.totalBytes")
+  }
+  if (expectedManifest.logicalDigest !== actualManifest.logicalDigest) {
+    differences.push("logicalDigest")
   }
 
   return {

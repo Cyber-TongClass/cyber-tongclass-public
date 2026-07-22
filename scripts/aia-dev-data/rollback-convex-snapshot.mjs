@@ -1,18 +1,19 @@
 import { spawnSync } from "node:child_process"
-import {
-  chmodSync,
-  lstatSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-} from "node:fs"
-import { tmpdir } from "node:os"
+import { readFileSync, rmSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import {
   parseDotEnv,
   validateTargetConfig,
 } from "./lib/target-gate.mjs"
+import {
+  acquireTargetImport,
+  assertRegularNonSymlinkFile,
+  createPrivateStagingDirectory,
+  recheckImportSnapshot,
+  securePrivateRegularFile,
+  stageExternalSnapshot,
+} from "./lib/import-safety.mjs"
 import {
   AIA_TARGET_DEPLOYMENT,
   assertSnapshotManifest,
@@ -86,20 +87,6 @@ function loadAndValidate(args) {
   })
 }
 
-function assertRegularFile(path, code) {
-  try {
-    const details = lstatSync(path)
-    if (!details.isFile() || details.isSymbolicLink()) {
-      fail(code)
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("AIA_")) {
-      throw error
-    }
-    fail(code)
-  }
-}
-
 function readBackupManifest(path) {
   let parsed
   try {
@@ -153,56 +140,86 @@ export function runConvexCommand(command, spawnCommand = spawnSync) {
   }
 }
 
-function secureFile(path) {
-  try {
-    chmodSync(path, 0o600)
-  } catch {
-    fail("AIA_SNAPSHOT_ARCHIVE_WRITE_FAILED")
-  }
-}
-
 function logManifest(label, manifest) {
   process.stdout.write(`${label} ${summarizeSnapshotManifest(manifest)}\n`)
-}
-
-function createVerificationDirectory() {
-  try {
-    return mkdtempSync(join(tmpdir(), "aia-rollback-"), { encoding: "utf8" })
-  } catch {
-    fail("AIA_SNAPSHOT_VERIFICATION_DIRECTORY_INVALID")
-  }
 }
 
 export async function runRollback(argv = process.argv.slice(2), options = {}) {
   const args = parseRollbackArgs(argv)
   loadAndValidate(args)
 
-  assertRegularFile(args.snapshot, "AIA_SNAPSHOT_BACKUP_SNAPSHOT_INVALID")
-  assertRegularFile(args.manifest, "AIA_SNAPSHOT_MANIFEST_INVALID")
+  assertRegularNonSymlinkFile(args.manifest, "AIA_SNAPSHOT_MANIFEST_INVALID")
   const expectedManifest = readBackupManifest(args.manifest)
-  const backupManifest = await makeSnapshotManifest(args.snapshot)
-  logManifest("rollback target-backup", backupManifest)
-
-  if (!compareSnapshotManifests(expectedManifest, backupManifest).equal) {
-    fail("AIA_SNAPSHOT_VERIFY_MISMATCH")
-  }
-
   const spawnCommand = options.spawnCommand ?? spawnSync
-  const verificationDirectory = createVerificationDirectory()
-  const verificationArchive = join(verificationDirectory, "target-after-rollback.zip")
+  let operation
+  let stagingDirectory
+  let importAttempted = false
+  let journalFinalized = false
 
   try {
-    runConvexCommand(buildConvexImport(AIA_TARGET_DEPLOYMENT, args.snapshot), spawnCommand)
+    operation = acquireTargetImport(options)
+    stagingDirectory = createPrivateStagingDirectory("aia-rollback-")
+    const stagedSnapshot = stageExternalSnapshot(args.snapshot, stagingDirectory)
+    const backupManifest = await makeSnapshotManifest(stagedSnapshot)
+    logManifest("rollback target-backup", backupManifest)
+    if (
+      backupManifest.sha256 !== expectedManifest.sha256
+      || backupManifest.archiveBytes !== expectedManifest.archiveBytes
+    ) {
+      fail("AIA_SNAPSHOT_IMPORT_SNAPSHOT_CHANGED")
+    }
+    if (!compareSnapshotManifests(expectedManifest, backupManifest).equal) {
+      fail("AIA_SNAPSHOT_VERIFY_MISMATCH")
+    }
+
+    if (typeof options.beforeImportRecheck === "function") {
+      options.beforeImportRecheck({ snapshotPath: stagedSnapshot })
+    }
+    await recheckImportSnapshot(stagedSnapshot, backupManifest)
+    importAttempted = true
+    try {
+      runConvexCommand(buildConvexImport(AIA_TARGET_DEPLOYMENT, stagedSnapshot), spawnCommand)
+    } catch {
+      operation.markUnknown()
+      journalFinalized = true
+      fail("AIA_SNAPSHOT_IMPORT_UNKNOWN")
+    }
+
+    const verificationArchive = join(stagingDirectory, "target-after-rollback.zip")
     runConvexCommand(buildConvexExport(AIA_TARGET_DEPLOYMENT, verificationArchive), spawnCommand)
-    secureFile(verificationArchive)
+    securePrivateRegularFile(verificationArchive)
     const actualManifest = await makeSnapshotManifest(verificationArchive)
     logManifest("rollback target-after", actualManifest)
 
     if (!compareSnapshotManifests(expectedManifest, actualManifest).equal) {
       fail("AIA_SNAPSHOT_VERIFY_MISMATCH")
     }
+    operation.markVerified()
+    journalFinalized = true
+  } catch (error) {
+    if (operation && !journalFinalized) {
+      if (importAttempted) {
+        operation.markUnknown()
+      } else {
+        operation.cancelBeforeImport()
+      }
+      journalFinalized = true
+    }
+    throw error
   } finally {
-    rmSync(verificationDirectory, { recursive: true, force: true })
+    try {
+      if (operation) {
+        operation.release()
+      }
+    } finally {
+      if (stagingDirectory) {
+        try {
+          rmSync(stagingDirectory, { recursive: true, force: true })
+        } catch {
+          fail("AIA_SNAPSHOT_STAGING_DIRECTORY_INVALID")
+        }
+      }
+    }
   }
 }
 
