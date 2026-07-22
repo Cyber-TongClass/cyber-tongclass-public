@@ -45,10 +45,12 @@ export function getSubmissionTitle(
 export function getApprovalTimeline(
   submission: SubmissionForPresentation,
 ): ApprovalTimelineNode[] {
-  const reviewDetail = submission.adminNote
-    ? `${reviewDetails[submission.reviewStatus]}：${submission.adminNote}`
-    : reviewDetails[submission.reviewStatus];
   const reviewIsPending = submission.reviewStatus === "pending";
+  const reviewDetail = reviewIsPending
+    ? reviewDetails.pending
+    : submission.adminNote
+      ? `${reviewDetails[submission.reviewStatus]}：${submission.adminNote}`
+      : reviewDetails[submission.reviewStatus];
 
   return [
     {
@@ -60,17 +62,19 @@ export function getApprovalTimeline(
     },
     {
       label: "管理员审核",
-      actor: submission.reviewerName || (reviewIsPending ? "等待管理员" : "管理员"),
+      actor: reviewIsPending
+        ? "等待管理员"
+        : submission.reviewerName || "管理员",
       detail: reviewDetail,
-      timestamp: submission.reviewedAt,
+      timestamp: reviewIsPending ? undefined : submission.reviewedAt,
       state: reviewIsPending ? "in_progress" : submission.reviewStatus,
     },
     {
       label: "结束",
       actor: "",
-      detail: reviewIsPending ? "等待审核完成" : "审核流程已结束",
+      detail: reviewIsPending ? "等待审核完成" : reviewDetail,
       timestamp: reviewIsPending ? undefined : submission.reviewedAt,
-      state: reviewIsPending ? "pending" : "completed",
+      state: reviewIsPending ? "pending" : submission.reviewStatus,
     },
   ];
 }
