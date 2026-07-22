@@ -6,6 +6,7 @@ import { makeFunctionReference } from "convex/server"
 import { api } from "../../convex/_generated/api"
 import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { toOAFormUpsertPayload } from "@/lib/oa-forms"
 
 type IdLike =
@@ -36,10 +37,6 @@ const toIdArg = (input: IdLike) => {
 }
 
 const techdayApi = api as any
-const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
-const currentUserRoleRef = makeFunctionReference<"query">("auth:currentUserRole")
-const isAdminRef = makeFunctionReference<"query">("auth:isAdmin")
-const isSuperAdminRef = makeFunctionReference<"query">("auth:isSuperAdmin")
 const listPublicTongClassMembersRef = makeFunctionReference<"query">("users:listPublicTongClassMembers")
 const listTongClassDirectoryMembersRef = makeFunctionReference<"query">("users:listTongClassDirectoryMembers")
 const listAdminUsersRef = makeFunctionReference<"query">("users:list")
@@ -174,19 +171,19 @@ export function useTechDayActorArgs() {
 // ==================== 认证相关 ====================
 
 export function useCurrentUser() {
-  return useQuery(currentUserRef)
+  return useAuth().currentUser
 }
 
 export function useCurrentUserRole() {
-  return useQuery(currentUserRoleRef)
+  return useAuth().currentRole
 }
 
 export function useIsAdmin() {
-  return useQuery(isAdminRef)
+  return useAuth().isAdmin
 }
 
 export function useIsSuperAdmin() {
-  return useQuery(isSuperAdminRef)
+  return useAuth().isSuperAdmin
 }
 
 type SignUpInput = {

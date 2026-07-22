@@ -33,6 +33,20 @@ test("super-admin Institute binding console uses the canonical session-aware hoo
   }
 })
 
+test("legacy current-account hooks share the session-aware auth authority", () => {
+  const api = source(apiPath)
+
+  assert.match(api, /import\s+\{\s*useAuth\s*\}\s+from\s+["']@\/lib\/hooks\/use-auth["']/)
+  assert.match(api, /export function useCurrentUser\(\)\s*\{\s*return useAuth\(\)\.currentUser\s*\}/)
+  assert.match(api, /export function useCurrentUserRole\(\)\s*\{\s*return useAuth\(\)\.currentRole\s*\}/)
+  assert.match(api, /export function useIsAdmin\(\)\s*\{\s*return useAuth\(\)\.isAdmin\s*\}/)
+  assert.match(api, /export function useIsSuperAdmin\(\)\s*\{\s*return useAuth\(\)\.isSuperAdmin\s*\}/)
+  assert.doesNotMatch(api, /return useQuery\(currentUserRef\)/)
+  assert.doesNotMatch(api, /return useQuery\(currentUserRoleRef\)/)
+  assert.doesNotMatch(api, /return useQuery\(isAdminRef\)/)
+  assert.doesNotMatch(api, /return useQuery\(isSuperAdminRef\)/)
+})
+
 test("admin navigation exposes the Institute binding console without exposing a public route", () => {
   const layout = source("src/app/admin/layout.tsx")
 
