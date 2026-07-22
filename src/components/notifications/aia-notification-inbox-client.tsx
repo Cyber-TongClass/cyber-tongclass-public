@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 
-import { NotificationInbox, type NotificationRowItem } from "@/components/notifications/notification-inbox"
+import { NotificationInbox } from "@/components/notifications/notification-inbox"
+import type { NotificationRowItem } from "@/components/notifications/notification-row"
 import {
   useCoffeeTalkNotifications,
   useTongClassSessionToken,

@@ -19,6 +19,7 @@ test("AIA exposes a session-aware, data-minimized Coffee Talk notification inbox
 
   assert.match(inbox, /useCoffeeTalkNotifications/)
   assert.match(inbox, /NotificationInbox/)
+  assert.match(inbox, /NotificationRowItem.*notification-row/)
   assert.doesNotMatch(inbox, /from\s+["'][^"']*convex[^"']*["']/i)
   assert.doesNotMatch(inbox, /applicantEmail|topic|availability|teacherSlug/)
 
