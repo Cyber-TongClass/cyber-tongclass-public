@@ -182,6 +182,37 @@ async function notifyCoffeeTalkRecipient(ctx: any, userId: any, applicationId: a
   })
 }
 
+type CoffeeTalkNotificationHref =
+  | "/services/coffee-talk/my"
+  | "/services/coffee-talk/manage"
+
+/**
+ * Resolves notification navigation solely from the notification recipient and
+ * explicit application/teacher bindings. It deliberately falls back to the
+ * applicant console rather than disclosing an unverified teacher console.
+ */
+async function coffeeTalkNotificationHref(
+  ctx: any,
+  recipientUserId: any,
+  applicationId: any,
+): Promise<CoffeeTalkNotificationHref> {
+  const application = await ctx.db.get(applicationId) as StoredCoffeeTalkApplication | null
+  if (!application || String(application.applicantUserId) === String(recipientUserId)) {
+    return "/services/coffee-talk/my"
+  }
+
+  const teacher = await ctx.db.get(application.assignedTeacherPersonId) as StoredInstituteTeacher | null
+  if (
+    teacher?.kind === "teacher"
+    && teacher.accountUserId !== undefined
+    && String(teacher.accountUserId) === String(recipientUserId)
+  ) {
+    return "/services/coffee-talk/manage"
+  }
+
+  return "/services/coffee-talk/my"
+}
+
 /**
  * Creates an idempotent Coffee Talk application. The applicant and teacher
  * account relationship are always derived from the server, never accepted as
@@ -412,13 +443,13 @@ export const listNotifications = query({
       .order("desc")
       .collect()
 
-    return notifications.map((notification: any) => ({
+    return Promise.all(notifications.map(async (notification: any) => ({
       id: String(notification._id),
       title: notification.title,
       body: notification.body,
       ...(notification.readAt !== undefined ? { readAt: notification.readAt } : {}),
       createdAt: notification.createdAt,
-      href: "/services/coffee-talk/my" as const,
-    }))
+      href: await coffeeTalkNotificationHref(ctx, actor._id, notification.resourceId),
+    })))
   },
 })

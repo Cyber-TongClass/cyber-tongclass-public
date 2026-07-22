@@ -35,3 +35,15 @@ test("Coffee Talk backend derives authority from sessions and explicit institute
   assert.match(source, /expectedVersion:\s*v\.number\(\)/)
   assert.match(source, /COFFEE_TALK_VERSION_CONFLICT/)
 })
+
+test("Coffee Talk notifications route applicants and explicitly bound teachers to their own safe consoles", () => {
+  const source = readFileSync(backendPath, "utf8")
+
+  assert.match(source, /async function coffeeTalkNotificationHref/)
+  assert.match(source, /application\.applicantUserId/)
+  assert.match(source, /assignedTeacherPersonId/)
+  assert.match(source, /teacher\.accountUserId/)
+  assert.match(source, /"\/services\/coffee-talk\/my"/)
+  assert.match(source, /"\/services\/coffee-talk\/manage"/)
+  assert.match(source, /return Promise\.all\(notifications\.map/)
+})
