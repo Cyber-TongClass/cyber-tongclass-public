@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft, Save } from "lucide-react"
 import { useEventById, useCreateEvent, useUpdateEvent } from "@/lib/api"
 import { MarkdownSplitEditor } from "@/components/markdown/markdown-split-editor"
+import { ContentTagsEditor } from "@/components/content-tags-editor"
+import { DEFAULT_AUDIENCES, type Audience } from "@/lib/updates"
 
 const typeOptions = [
   { label: "学术", color: "#0F4C81" },
@@ -35,6 +37,8 @@ export default function EditEventPage() {
     type: "学术",
     description: "",
     url: "",
+    audiences: DEFAULT_AUDIENCES as Audience[],
+    tags: [] as string[],
   })
 
   const eventData = useEventById(isCreateMode ? undefined : (eventId as string))
@@ -61,6 +65,8 @@ export default function EditEventPage() {
         type: colorToType[target.color] || "学术",
         description: target.description || "",
         url: target.url || "",
+        audiences: target.audiences?.length ? target.audiences : DEFAULT_AUDIENCES,
+        tags: target.tags || [],
       })
     }
     setLoading(false)
@@ -78,6 +84,8 @@ export default function EditEventPage() {
         description: formData.description,
         url: formData.url,
         color: typeToColor[formData.type] || "#0F4C81",
+        audiences: formData.audiences,
+        tags: formData.tags,
       })
     } else if (eventData) {
       await updateEventMutation({
@@ -89,6 +97,8 @@ export default function EditEventPage() {
         description: formData.description,
         url: formData.url,
         color: typeToColor[formData.type] || eventData.color,
+        audiences: formData.audiences,
+        tags: formData.tags,
       })
     }
 
@@ -199,6 +209,14 @@ export default function EditEventPage() {
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                 />
               </div>
+            </div>
+            <div className="md:col-span-2">
+              <ContentTagsEditor
+                audiences={formData.audiences}
+                tags={formData.tags}
+                onAudiencesChange={(audiences) => setFormData((current) => ({ ...current, audiences }))}
+                onTagsChange={(tags) => setFormData((current) => ({ ...current, tags }))}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">活动描述（Markdown）</Label>

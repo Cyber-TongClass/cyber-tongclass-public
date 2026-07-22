@@ -11,6 +11,8 @@ import { useAuth } from "@/lib/hooks/use-auth"
 import { useNewsById, useCreateNews, useUpdateNews } from "@/lib/api"
 import { MarkdownSplitEditor } from "@/components/markdown/markdown-split-editor"
 import { formatNewsDateInputValue, NEWS_CATEGORY_OPTIONS, parseNewsDateInputValue, type NewsCategory } from "@/lib/news"
+import { ContentTagsEditor } from "@/components/content-tags-editor"
+import { DEFAULT_AUDIENCES, type Audience } from "@/lib/updates"
 
 const statusOptions = [
   { value: "draft", label: "草稿" },
@@ -27,6 +29,8 @@ type NewsFormState = {
   showOnHomepage: boolean
   homepageSubtitle: string
   content: string
+  audiences: Audience[]
+  tags: string[]
 }
 
 export default function EditNewsPage() {
@@ -52,6 +56,8 @@ export default function EditNewsPage() {
     showOnHomepage: false,
     homepageSubtitle: "",
     content: "",
+    audiences: DEFAULT_AUDIENCES,
+    tags: [],
   })
 
   // Update form when news data loads
@@ -76,6 +82,8 @@ export default function EditNewsPage() {
         showOnHomepage: newsData.showOnHomepage || false,
         homepageSubtitle: newsData.homepageSubtitle || "",
         content: newsData.content,
+        audiences: newsData.audiences?.length ? newsData.audiences : DEFAULT_AUDIENCES,
+        tags: newsData.tags || [],
       })
     }
     setLoading(false)
@@ -94,6 +102,8 @@ export default function EditNewsPage() {
         await createNews({
           title: formData.title,
           category: formData.category,
+          audiences: formData.audiences,
+          tags: formData.tags,
           content: formData.content,
           sourceUrl: formData.sourceUrl || undefined,
           coverImageUrl: formData.coverImageUrl || undefined,
@@ -108,6 +118,8 @@ export default function EditNewsPage() {
           id: newsData._id,
           title: formData.title,
           category: formData.category,
+          audiences: formData.audiences,
+          tags: formData.tags,
           sourceUrl: formData.sourceUrl || undefined,
           coverImageUrl: formData.coverImageUrl || undefined,
           showOnHomepage: formData.showOnHomepage,
@@ -264,6 +276,14 @@ export default function EditNewsPage() {
                   </p>
                 </div>
               </div>
+            </div>
+            <div className="md:col-span-2">
+              <ContentTagsEditor
+                audiences={formData.audiences}
+                tags={formData.tags}
+                onAudiencesChange={(audiences) => setFormData((current) => ({ ...current, audiences }))}
+                onTagsChange={(tags) => setFormData((current) => ({ ...current, tags }))}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="content">新闻内容（Markdown）</Label>

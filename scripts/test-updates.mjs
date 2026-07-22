@@ -123,3 +123,19 @@ test("accepts the existing academic exchange updatedAt field during schema deplo
     /academicExchangeSupportApplications: defineTable\([\s\S]*?createdAt: v\.number\(\),\s*updatedAt: v\.optional\(v\.number\(\)\)/,
   )
 })
+
+test("uses one controlled editor for content audiences and custom tags", () => {
+  const editor = fs.readFileSync(path.join(projectRoot, "src/components/content-tags-editor.tsx"), "utf8")
+  const newsForm = fs.readFileSync(path.join(projectRoot, "src/app/admin/news/[id]/page.tsx"), "utf8")
+  const eventForm = fs.readFileSync(path.join(projectRoot, "src/app/admin/events/[id]/page.tsx"), "utf8")
+
+  for (const marker of ["audiences", "tags", "AUDIENCE_OPTIONS", "添加分类"]) {
+    assert.ok(editor.includes(marker), `Missing editor marker: ${marker}`)
+  }
+
+  for (const source of [newsForm, eventForm]) {
+    assert.ok(source.includes("ContentTagsEditor"), "Admin form must render the shared tag editor")
+    assert.match(source, /audiences: formData\.audiences/)
+    assert.match(source, /tags: formData\.tags/)
+  }
+})
