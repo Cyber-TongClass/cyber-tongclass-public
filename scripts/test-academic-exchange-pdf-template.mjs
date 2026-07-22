@@ -15,6 +15,8 @@ const fangSongPath = path.join(projectRoot, "public", "fonts", "FZFSK.TTF")
 const shuSongPath = path.join(projectRoot, "public", "fonts", "FZSSK.TTF")
 const kaiTiPath = path.join(projectRoot, "public", "fonts", "FZKTK.TTF")
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "tongclass-academic-exchange-pdf-"))
+const alignedTableLeft = 90.88
+const alignedTableRight = 516.62
 
 function buildGeneratorModule() {
   const bundlePath = path.join(temporaryDirectory, "academic-exchange-pdf.cjs")
@@ -80,6 +82,15 @@ function findRun(runs, text) {
   return run
 }
 
+function findTopmostRun(runs, text) {
+  const needle = text.replace(/\s+/g, "")
+  const run = runs
+    .filter((candidate) => candidate.text.replace(/\s+/g, "").includes(needle))
+    .sort((left, right) => left.top - right.top)[0]
+  assert.ok(run, `Expected PDF text run containing: ${text}`)
+  return run
+}
+
 async function assertExpenseTableBottomBorderIsIntact(pdfPath, expectedBottomTop) {
   const imagePrefix = path.join(temporaryDirectory, "outbound-border")
   execFileSync("pdftoppm", ["-png", "-r", "144", "-f", "1", "-singlefile", pdfPath, imagePrefix], {
@@ -87,8 +98,8 @@ async function assertExpenseTableBottomBorderIsIntact(pdfPath, expectedBottomTop
   })
   const { data, info } = await sharp(`${imagePrefix}.png`).greyscale().raw().toBuffer({ resolveWithObject: true })
   const scale = 2
-  const xStart = Math.round(91.59 * scale)
-  const xEnd = Math.round(515.9 * scale)
+  const xStart = Math.round(alignedTableLeft * scale)
+  const xEnd = Math.round(alignedTableRight * scale)
   const expectedY = Math.round(expectedBottomTop * scale)
   let bestCoverage = 0
 
@@ -127,8 +138,129 @@ async function assertContinuationOuterBordersAreBold(pdfPath) {
     return bestRun
   }
 
-  assert.ok(getDarkRun(91.59) >= 6, "Continuation table left outer border must render at 1.5pt")
-  assert.ok(getDarkRun(515.9) >= 6, "Continuation table right outer border must render at 1.5pt")
+  assert.ok(getDarkRun(alignedTableLeft) >= 3 && getDarkRun(alignedTableLeft) <= 5, "Continuation table left outer border must render at 1pt")
+  assert.ok(getDarkRun(alignedTableRight) >= 3 && getDarkRun(alignedTableRight) <= 5, "Continuation table right outer border must render at 1pt")
+}
+
+async function assertFirstPageOuterBordersAreBold(pdfPath) {
+  const imagePrefix = path.join(temporaryDirectory, "first-page-border")
+  const templatePrefix = path.join(temporaryDirectory, "template-border-reference")
+  execFileSync("pdftoppm", ["-png", "-r", "288", "-f", "1", "-singlefile", pdfPath, imagePrefix], {
+    stdio: "ignore",
+  })
+  execFileSync("pdftoppm", ["-png", "-r", "288", "-f", "1", "-singlefile", templatePath, templatePrefix], {
+    stdio: "ignore",
+  })
+  const { data, info } = await sharp(`${imagePrefix}.png`).greyscale().raw().toBuffer({ resolveWithObject: true })
+  const { data: templateData } = await sharp(`${templatePrefix}.png`).greyscale().raw().toBuffer({ resolveWithObject: true })
+  const scale = 4
+
+  const getDarkRun = (pointX, pointY) => {
+    const centerX = Math.round(pointX * scale)
+    const y = Math.round(pointY * scale)
+    let bestRun = 0
+    let currentRun = 0
+    for (let x = centerX - 8; x <= centerX + 8; x += 1) {
+      if (data[y * info.width + x] < 128) {
+        currentRun += 1
+        bestRun = Math.max(bestRun, currentRun)
+      } else {
+        currentRun = 0
+      }
+    }
+    return bestRun
+  }
+
+  const getDarkRunBounds = (pointX, pointY, pixels = data) => {
+    const centerX = Math.round(pointX * scale)
+    const y = Math.round(pointY * scale)
+    const runs = []
+    let start = null
+    for (let x = centerX - 12; x <= centerX + 12; x += 1) {
+      const isDark = pixels[y * info.width + x] < 128
+      if (isDark && start === null) start = x
+      if (!isDark && start !== null) {
+        runs.push({ start, end: x - 1 })
+        start = null
+      }
+    }
+    if (start !== null) runs.push({ start, end: centerX + 12 })
+    const run = runs.sort((left, right) => (right.end - right.start) - (left.end - left.start))[0]
+    assert.ok(run, `Expected border near ${pointX}pt at ${pointY}pt`)
+    return { ...run, center: (run.start + run.end) / 2 }
+  }
+
+  const getVerticalDarkRun = (pointX, pointY) => {
+    const x = Math.round(pointX * scale)
+    const centerY = Math.round(pointY * scale)
+    let bestRun = 0
+    let currentRun = 0
+    for (let y = centerY - 8; y <= centerY + 8; y += 1) {
+      if (data[y * info.width + x] < 128) {
+        currentRun += 1
+        bestRun = Math.max(bestRun, currentRun)
+      } else {
+        currentRun = 0
+      }
+    }
+    return bestRun
+  }
+
+  for (const y of [215.14, 295.2]) {
+    const run = getVerticalDarkRun(120, y)
+    assert.ok(run >= 3 && run <= 5, `Section-title bottom rule at ${y}pt must render at 1pt (dark run ${run}px)`)
+  }
+
+  for (const y of [360, 520]) {
+    assert.ok(getDarkRun(alignedTableLeft, y) >= 3 && getDarkRun(alignedTableLeft, y) <= 5, `First-page left outer border at ${y}pt must render at 1pt`)
+    assert.ok(getDarkRun(alignedTableRight, y) >= 3 && getDarkRun(alignedTableRight, y) <= 5, `First-page right outer border at ${y}pt must render at 1pt`)
+  }
+
+  for (const x of [alignedTableLeft, alignedTableRight]) {
+    const upperProjectBorderRun = getDarkRun(x, 300)
+    assert.ok(
+      upperProjectBorderRun >= 3 && upperProjectBorderRun <= 5,
+      `Template project-info upper border at ${x}pt must render at 1pt (dark run ${upperProjectBorderRun}px)`
+    )
+
+    const centerX = Math.round(x * scale)
+    const joinStartY = Math.round((336.63 - 2) * scale)
+    const joinEndY = Math.round((336.63 + 2) * scale)
+    for (let y = joinStartY; y <= joinEndY; y += 1) {
+      const hasBorderPixel = Array.from({ length: 11 }, (_, index) => centerX - 5 + index)
+        .some((pixelX) => data[y * info.width + pixelX] < 128)
+      assert.ok(hasBorderPixel, `Project-info outer border must remain continuous at ${x}pt around the dynamic-row join`)
+    }
+  }
+
+  for (const x of [90.75, 516]) {
+    const fixedBorder = getDarkRunBounds(x, 300)
+    const dynamicBorder = getDarkRunBounds(x, 360)
+    const expenseBorder = getDarkRunBounds(x, 520)
+    assert.ok(
+      Math.abs(dynamicBorder.center - fixedBorder.center) <= 0.5,
+      `Dynamic project border at ${x}pt must align with the template border (${dynamicBorder.center}px vs ${fixedBorder.center}px)`
+    )
+    assert.ok(
+      Math.abs(expenseBorder.center - fixedBorder.center) <= 0.5,
+      `Expense border at ${x}pt must align with the template border (${expenseBorder.center}px vs ${fixedBorder.center}px)`
+    )
+  }
+  const fixedLabelDivider = getDarkRunBounds(171.54, 300)
+  const dynamicLabelDivider = getDarkRunBounds(171.54, 360)
+  assert.ok(
+    Math.abs(dynamicLabelDivider.center - fixedLabelDivider.center) <= 0.5,
+    "Dynamic project label divider must align with the template divider"
+  )
+
+  for (const x of [240.57, 388.23]) {
+    const templateDivider = getDarkRunBounds(x, 600, templateData)
+    const generatedDivider = getDarkRunBounds(x, 550)
+    assert.ok(
+      Math.abs(generatedDivider.center - templateDivider.center) <= 0.5,
+      `Expense column divider at ${x}pt must align with the template divider (${generatedDivider.center}px vs ${templateDivider.center}px)`
+    )
+  }
 }
 
 function makeExpenseItems(count) {
@@ -239,7 +371,14 @@ try {
   assert.ok(Math.abs(pageOneTitle.top - pageTwoTitle.top) <= 2, "Continuation-page title must keep the first-page vertical layout")
   assert.ok(Math.abs(pageOneTitle.left - pageTwoTitle.left) <= 2, "Continuation-page title must keep the first-page horizontal layout")
   assert.equal(pageTwoTitle.family, pageOneTitle.family, "Continuation-page title must keep the first-page font")
-  await assertExpenseTableBottomBorderIsIntact(outboundInspection.pdfPath, 708.39)
+  const compactProjectPlanLabelRun = findTopmostRun(pageOneRuns, "项目计划")
+  const compactExpenseHeadingRun = findTopmostRun(pageOneRuns, "支出明细")
+  const compactProjectPlanToExpenseGap = compactExpenseHeadingRun.top - compactProjectPlanLabelRun.top
+  assert.ok(
+    compactProjectPlanToExpenseGap < 80,
+    `Paper, funding, and project-plan rows must compact to their wrapped content height (gap ${compactProjectPlanToExpenseGap})`
+  )
+  await assertExpenseTableBottomBorderIsIntact(outboundInspection.pdfPath, 608.28)
   await assertContinuationOuterBordersAreBold(outboundInspection.pdfPath)
 
   const paperApplication = {
@@ -249,25 +388,50 @@ try {
     projectName: "国际人工智能学术会议",
     expenseItems: makeExpenseItems(1),
     totalAmount: 100,
-    paperTitle: "A Test Paper",
+    paperTitle: "GeoRecon: Graph-Level Representation Learning for 3D Molecules via Reconstruction-Based Pretraining",
     paperAuthors: ["张三", "李四"],
     applicantAuthorName: "张三",
     applicantAuthorIndexLabel: "第一作者",
-    applicantAffiliation: "北京大学",
+    applicantAffiliation: "北京大学人工智能研究院",
     totalPages: 12,
     bodyPages: 9,
     paperPdfUrl: "https://example.com/paper.pdf",
+    otherFunding: "学院国际交流专项已提供部分注册费支持，申请人仍需自行承担国际旅费、住宿费及会议期间必要支出；本申请所列金额未与其他渠道重复申报。资助来源说明结束。",
+    projectPlan: "2026年7月5日乘飞机抵达韩国首尔，完成会议注册并参加大会报告、专题研讨和学术交流；会议期间展示研究成果并与同行讨论后续合作，7月12日乘飞机返回北京。行程安排和学术交流计划说明结束。",
   }
   const paperPdf = await buildAcademicExchangePdf(paperApplication, {
     paperPdfBytes: await makeAttachmentPdf(),
   })
   const paperDocument = await PDFDocument.load(paperPdf)
   const paperText = extractPdfText(paperPdf, "paper-sample.pdf")
-  const paperRuns = parseTextRuns(inspectPdf(paperPdf, "paper-inspection.pdf").xml)[0]
+  const paperInspection = inspectPdf(paperPdf, "paper-inspection.pdf")
+  const paperRuns = parseTextRuns(paperInspection.xml)[0]
   assert.equal(paperDocument.getPageCount(), 2, "A paper-backed application must append the supplied paper PDF")
-  assert.match(paperText, /论文题目：A Test Paper/)
-  assert.match(paperText, /申请人所在单位：北京大学/)
+  assert.match(paperText, /论文题目：GeoRecon/)
+  assert.match(paperText, /申请人所在单位：北京大学人工智能研究院/)
+  assert.match(paperText, /资助来源说明结束/)
+  assert.match(paperText, /学术交流计划说明结束/)
+  assert.doesNotMatch(paperText, /…/, "Dynamic project-information rows must not truncate content with an ellipsis")
   assert.match(paperText, /Attached paper page/)
+  const paperTitleRun = findTopmostRun(paperRuns, "论文题目：")
+  const paperTitleTopPadding = paperTitleRun.top - 336.63 * 1.5
+  assert.ok(
+    paperTitleTopPadding >= 6.25,
+    `Dynamic detail cells must keep 0.5em vertical padding (top padding ${paperTitleTopPadding.toFixed(2)}px)`
+  )
+  const paperAuthorRun = findTopmostRun(paperRuns, "作者：")
+  const applicantRankRun = findTopmostRun(paperRuns, "申请人位次：")
+  const detailLineSpacing = applicantRankRun.top - paperAuthorRun.top
+  assert.ok(
+    detailLineSpacing >= 16 && detailLineSpacing <= 18,
+    `Dynamic detail content must use 1.3 line spacing (line advance ${detailLineSpacing}px)`
+  )
+  for (const label of ["论文题目：", "作者：", "申请人位次：", "申请人所在单位：", "总页数：", "正文页数："]) {
+    assert.match(findTopmostRun(paperRuns, label).family, /FZHTK/, `${label} must use FZ HeiTi`)
+  }
+  assert.match(findTopmostRun(paperRuns, "GeoRecon").family, /FZSSK/, "Paper title content must keep FZ ShuSong")
+  assert.match(findTopmostRun(paperRuns, "张三，李四").family, /FZSSK/, "Paper author content must keep FZ ShuSong")
+  await assertFirstPageOuterBordersAreBold(paperInspection.pdfPath)
   const singleExpenseRun = findRun(paperRuns, "费用项目 1")
   const singleExpenseTotalRun = paperRuns
     .filter((run) => run.text.replace(/\s+/g, "") === "总计")
