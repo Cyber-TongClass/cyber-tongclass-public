@@ -23,16 +23,11 @@ import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye } from "lucide-react"
 import { useUsers, useDeleteUser } from "@/lib/api"
-import type { User } from "@/types"
+import type { User, UserRole } from "@/types"
 import { getCohortLabel } from "@/lib/cohort"
+import { accountRoleLabels } from "@/lib/account-role"
 
-const roleLabels: Record<string, string> = {
-  member: "成员",
-  admin: "管理员",
-  super_admin: "超级管理员",
-}
-
-const roleColors: Record<string, string> = {
+const roleColors: Record<UserRole, string> = {
   member: "bg-gray-100 text-gray-800",
   admin: "bg-blue-100 text-blue-800",
   super_admin: "bg-purple-100 text-purple-800",
@@ -45,7 +40,7 @@ const organizationLabels: Record<string, string> = {
 
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [roleFilter, setRoleFilter] = useState<string | null>(null)
+  const [roleFilter, setRoleFilter] = useState<UserRole | null>(null)
   const { confirm, ConfirmDialog } = useConfirmDialog()
 
   // Fetch users from Convex
@@ -115,14 +110,14 @@ export default function UsersPage() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
                   <Filter className="h-4 w-4 mr-2" />
-                  {roleFilter ? roleLabels[roleFilter] : "全部角色"}
+                  {roleFilter ? accountRoleLabels[roleFilter] : "全部角色"}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem onClick={() => setRoleFilter(null)}>全部角色</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRoleFilter("member")}>成员</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRoleFilter("admin")}>管理员</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRoleFilter("super_admin")}>超级管理员</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRoleFilter("member")}>{accountRoleLabels.member}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRoleFilter("admin")}>{accountRoleLabels.admin}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRoleFilter("super_admin")}>{accountRoleLabels.super_admin}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -156,7 +151,7 @@ export default function UsersPage() {
                   <TableCell>{organizationLabels[user.organization] || user.organization}</TableCell>
                   <TableCell>{getCohortLabel(user.cohort)}</TableCell>
                   <TableCell>
-                    <Badge className={roleColors[user.role]}>{roleLabels[user.role]}</Badge>
+                    <Badge className={roleColors[user.role]}>{accountRoleLabels[user.role]}</Badge>
                   </TableCell>
                   <TableCell className="text-gray-500">{new Date(user.createdAt).toLocaleDateString("zh-CN")}</TableCell>
                   <TableCell className="text-right">

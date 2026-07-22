@@ -22,15 +22,10 @@ import type { UserLink, UserRole } from "@/types"
 import { cohortToSelectValue, getCohortLabel, getCohortOptions, parseCohortValue, type CohortValue } from "@/lib/cohort"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { RESEARCH_DIRECTIONS } from "@/lib/research-directions"
+import { accountRoleOptions } from "@/lib/account-role"
 
 type Organization = "pku" | "thu"
 type Role = UserRole
-
-const roleOptions: { value: Role; label: string }[] = [
-  { value: "member", label: "成员" },
-  { value: "admin", label: "管理员" },
-  { value: "super_admin", label: "超级管理员" },
-]
 
 const organizationOptions: { value: Organization; label: string }[] = [
   { value: "pku", label: "北大通班" },
@@ -262,14 +257,14 @@ export default function UserFormPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900">{isCreateMode ? "新建用户" : "编辑用户"}</h1>
-          <p className="text-gray-500 mt-1">{isCreateMode ? "创建成员或管理员账号" : "修改用户信息与角色权限"}</p>
+          <p className="text-gray-500 mt-1">{isCreateMode ? "创建本科生、管理员或超级管理员账号" : "修改用户信息与角色权限"}</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="border-slate-200/60 shadow-sm">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg">{isCreateMode ? "用户注册信息" : "用户信息"}</CardTitle>
+            <CardTitle className="text-lg">{isCreateMode ? "用户账户信息" : "用户信息"}</CardTitle>
             <p className="text-sm text-slate-600">
               {isCreateMode ? "学校邮箱需与组织和学号匹配，创建后可立即登录。" : "保存后会立即同步到用户列表。"}
             </p>
@@ -363,7 +358,7 @@ export default function UserFormPage() {
                     <SelectValue placeholder="选择角色" />
                   </SelectTrigger>
                   <SelectContent>
-                    {roleOptions.map((option) => (
+                    {accountRoleOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
