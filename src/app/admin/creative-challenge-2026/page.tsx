@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  useUsers,
+  useAdminUsers,
   useCC2026List,
   useCC2026Set,
   useCC2026ManageRegistrations,
@@ -200,7 +200,7 @@ function buildPreviewRegistrations(): CreativeChallengeRegistration[] {
 
 export default function AdminCreativeChallenge2026Page() {
   const { currentUser, isSuperAdmin } = useAuth()
-  const usersData = useUsers({ limit: 1000, skip: !isSuperAdmin })
+  const usersData = useAdminUsers({ limit: 1000, skip: !isSuperAdmin })
   const [registrations, setRegistrations] = useState<CreativeChallengeRegistration[]>([])
   const [settings, setSettings] = useState<CreativeChallengeSettings>(() => createDefaultCreativeChallengeSettings())
   const [votes, setVotes] = useState<Record<string, number>>({})

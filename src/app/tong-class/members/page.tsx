@@ -17,12 +17,23 @@ import {
 } from "@/components/ui/select"
 import { useUsers } from "@/lib/api"
 import { RESEARCH_DIRECTIONS, getResearchDirectionLabel } from "@/lib/research-directions"
-import type { User } from "@/types"
 import { compareCohorts, getCohortClassLabel, getCohortLabel, getYearCohortOptions, parseCohortValue } from "@/lib/cohort"
 
+type PublicMember = {
+  username: string
+  englishName: string
+  chineseName?: string
+  organization: "pku" | "thu"
+  cohort: number | "mascot"
+  researchDirections?: string[]
+  researchInterests?: string[]
+  avatar?: string
+  realPhoto?: string
+}
+
 // Group by cohort
-function groupByCohort(users: User[]): Array<{cohort: string|number, label: string, users: User[]}> {
-  const groups: Array<{cohort: string|number, label: string, users: User[]}> = []
+function groupByCohort(users: PublicMember[]): Array<{cohort: string|number, label: string, users: PublicMember[]}> {
+  const groups: Array<{cohort: string|number, label: string, users: PublicMember[]}> = []
   for (const user of users) {
     const last = groups[groups.length - 1]
     if (last && last.cohort === user.cohort) {
@@ -35,7 +46,7 @@ function groupByCohort(users: User[]): Array<{cohort: string|number, label: stri
 }
 
 // 排序函数：学校 → 年级（新→旧）→ 拼音
-function sortUsers(users: User[]) {
+function sortUsers(users: PublicMember[]) {
   const orgOrder = { pku: 0, thu: 1 }
   
   return [...users].sort((a, b) => {
@@ -55,11 +66,11 @@ function sortUsers(users: User[]) {
   })
 }
 
-function getProfileSlug(user: User) {
-  return user.username || user._id
+function getProfileSlug(user: PublicMember) {
+  return user.username
 }
 
-function getUserDirections(user: User) {
+function getUserDirections(user: PublicMember) {
   return user.researchDirections && user.researchDirections.length > 0 ? user.researchDirections : []
 }
 
@@ -72,10 +83,7 @@ export default function MembersPage() {
   // Fetch users from Convex
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const usersFromConvex = usersData || []
-  const users: User[] = usersFromConvex.map((u) => ({
-    ...u,
-    _id: u._id,
-  }))
+  const users = usersFromConvex as PublicMember[]
 
   // Show loading state while fetching
   if (!usersData) {
@@ -255,7 +263,7 @@ export default function MembersPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {group.users.map((user) => (
-              <Link key={user._id} href={`/tong-class/members/${getProfileSlug(user)}`}>
+              <Link key={user.username} href={`/tong-class/members/${getProfileSlug(user)}`}>
                 <Card className="group h-full bg-white shadow-sm hover:bg-slate-50 border-l-[3px] border-transparent hover:border-primary transition-all duration-200 rounded-none border-0">
                   <CardContent className="p-6">
                     {/* Avatar */}

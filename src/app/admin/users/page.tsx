@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye } from "lucide-react"
-import { useUsers, useDeleteUser } from "@/lib/api"
+import { useAdminUsers, useDeleteUser } from "@/lib/api"
 import type { User, UserRole } from "@/types"
 import { getCohortLabel } from "@/lib/cohort"
 import { accountRoleLabels } from "@/lib/account-role"
@@ -44,7 +44,7 @@ export default function UsersPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog()
 
   // Fetch users from Convex
-  const usersData = useUsers({ limit: 1000 })
+  const usersData = useAdminUsers({ limit: 1000 })
   const users = (usersData || []) as User[]
   const deleteUserMutation = useDeleteUser()
 

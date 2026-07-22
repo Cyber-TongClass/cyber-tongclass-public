@@ -55,7 +55,7 @@ import {
   useReviewTags,
   useSetReviewTagColor,
   useUpdateCourseReview,
-  useUsers,
+  useAdminUsers,
 } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import type { Course, CourseReview, User } from "@/types"
@@ -215,7 +215,7 @@ export default function ReviewsPage() {
   const allReviewsData = useAllCourseReviews()
   const allReviews: CourseReview[] = allReviewsData || []
   const reviews = [...allReviews].sort((a, b) => b.createdAt - a.createdAt)
-  const usersData = useUsers({ limit: 1000, skip: !isSuperAdmin })
+  const usersData = useAdminUsers({ limit: 1000, skip: !isSuperAdmin })
   const usersById = useMemo(() => {
     const entries = ((usersData || []) as User[]).map((user) => [String(user._id), user] as const)
     return new Map(entries)

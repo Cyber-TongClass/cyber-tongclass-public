@@ -31,9 +31,7 @@ const WINDOW_MS = 60 * 60_000
 const MAX_EMAIL_PER_WINDOW = 5
 const MAX_IP_PER_WINDOW = 20
 const getRecentStatsRef = makeFunctionReference<"query">("emailVerifications:getRecentStats")
-const getUserByEmailRef = makeFunctionReference<"query">("users:getByEmail")
 const createEmailVerificationRef = makeFunctionReference<"mutation">("emailVerifications:create")
-const touchVerificationRequestRef = makeFunctionReference<"mutation">("users:touchVerificationRequest")
 
 export async function POST(request: NextRequest) {
     try {
@@ -90,11 +88,6 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const maybeUser = await client.query(getUserByEmailRef, { email } as any)
-        if (purpose === "email_verification" && maybeUser?.isEmailVerified) {
-            return NextResponse.json({ ok: true, message: "Email is already verified." })
-        }
-
         const token = generateVerificationToken()
         const code = generateVerificationCode()
         const tokenHash = sha256Hex(token)
@@ -108,16 +101,11 @@ export async function POST(request: NextRequest) {
             tokenHash,
             codeHash,
             purpose,
-            userId: maybeUser?._id,
             sentTo: email,
             ip,
             userAgent,
             expiresAt: Date.now() + expiryMinutes * 60_000,
         } as any)
-
-        if (maybeUser?._id) {
-            await client.mutation(touchVerificationRequestRef, { userId: maybeUser._id } as any)
-        }
 
         const siteUrl = getSiteUrl()
         const path = purpose === "password_reset"

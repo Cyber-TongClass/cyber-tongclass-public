@@ -1,15 +1,14 @@
 "use client"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ArrowLeft, Mail, ExternalLink, BookOpen, FileText, School, GraduationCap } from "lucide-react"
+import { ArrowLeft, ExternalLink, BookOpen, FileText, School, GraduationCap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
 import { usePublications, useUserByProfileSlug } from "@/lib/api"
-import { publicationBelongsToUser } from "@/lib/publication-authors"
+import { parsePublicationAuthors } from "@/lib/publication-authors"
 import { normalizeUrl } from "@/lib/utils"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
-import { getUserLinks, getUserPersonalEmails } from "@/lib/user-profile"
 import { getResearchDirectionLabel } from "@/lib/research-directions"
 import type { Publication } from "@/types"
 import { getCohortClassLabel } from "@/lib/cohort"
@@ -19,13 +18,14 @@ export default function MemberDetailPage() {
   const memberSlug = params.id
 
   const userData = useUserByProfileSlug(memberSlug)
-  const member = userData ? { ...userData, id: userData._id } : null
+  const member = userData || null
   const publicationsData = usePublications({ limit: 1000 })
   const publications: Publication[] = (publicationsData || []).filter((publication: Publication) =>
-    publicationBelongsToUser(publication, member?._id)
+    Boolean(member?.username) && parsePublicationAuthors(publication.authors).some(
+      (author) => author.username?.toLowerCase() === member.username.toLowerCase(),
+    )
   )
-  const personalEmails = member ? getUserPersonalEmails(member) : []
-  const profileLinks = member ? getUserLinks(member) : []
+  const profileLinks = member?.links || []
   const researchDirections = member?.researchDirections || []
   const profilePhoto = member?.realPhoto || member?.avatar
 
@@ -80,21 +80,6 @@ export default function MemberDetailPage() {
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {personalEmails.length > 0 && (
-                <div className="space-y-3">
-                  {personalEmails.map((email) => (
-                    <a
-                      key={email}
-                      href={`mailto:${email}`}
-                      className="flex items-center gap-2 text-sm text-slate-600 hover:text-primary transition-colors"
-                    >
-                      <Mail className="h-4 w-4" />
-                      {email}
-                    </a>
-                  ))}
-                </div>
-              )}
-
               {researchDirections.length > 0 && (
                 <div>
                   <h4 className="text-sm font-extrabold mb-2 flex items-center gap-2">
@@ -196,7 +181,7 @@ export default function MemberDetailPage() {
                         <h4 className="font-extrabold text-slate-900 hover:text-primary mb-1 line-clamp-2">{pub.title}</h4>
                       </Link>
                       <p className="text-sm text-slate-600 mb-2">
-                        <PublicationAuthorsList authors={pub.authors} emphasizedUserId={String(member._id)} />
+                        <PublicationAuthorsList authors={pub.authors} />
                       </p>
                       <div className="flex items-center gap-3 text-xs text-slate-600">
                         <span className="font-medium text-primary">{pub.venue}</span>

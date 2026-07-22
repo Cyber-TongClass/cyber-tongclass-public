@@ -2,6 +2,12 @@ export type ManagedUserRole = "member" | "admin" | "super_admin"
 
 const isAccountManager = (role: ManagedUserRole) => role === "admin" || role === "super_admin"
 
+export function assertCanViewAccountRecords(actorRole: ManagedUserRole) {
+  if (!isAccountManager(actorRole)) {
+    throw new Error("只有管理员可以查看账号资料")
+  }
+}
+
 export function assertCanManageAccount(
   actorRole: ManagedUserRole,
   targetRole: ManagedUserRole,

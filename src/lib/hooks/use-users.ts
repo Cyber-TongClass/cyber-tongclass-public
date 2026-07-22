@@ -4,6 +4,7 @@
 // in the canonical API layer so every call receives the stored main session.
 export {
   useUsers,
+  useAdminUsers,
   useUserById,
   useUserByEmail,
   useUserByStudentId,

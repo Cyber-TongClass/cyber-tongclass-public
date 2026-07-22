@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
-import { normalizeEmail, sha256Hex, signEmailVerificationProof, signPasswordResetProof } from "@/lib/server/verification"
+import { normalizeEmail, sha256Hex, signPasswordResetProof } from "@/lib/server/verification"
 
 type Purpose = "email_verification" | "password_reset"
 const PURPOSE_SET = new Set<Purpose>(["email_verification", "password_reset"])
 const consumeVerificationRef = makeFunctionReference<"mutation">("emailVerifications:consume")
 const markEmailVerifiedRef = makeFunctionReference<"mutation">("users:markEmailVerified")
-const getUserByEmailRef = makeFunctionReference<"query">("users:getByEmail")
 
 export async function POST(request: NextRequest) {
     try {
@@ -36,23 +35,19 @@ export async function POST(request: NextRequest) {
         }
 
         if (purpose === "email_verification") {
-            if (consume.userId) {
-                await client.mutation(markEmailVerifiedRef, { userId: consume.userId } as any)
+            if (consume.verificationId) {
+                await client.mutation(markEmailVerifiedRef, {
+                    verificationId: consume.verificationId,
+                } as any)
             }
 
             return NextResponse.json({
                 ok: true,
                 message: "Email verified successfully.",
-                email: consume.sentTo,
-                proof: consume.sentTo ? signEmailVerificationProof(consume.sentTo) : undefined,
             })
         }
 
-        let targetUserId = consume.userId as string | undefined
-        if (!targetUserId && consume.sentTo) {
-            const user = await client.query(getUserByEmailRef, { email: consume.sentTo } as any)
-            targetUserId = user?._id
-        }
+        const targetUserId = consume.userId as string | undefined
 
         if (!targetUserId || !consume.sentTo) {
             return NextResponse.json({ ok: false, message: "Unable to resolve target account." }, { status: 400 })

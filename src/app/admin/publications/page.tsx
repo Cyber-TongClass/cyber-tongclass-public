@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye, Save, X } from "lucide-react"
 import {
-  useUsers,
+  useAdminUsers,
   usePublications,
   useDeletePublication,
   usePublicationVenues,
@@ -46,7 +46,7 @@ export default function AdminPublicationsPage() {
 
   // Fetch data from Convex
   const publicationsData = usePublications({ limit: 1000 })
-  const usersData = useUsers({})
+  const usersData = useAdminUsers({})
   const publicationVenuesData = usePublicationVenues()
   const deletePublication = useDeletePublication()
   const createPublicationVenue = useCreatePublicationVenue()

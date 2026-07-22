@@ -40,6 +40,14 @@ const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
 const currentUserRoleRef = makeFunctionReference<"query">("auth:currentUserRole")
 const isAdminRef = makeFunctionReference<"query">("auth:isAdmin")
 const isSuperAdminRef = makeFunctionReference<"query">("auth:isSuperAdmin")
+const listPublicTongClassMembersRef = makeFunctionReference<"query">("users:listPublicTongClassMembers")
+const listTongClassDirectoryMembersRef = makeFunctionReference<"query">("users:listTongClassDirectoryMembers")
+const listAdminUsersRef = makeFunctionReference<"query">("users:list")
+const getUserByIdRef = makeFunctionReference<"query">("users:getById")
+const getUserByEmailRef = makeFunctionReference<"query">("users:getByEmail")
+const getUserByStudentIdRef = makeFunctionReference<"query">("users:getByStudentId")
+const searchPublicTongClassMembersRef = makeFunctionReference<"query">("users:searchPublicTongClassMembers")
+const getPublicTongClassMemberBySlugRef = makeFunctionReference<"query">("users:getPublicTongClassMemberBySlug")
 const academicExchangeProfileRef = makeFunctionReference<"query">("academicExchange:getStudentFormProfile")
 const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("academicExchange:upsertStudentFormProfile")
 const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
@@ -231,7 +239,55 @@ export function useSignIn() {
 
 // ==================== 用户相关 ====================
 
-export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number | boolean; limit?: number; classMembersOnly?: boolean }) {
+type UserListArgs = {
+  organization?: "pku" | "thu"
+  cohort?: CohortValue
+  skip?: number | boolean
+  limit?: number
+  classMembersOnly?: boolean
+}
+
+function normalizeUserListArgs(args?: UserListArgs) {
+  if (!args) return {}
+  const { skip, classMembersOnly: _classMembersOnly, ...rest } = args
+  return {
+    ...rest,
+    ...(typeof skip === "number" ? { skip } : {}),
+  }
+}
+
+function withClientUserId(result: unknown): any {
+  if (result === undefined || result === null) return result
+  if (Array.isArray(result)) {
+    return result.map(withClientUserId)
+  }
+  const record = result as { id?: unknown }
+  return typeof result === "object" && typeof record.id === "string"
+    ? { ...record, _id: record.id }
+    : result
+}
+
+/**
+ * General user discovery deliberately uses only public profile fields while
+ * signed out, and a PII-free directory projection while signed in.
+ */
+export function useUsers(args?: UserListArgs) {
+  const sessionToken = useTongClassSessionToken()
+  const queryArgs = useMemo(() => normalizeUserListArgs(args), [args])
+  const result = useQuery(
+    sessionToken ? listTongClassDirectoryMembersRef : listPublicTongClassMembersRef,
+    args?.skip === true
+      ? "skip"
+      : sessionToken
+        ? ({ ...queryArgs, sessionToken } as any)
+        : (queryArgs as any),
+  )
+  return useMemo(() => withClientUserId(result), [result])
+}
+
+/** Account management screens explicitly opt into an administrator-only DTO. */
+export function useAdminUsers(args?: UserListArgs) {
+  const sessionToken = useTongClassSessionToken()
   const queryArgs = useMemo(() => {
     if (!args) return {}
     const { skip, ...rest } = args
@@ -240,41 +296,52 @@ export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortV
       ...(typeof skip === "number" ? { skip } : {}),
     }
   }, [args])
-
-  return useQuery(api.users.list, args?.skip === true ? "skip" : queryArgs)
+  const result = useQuery(
+    listAdminUsersRef,
+    !sessionToken || args?.skip === true ? "skip" : ({ ...queryArgs, sessionToken } as any),
+  )
+  return useMemo(() => withClientUserId(result), [result])
 }
 
 export function useUserById(id?: string | null) {
-  return useQuery(api.users.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  const result = useQuery(
+    getUserByIdRef,
+    id && sessionToken ? ({ id: id as any, sessionToken } as any) : "skip",
+  )
+  return useMemo(() => withClientUserId(result), [result])
 }
 
 export function useUserByEmail(email?: string | null) {
-  return useQuery(api.users.getByEmail, email ? ({ email } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  const result = useQuery(
+    getUserByEmailRef,
+    email && sessionToken ? ({ email, sessionToken } as any) : "skip",
+  )
+  return useMemo(() => withClientUserId(result), [result])
 }
 
 export function useUserByStudentId(studentId?: string | null) {
-  return useQuery(api.users.getByStudentId, studentId ? ({ studentId } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  const result = useQuery(
+    getUserByStudentIdRef,
+    studentId && sessionToken ? ({ studentId, sessionToken } as any) : "skip",
+  )
+  return useMemo(() => withClientUserId(result), [result])
 }
 
-export function useSearchUsers(query: string, classMembersOnly?: boolean) {
+export function useSearchUsers(query: string) {
   const normalizedQuery = query.trim()
   return useQuery(
-    api.users.search,
-    normalizedQuery ? ({ query: normalizedQuery, classMembersOnly } as any) : "skip"
+    searchPublicTongClassMembersRef,
+    normalizedQuery ? ({ query: normalizedQuery } as any) : "skip",
   )
 }
 
 export function useUserByProfileSlug(slug?: string | null) {
-  const users = useUsers({ limit: 1000, classMembersOnly: true })
-  const normalizedSlug = slug?.trim().toLowerCase()
-
-  if (!slug) return null
-  if (users === undefined) return undefined
-
-  return (
-    users.find((user: any) => user.username?.toLowerCase() === normalizedSlug) ||
-    users.find((user: any) => String(user._id) === slug) ||
-    null
+  return useQuery(
+    getPublicTongClassMemberBySlugRef,
+    slug?.trim() ? ({ slug: slug.trim() } as any) : "skip",
   )
 }
 

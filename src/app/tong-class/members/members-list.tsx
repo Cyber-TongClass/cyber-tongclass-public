@@ -34,13 +34,12 @@ export function MembersList() {
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const users = useMemo(() => usersData || [], [usersData])
 
-  // Filter users by role (member, admin, super_admin)
+  // Public directory projections intentionally do not expose account roles.
   const registeredUsers = useMemo(() => {
     return users
-      .filter((u) => u.role === "member" || u.role === "admin" || u.role === "super_admin")
       .map((u) => ({
-        id: u._id,
-        username: u.username || u._id,
+        id: u.username,
+        username: u.username,
         englishName: u.englishName || u.username,
         organization: u.organization,
         cohort: u.cohort,

@@ -121,6 +121,33 @@ test("toPublicTongClassMemberDto returns only the public member profile", () => 
   assertFieldsAreAbsent(publicMember, publicFields)
 })
 
+test("toTongClassDirectoryUserDto gives signed-in tools an identifier without private account fields", () => {
+  const directoryMember = dto.toTongClassDirectoryUserDto(userDocument)
+
+  assert.deepEqual(directoryMember, {
+    id: "users:ada",
+    username: "ada",
+    englishName: "Ada Lovelace",
+    chineseName: "艾达",
+    organization: "pku",
+    cohort: 2026,
+    bio: "Computing pioneer",
+    profileMarkdown: "# Ada",
+    researchDirections: ["Machine Learning"],
+    researchInterests: ["Programming Languages"],
+    links: [{
+      type: "github",
+      label: "GitHub",
+      url: "https://github.com/ada",
+    }],
+    avatar: "https://images.example/avatar.png",
+    realPhoto: "https://images.example/photo.png",
+    isClassMember: true,
+  })
+  assert.equal(Object.hasOwn(directoryMember, "_id"), false)
+  assertFieldsAreAbsent(directoryMember, publicFields)
+})
+
 test("toCurrentUserDto returns the owner account fields without credential or session data", () => {
   const currentUser = dto.toCurrentUserDto(userDocument)
 

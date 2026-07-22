@@ -7,6 +7,9 @@
 
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserBySession } from "./reviewer/lib"
+import { assertCanViewAccountRecords } from "./lib/userAccountPolicy"
+import { toAdminUserDto, toCurrentUserDto } from "./lib/userDto"
 
 const sha256Hex = async (input: string) => {
   const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
@@ -14,6 +17,16 @@ const sha256Hex = async (input: string) => {
   const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
   return Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, "0")).join("")
 }
+
+const toCurrentAccountDto = (user: any) => ({
+  _id: user._id,
+  ...toCurrentUserDto(user),
+})
+
+const toAdminAccountDto = (user: any) => ({
+  id: String(user._id),
+  ...toAdminUserDto(user),
+})
 
 // Check if student ID is allowed to register
 export const isStudentIdAllowed = query({
@@ -42,7 +55,7 @@ export const currentUser = query({
       .filter((q) => q.eq(q.field("email"), identity.email!))
       .first()
 
-    return user
+    return user ? toCurrentAccountDto(user) : null
   },
 })
 
@@ -62,19 +75,24 @@ export const currentUserBySession = query({
     }
 
     const user = await ctx.db.get(session.userId)
-    return user || null
+    return user ? toCurrentAccountDto(user) : null
   },
 })
 
-// Get current user by email (for demo login)
+// Email lookup is limited to account-management workflows.
 export const getUserByEmail = query({
-  args: { email: v.string() },
+  args: {
+    email: v.string(),
+    sessionToken: v.string(),
+  },
   handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    assertCanViewAccountRecords(actor.role)
     const user = await ctx.db
       .query("users")
-      .filter((q) => q.eq(q.field("email"), args.email.toLowerCase()))
+      .withIndex("by_email", (q) => q.eq("email", args.email.trim().toLowerCase()))
       .first()
-    return user
+    return user ? toAdminAccountDto(user) : null
   },
 })
 

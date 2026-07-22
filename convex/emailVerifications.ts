@@ -8,25 +8,39 @@ export const create = mutation({
         tokenHash: v.string(),
         codeHash: v.optional(v.string()),
         purpose: PURPOSE,
-        userId: v.optional(v.id("users")),
         sentTo: v.string(),
         ip: v.optional(v.string()),
         userAgent: v.optional(v.string()),
         expiresAt: v.number(),
     },
     handler: async (ctx, args) => {
-        return ctx.db.insert("emailVerifications", {
+        const sentTo = args.sentTo.trim().toLowerCase()
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", sentTo))
+            .first()
+
+        const verificationId = await ctx.db.insert("emailVerifications", {
             tokenHash: args.tokenHash,
             codeHash: args.codeHash,
             purpose: args.purpose,
-            userId: args.userId,
-            sentTo: args.sentTo.trim().toLowerCase(),
+            userId: user?._id,
+            sentTo,
             ip: args.ip,
             userAgent: args.userAgent,
             createdAt: Date.now(),
             expiresAt: args.expiresAt,
             usedAt: undefined,
         })
+
+        if (user) {
+            await ctx.db.patch(user._id, {
+                lastVerificationRequestedAt: Date.now(),
+                updatedAt: Date.now(),
+            })
+        }
+
+        return { verificationId }
     },
 })
 
@@ -77,6 +91,7 @@ export const consume = mutation({
 
         return {
             ok: true as const,
+            verificationId: row._id,
             userId: row.userId,
             sentTo: row.sentTo,
             purpose: row.purpose,

@@ -78,17 +78,16 @@ function SearchContent() {
         user.englishName.toLowerCase().includes(q) ||
         user.username.toLowerCase().includes(q) ||
         user.chineseName?.toLowerCase().includes(q) ||
-        user.email.toLowerCase().includes(q) ||
         user.bio?.toLowerCase().includes(q) ||
         user.researchInterests?.some((interest) => interest.toLowerCase().includes(q)) ||
         user.researchDirections?.some((d) => d.toLowerCase().includes(q))
       ) {
         newResults.push({
           type: "member",
-          id: user._id,
+          id: user.username,
           title: user.englishName || user.username,
-          description: user.bio?.slice(0, 100) || user.email,
-          url: `/tong-class/members/${user.username || user._id}`,
+          description: user.bio?.slice(0, 100) || user.username,
+          url: `/tong-class/members/${user.username}`,
           icon: <Users className="h-5 w-5" />,
         })
       }

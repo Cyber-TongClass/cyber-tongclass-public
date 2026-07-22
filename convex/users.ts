@@ -5,11 +5,19 @@ import {
     assertCanManageAccount,
     assertCanProvisionAccount,
     assertCanSetManagedRole,
+    assertCanViewAccountRecords,
 } from "./lib/userAccountPolicy"
 import {
     assertCanAssignUserIdentityType,
     getDefaultStoredIdentityType,
 } from "./lib/userIdentity"
+import {
+    toAdminUserDto,
+    toCurrentUserDto,
+    toPublicTongClassMemberDto,
+    toTongClassDirectoryUserDto,
+} from "./lib/userDto"
+import type { TongClassUserRecord } from "./lib/userDto"
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 const normalizeUsername = (username: string) => username.trim().toLowerCase()
@@ -101,6 +109,13 @@ const pickDefined = <T extends Record<string, any>>(input: T) => {
 
 const isVisibleClassMember = (user: { isClassMember?: boolean }) => user.isClassMember !== false
 
+type StoredUser = TongClassUserRecord & { _id: unknown }
+
+const toAdminAccountDto = (user: any) => ({
+    id: String(user._id),
+    ...toAdminUserDto(user),
+})
+
 const generateSalt = (len = 16) => {
     const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
     const arr = cryptoImpl.getRandomValues(new Uint8Array(len)) as Uint8Array
@@ -139,70 +154,183 @@ const verifyPassword = async (password: string, credential: { passwordHash: stri
     return credential.passwordHash === await sha256Hex(password)
 }
 
-// Get all users with pagination
+const userListArgs = {
+    skip: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    organization: v.optional(v.union(v.literal("pku"), v.literal("thu"))),
+    cohort: v.optional(v.union(v.number(), v.literal("mascot"))),
+}
+
+async function listFilteredUsers(ctx: any, args: {
+    organization?: "pku" | "thu"
+    cohort?: number | "mascot"
+}): Promise<StoredUser[]> {
+    let usersQuery = ctx.db.query("users")
+
+    if (args.organization) {
+        usersQuery = usersQuery.filter((q: any) => q.eq(q.field("organization"), args.organization))
+    }
+
+    if (args.cohort !== undefined) {
+        usersQuery = usersQuery.filter((q: any) => q.eq(q.field("cohort"), args.cohort))
+    }
+
+    return (await usersQuery.order("desc").collect()) as StoredUser[]
+}
+
+function paginate<T>(items: T[], skip?: number, limit?: number) {
+    return items.slice(skip || 0, (skip || 0) + (limit || 50))
+}
+
+async function findVisibleClassMemberByProfileSlug(ctx: any, rawSlug: string) {
+    const slug = rawSlug.trim()
+    const username = normalizeUsername(slug)
+    if (!slug || !username) return null
+
+    const users = await ctx.db.query("users").collect()
+    const user = users.find((candidate: any) => (
+        candidate.username?.toLowerCase() === username || String(candidate._id) === slug
+    ))
+
+    return user && isVisibleClassMember(user) ? user : null
+}
+
+/**
+ * Anonymous Tong Class discovery is intentionally a public profile
+ * projection, never a raw account-document query.
+ */
+export const listPublicTongClassMembers = query({
+    args: userListArgs,
+    handler: async (ctx, args) => {
+        const users = await listFilteredUsers(ctx, args)
+        const visibleUsers = users.filter(isVisibleClassMember)
+        return paginate(visibleUsers, args.skip, args.limit).map(toPublicTongClassMemberDto)
+    },
+})
+
+/**
+ * Logged-in tools can correlate public profiles with existing content IDs,
+ * but they still receive no email, student ID, role, or verification data.
+ */
+export const listTongClassDirectoryMembers = query({
+    args: {
+        ...userListArgs,
+        sessionToken: v.string(),
+    },
+    handler: async (ctx, args) => {
+        await getUserBySession(ctx, args.sessionToken)
+        const users = await listFilteredUsers(ctx, args)
+        const visibleUsers = users.filter(isVisibleClassMember)
+        return paginate(visibleUsers, args.skip, args.limit).map(toTongClassDirectoryUserDto)
+    },
+})
+
+/**
+ * Legacy list is retained only for administrator tooling. Its result is an
+ * explicit account DTO instead of a raw Convex document.
+ */
 export const list = query({
     args: {
-        skip: v.optional(v.number()),
-        limit: v.optional(v.number()),
-        organization: v.optional(v.union(v.literal("pku"), v.literal("thu"))),
-        cohort: v.optional(v.union(v.number(), v.literal("mascot"))),
+        ...userListArgs,
         classMembersOnly: v.optional(v.boolean()),
+        sessionToken: v.string(),
     },
     handler: async (ctx, args) => {
-        let usersQuery = ctx.db.query("users")
+        const actor = await getUserBySession(ctx, args.sessionToken)
+        assertCanViewAccountRecords(actor.role)
 
-        if (args.organization) {
-            usersQuery = usersQuery.filter((q) => q.eq(q.field("organization"), args.organization))
-        }
-
-        if (args.cohort !== undefined) {
-            usersQuery = usersQuery.filter((q) => q.eq(q.field("cohort"), args.cohort))
-        }
-
-        const allUsers = await usersQuery.order("desc").collect()
-        const visibleUsers = args.classMembersOnly ? allUsers.filter(isVisibleClassMember) : allUsers
-        const skip = args.skip || 0
-        const limit = args.limit || 50
-        return visibleUsers.slice(skip, skip + limit)
+        const users = await listFilteredUsers(ctx, args)
+        const visibleUsers = args.classMembersOnly ? users.filter(isVisibleClassMember) : users
+        return paginate(visibleUsers, args.skip, args.limit).map(toAdminAccountDto)
     },
 })
 
-// Get a single user by ID
+export const getPublicTongClassMemberBySlug = query({
+    args: { slug: v.string() },
+    handler: async (ctx, args) => {
+        const user = await findVisibleClassMemberByProfileSlug(ctx, args.slug)
+        if (!user) return null
+        return toPublicTongClassMemberDto(user)
+    },
+})
+
+export const searchPublicTongClassMembers = query({
+    args: {
+        query: v.string(),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const keyword = args.query.trim().toLowerCase()
+        if (!keyword) return []
+
+        const users = await ctx.db.query("users").collect()
+        return users
+            .filter(isVisibleClassMember)
+            .filter((user) => {
+                const values = [user.englishName, user.chineseName || "", user.username]
+                return values.some((value) => value.toLowerCase().includes(keyword))
+            })
+            .slice(0, args.limit || 20)
+            .map(toPublicTongClassMemberDto)
+    },
+})
+
+// Get a single user by ID. Ordinary users can only retrieve their own account.
 export const getById = query({
-    args: { id: v.id("users") },
+    args: {
+        id: v.id("users"),
+        sessionToken: v.string(),
+    },
     handler: async (ctx, args) => {
+        const actor = await getUserBySession(ctx, args.sessionToken)
         const user = await ctx.db.get(args.id)
-        return user
+        if (!user) return null
+
+        if (String(actor._id) === String(user._id)) {
+            return toCurrentUserDto(user)
+        }
+
+        assertCanViewAccountRecords(actor.role)
+        return toAdminAccountDto(user)
     },
 })
 
-// Get a single user by email
+// Email and student-ID lookup are account-management functions, never public discovery APIs.
 export const getByEmail = query({
-    args: { email: v.string() },
+    args: {
+        email: v.string(),
+        sessionToken: v.string(),
+    },
     handler: async (ctx, args) => {
+        const actor = await getUserBySession(ctx, args.sessionToken)
+        assertCanViewAccountRecords(actor.role)
         const normalizedEmail = normalizeEmail(args.email)
 
         const user = await ctx.db
             .query("users")
-            .filter((q) => q.eq(q.field("email"), normalizedEmail))
+            .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
             .first()
 
-        return user
+        return user ? toAdminAccountDto(user) : null
     },
 })
 
-// Get a single user by student ID
 export const getByStudentId = query({
-    args: { studentId: v.string() },
+    args: {
+        studentId: v.string(),
+        sessionToken: v.string(),
+    },
     handler: async (ctx, args) => {
+        const actor = await getUserBySession(ctx, args.sessionToken)
+        assertCanViewAccountRecords(actor.role)
         const normalizedStudentId = normalizeStudentId(args.studentId)
 
         const user = await ctx.db
             .query("users")
-            .filter((q) => q.eq(q.field("studentId"), normalizedStudentId))
+            .withIndex("by_studentId", (q) => q.eq("studentId", normalizedStudentId))
             .first()
 
-        return user
+        return user ? toAdminAccountDto(user) : null
     },
 })
 
@@ -461,44 +589,58 @@ export const update = mutation({
 
 export const markEmailVerified = mutation({
     args: {
-        userId: v.id("users"),
+        verificationId: v.id("emailVerifications"),
     },
     handler: async (ctx, args) => {
-        const user = await ctx.db.get(args.userId)
+        const verification = await ctx.db.get(args.verificationId)
+        if (
+            !verification ||
+            verification.purpose !== "email_verification" ||
+            !verification.userId ||
+            verification.usedAt === undefined ||
+            verification.usedAt > verification.expiresAt
+        ) {
+            throw new Error("有效的邮箱验证凭据不可用")
+        }
+
+        const user = await ctx.db.get(verification.userId)
         if (!user) {
             throw new Error("User not found")
         }
 
-        await ctx.db.patch(args.userId, {
+        if (normalizeEmail(user.email) !== normalizeEmail(verification.sentTo)) {
+            throw new Error("邮箱验证凭据与账号不匹配")
+        }
+
+        await ctx.db.patch(verification.userId, {
             isEmailVerified: true,
             updatedAt: Date.now(),
         })
 
-        return args.userId
+        return verification.userId
     },
 })
 
+// Kept for the legacy verification route, but a caller can only touch its own account.
 export const touchVerificationRequest = mutation({
     args: {
-        userId: v.id("users"),
+        sessionToken: v.string(),
     },
     handler: async (ctx, args) => {
-        const user = await ctx.db.get(args.userId)
-        if (!user) {
-            throw new Error("User not found")
-        }
+        const actor = await getUserBySession(ctx, args.sessionToken)
 
-        await ctx.db.patch(args.userId, {
+        await ctx.db.patch(actor._id, {
             lastVerificationRequestedAt: Date.now(),
             updatedAt: Date.now(),
         })
 
-        return args.userId
+        return actor._id
     },
 })
 
 export const updatePasswordByUserId = mutation({
     args: {
+        sessionToken: v.string(),
         userId: v.id("users"),
         newPassword: v.string(),
     },
@@ -507,9 +649,14 @@ export const updatePasswordByUserId = mutation({
             throw new Error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
         }
 
+        const actor = await getUserBySession(ctx, args.sessionToken)
         const user = await ctx.db.get(args.userId)
         if (!user) {
             throw new Error("User not found")
+        }
+
+        if (String(actor._id) !== String(user._id) && actor.role !== "super_admin") {
+            throw new Error("只能修改自己的密码；重置其他账号密码需要超级管理员权限")
         }
 
         const salt = generateSalt()
@@ -677,25 +824,21 @@ export const updateRole = mutation({
 // Update user profile markdown with owner/super_admin authorization.
 export const updateProfileMarkdown = mutation({
     args: {
+        sessionToken: v.string(),
         userId: v.id("users"),
-        requesterId: v.id("users"),
         profileMarkdown: v.string(),
     },
     handler: async (ctx, args) => {
-        const [targetUser, requester] = await Promise.all([
+        const [targetUser, actor] = await Promise.all([
             ctx.db.get(args.userId),
-            ctx.db.get(args.requesterId),
+            getUserBySession(ctx, args.sessionToken),
         ])
 
         if (!targetUser) {
             throw new Error("User not found")
         }
 
-        if (!requester) {
-            throw new Error("Requester not found")
-        }
-
-        const canEdit = requester._id === targetUser._id || requester.role === "super_admin"
+        const canEdit = String(actor._id) === String(targetUser._id) || actor.role === "super_admin"
         if (!canEdit) {
             throw new Error("Unauthorized to edit profile markdown")
         }
@@ -748,19 +891,11 @@ export const remove = mutation({
 })
 
 export const getByProfileSlug = query({
-    args: { slug: v.string(), includeHidden: v.optional(v.boolean()) },
+    args: { slug: v.string() },
     handler: async (ctx, args) => {
-        const slug = args.slug.trim()
-        const normalizedSlug = slug.toLowerCase()
-        if (!slug) return null
-
-        const users = await ctx.db.query("users").collect()
-        const visibleUsers = args.includeHidden ? users : users.filter(isVisibleClassMember)
-        return (
-            visibleUsers.find((user) => user.username?.toLowerCase() === normalizedSlug) ||
-            visibleUsers.find((user) => String(user._id) === slug) ||
-            null
-        )
+        const user = await findVisibleClassMemberByProfileSlug(ctx, args.slug)
+        if (!user) return null
+        return toPublicTongClassMemberDto(user)
     },
 })
 
@@ -836,8 +971,14 @@ export const count = query({
 
 // Search users by name
 export const search = query({
-    args: { query: v.string(), classMembersOnly: v.optional(v.boolean()) },
+    args: {
+        query: v.string(),
+        classMembersOnly: v.optional(v.boolean()),
+        sessionToken: v.string(),
+    },
     handler: async (ctx, args) => {
+        const actor = await getUserBySession(ctx, args.sessionToken)
+        assertCanViewAccountRecords(actor.role)
         const keyword = args.query.trim()
 
         // Some Convex versions/types do not expose a string "contains" filter
@@ -854,6 +995,6 @@ export const search = query({
             })
             .slice(0, 20)
 
-        return users
+        return users.map(toAdminAccountDto)
     },
 })

@@ -62,6 +62,15 @@ export type PublicTongClassMemberDto = {
   isClassMember?: boolean
 }
 
+/**
+ * A signed-in, non-administrative directory projection. The stable document
+ * identifier is deliberately kept separate from the public member projection
+ * so anonymous directory and search responses never expose a raw account ID.
+ */
+export type TongClassDirectoryUserDto = PublicTongClassMemberDto & {
+  id: string
+}
+
 export type CurrentUserDto = {
   email: string
   username: string
@@ -117,6 +126,15 @@ export function toPublicTongClassMemberDto(
     avatar: user.avatar,
     realPhoto: user.realPhoto,
     isClassMember: user.isClassMember,
+  }
+}
+
+export function toTongClassDirectoryUserDto(
+  user: TongClassUserRecord & { _id: unknown },
+): TongClassDirectoryUserDto {
+  return {
+    id: String(user._id),
+    ...toPublicTongClassMemberDto(user),
   }
 }
 
