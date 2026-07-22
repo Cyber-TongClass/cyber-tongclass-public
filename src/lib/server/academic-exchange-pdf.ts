@@ -16,6 +16,22 @@ const DETAIL_CONTENT_VERTICAL_PADDING = FILL_FONT_SIZE * 0.5
 const DETAIL_LABEL_VERTICAL_PADDING = DETAIL_LABEL_FONT_SIZE * 0.5
 const DETAIL_LINE_HEIGHT_MULTIPLIER = 1.3
 const TABLE_OUTER_BORDER_WIDTH = 1.5
+// The source template's Quartz content is fractionally wider than pdf-lib's
+// overlay coordinate space. Calibrate extracted template coordinates against
+// the rendered fixed rows so every regenerated rule lands on the same pixels.
+const alignTemplateCoordinate = (coordinate: number) => coordinate * 1.001176 + 0.0183
+const TEMPLATE_TABLE_LEFT = alignTemplateCoordinate(90.753906)
+const TEMPLATE_TABLE_RIGHT = alignTemplateCoordinate(515.996094)
+const TEMPLATE_TABLE_WIDTH = TEMPLATE_TABLE_RIGHT - TEMPLATE_TABLE_LEFT
+const PROJECT_LABEL_DIVIDER = alignTemplateCoordinate(171.537109)
+const PROJECT_LABEL_WIDTH = PROJECT_LABEL_DIVIDER - TEMPLATE_TABLE_LEFT
+const TABLE_INNER_BORDER_WIDTH = 0.5
+const EXPENSE_COLUMN_DIVIDERS = [240.572266, 388.232422].map(alignTemplateCoordinate)
+const EXPENSE_COLUMN_WIDTHS = [
+  EXPENSE_COLUMN_DIVIDERS[0] - TEMPLATE_TABLE_LEFT,
+  EXPENSE_COLUMN_DIVIDERS[1] - EXPENSE_COLUMN_DIVIDERS[0],
+  TEMPLATE_TABLE_RIGHT - EXPENSE_COLUMN_DIVIDERS[1],
+]
 const CONTINUATION_ROWS_PER_PAGE = 20
 const APPLICATION_NUMBER_RECT = { x: 185, top: 145, width: 225, height: 23 }
 // The application form explicitly supports direct arXiv PDF links. Keep this
@@ -216,39 +232,69 @@ function clearTemplateRect(page: any, rect: TemplateRect) {
   })
 }
 
-function drawTemplateBorder(page: any, rect: TemplateRect, borderWidth = 0.6) {
+function drawTemplateRule({
+  page,
+  orientation,
+  position,
+  start,
+  end,
+  width,
+}: {
+  page: any
+  orientation: "horizontal" | "vertical"
+  position: number
+  start: number
+  end: number
+  width: number
+}) {
+  const pageHeight = page.getHeight()
+  if (orientation === "horizontal") {
+    page.drawRectangle({
+      x: start,
+      y: pageHeight - position - width / 2,
+      width: end - start,
+      height: width,
+      color: BLACK,
+    })
+    return
+  }
+
   page.drawRectangle({
-    x: rect.x,
-    y: page.getHeight() - rect.top - rect.height,
-    width: rect.width,
-    height: rect.height,
-    borderColor: BLACK,
-    borderWidth,
+    x: position - width / 2,
+    y: pageHeight - end,
+    width,
+    height: end - start,
+    color: BLACK,
   })
 }
 
-function drawTemplateLine({
-  page,
-  startX,
-  startTop,
-  endX,
-  endTop,
-  borderWidth,
-}: {
-  page: any
-  startX: number
-  startTop: number
-  endX: number
-  endTop: number
-  borderWidth: number
-}) {
-  const pageHeight = page.getHeight()
-  page.drawLine({
-    start: { x: startX, y: pageHeight - startTop },
-    end: { x: endX, y: pageHeight - endTop },
-    thickness: borderWidth,
-    color: BLACK,
+function drawAlignedTableFrame(page: any, top: number, bottom: number) {
+  drawTemplateRule({
+    page,
+    orientation: "vertical",
+    position: TEMPLATE_TABLE_LEFT,
+    start: top,
+    end: bottom,
+    width: TABLE_OUTER_BORDER_WIDTH,
   })
+  drawTemplateRule({
+    page,
+    orientation: "vertical",
+    position: TEMPLATE_TABLE_RIGHT,
+    start: top,
+    end: bottom,
+    width: TABLE_OUTER_BORDER_WIDTH,
+  })
+  for (const position of [top, bottom]) {
+    drawTemplateRule({
+      page,
+      orientation: "horizontal",
+      position,
+      start: TEMPLATE_TABLE_LEFT,
+      end: TEMPLATE_TABLE_RIGHT,
+      width: TABLE_OUTER_BORDER_WIDTH,
+    })
+  }
 }
 
 function formatAmount(value: unknown) {
@@ -401,9 +447,9 @@ function drawExpenseContinuationPages({
   expenseItems: any[]
   totalAmount: number
 }) {
-  const tableX = 91.59
-  const tableWidth = 424.31
-  const columnWidths = [149.52, 147.84, 126.95]
+  const tableX = TEMPLATE_TABLE_LEFT
+  const tableWidth = TEMPLATE_TABLE_WIDTH
+  const columnWidths = EXPENSE_COLUMN_WIDTHS
   const sectionTop = 195.27
   const sectionHeight = 20.4
   const headerTop = sectionTop + sectionHeight
@@ -426,7 +472,6 @@ function drawExpenseContinuationPages({
     })
 
     const sectionRect = { x: tableX, top: sectionTop, width: tableWidth, height: sectionHeight }
-    drawTemplateBorder(page, sectionRect, TABLE_OUTER_BORDER_WIDTH)
     drawTextInTemplateRect({
       page,
       text: "支出明细（续）",
@@ -445,7 +490,6 @@ function drawExpenseContinuationPages({
     let headerX = tableX
     for (const cell of headerCells) {
       const rect = { x: headerX, top: headerTop, width: cell.width, height: rowHeight }
-      drawTemplateBorder(page, rect, 0.6)
       drawTextInTemplateRect({ page, text: cell.text, rect, font: fillFont, fontSize: 10, align: "center" })
       headerX += cell.width
     }
@@ -460,7 +504,6 @@ function drawExpenseContinuationPages({
       let columnX = tableX
       for (const cell of cells) {
         const rect = { x: columnX, top, width: cell.width, height: rowHeight }
-        drawTemplateBorder(page, rect, 0.55)
         drawTextInTemplateRect({ page, text: cell.text, rect, font: fillFont, align: cell.align })
         columnX += cell.width
       }
@@ -470,8 +513,6 @@ function drawExpenseContinuationPages({
     if (isLastPage) {
       const labelRect = { x: tableX, top: contentBottom, width: columnWidths[0], height: rowHeight }
       const amountRect = { x: tableX + columnWidths[0], top: contentBottom, width: columnWidths[1], height: rowHeight }
-      const noteRect = { x: tableX + columnWidths[0] + columnWidths[1], top: contentBottom, width: columnWidths[2], height: rowHeight }
-      ;[labelRect, amountRect, noteRect].forEach((rect) => drawTemplateBorder(page, rect, 0.55))
       drawTextInTemplateRect({
         page,
         text: "总计",
@@ -490,12 +531,35 @@ function drawExpenseContinuationPages({
     }
 
     const tableBottom = contentBottom + (isLastPage ? rowHeight : 0)
-    drawTemplateBorder(page, {
-      x: tableX,
-      top: sectionTop,
-      width: tableWidth,
-      height: tableBottom - sectionTop,
-    }, TABLE_OUTER_BORDER_WIDTH)
+    drawAlignedTableFrame(page, sectionTop, tableBottom)
+    drawTemplateRule({
+      page,
+      orientation: "horizontal",
+      position: headerTop,
+      start: tableX,
+      end: tableX + tableWidth,
+      width: TABLE_OUTER_BORDER_WIDTH,
+    })
+    for (let position = headerTop + rowHeight; position < tableBottom; position += rowHeight) {
+      drawTemplateRule({
+        page,
+        orientation: "horizontal",
+        position,
+        start: tableX,
+        end: tableX + tableWidth,
+        width: TABLE_INNER_BORDER_WIDTH,
+      })
+    }
+    for (const position of EXPENSE_COLUMN_DIVIDERS) {
+      drawTemplateRule({
+        page,
+        orientation: "vertical",
+        position,
+        start: headerTop,
+        end: tableBottom,
+        width: TABLE_INNER_BORDER_WIDTH,
+      })
+    }
   })
 }
 
@@ -558,9 +622,9 @@ function drawApplicationTemplatePage({
     drawTextInTemplateRect({ page, text, rect, font: fillFont, align: "center", paddingX: 3, paddingY: 2 })
   }
 
-  const tableX = 91.59
-  const tableWidth = 424.31
-  const labelWidth = 80.4
+  const tableX = TEMPLATE_TABLE_LEFT
+  const tableWidth = TEMPLATE_TABLE_WIDTH
+  const labelWidth = PROJECT_LABEL_WIDTH
   const contentX = tableX + labelWidth
   const contentWidth = tableWidth - labelWidth
   const dynamicRowsTop = 336.63
@@ -606,11 +670,9 @@ function drawApplicationTemplatePage({
   })
 
   let dynamicTop = dynamicRowsTop
-  for (const row of dynamicRows) {
+  dynamicRows.forEach((row, rowIndex) => {
     const labelRect = { x: tableX, top: dynamicTop, width: labelWidth, height: row.height }
     const contentRect = { x: contentX, top: dynamicTop, width: contentWidth, height: row.height }
-    drawTemplateBorder(page, labelRect, 0.55)
-    drawTemplateBorder(page, contentRect, 0.55)
     drawTextInTemplateRect({
       page,
       text: row.label,
@@ -634,37 +696,55 @@ function drawApplicationTemplatePage({
       lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
     })
     dynamicTop += row.height
-  }
+    if (rowIndex < dynamicRows.length - 1) {
+      drawTemplateRule({
+        page,
+        orientation: "horizontal",
+        position: dynamicTop,
+        start: tableX,
+        end: tableX + tableWidth,
+        width: TABLE_INNER_BORDER_WIDTH,
+      })
+    }
+  })
 
   // Preserve the template's upper frame exactly as-is. Only the cleared,
   // dynamic lower portion needs new 1.5pt left, right, and bottom edges;
   // redrawing the complete frame would visibly thicken the original lines.
-  drawTemplateLine({
+  drawTemplateRule({
     page,
-    startX: tableX,
-    startTop: dynamicRowsTop,
-    endX: tableX,
-    endTop: dynamicTop,
-    borderWidth: TABLE_OUTER_BORDER_WIDTH,
+    orientation: "vertical",
+    position: tableX,
+    start: dynamicRowsTop,
+    end: dynamicTop,
+    width: TABLE_OUTER_BORDER_WIDTH,
   })
-  drawTemplateLine({
+  drawTemplateRule({
     page,
-    startX: tableX + tableWidth,
-    startTop: dynamicRowsTop,
-    endX: tableX + tableWidth,
-    endTop: dynamicTop,
-    borderWidth: TABLE_OUTER_BORDER_WIDTH,
+    orientation: "vertical",
+    position: tableX + tableWidth,
+    start: dynamicRowsTop,
+    end: dynamicTop,
+    width: TABLE_OUTER_BORDER_WIDTH,
   })
-  drawTemplateLine({
+  drawTemplateRule({
     page,
-    startX: tableX,
-    startTop: dynamicTop,
-    endX: tableX + tableWidth,
-    endTop: dynamicTop,
-    borderWidth: TABLE_OUTER_BORDER_WIDTH,
+    orientation: "vertical",
+    position: contentX,
+    start: dynamicRowsTop,
+    end: dynamicTop,
+    width: TABLE_INNER_BORDER_WIDTH,
+  })
+  drawTemplateRule({
+    page,
+    orientation: "horizontal",
+    position: dynamicTop,
+    start: tableX,
+    end: tableX + tableWidth,
+    width: TABLE_OUTER_BORDER_WIDTH,
   })
 
-  const columnWidths = [149.52, 147.84, 126.95]
+  const columnWidths = EXPENSE_COLUMN_WIDTHS
   const sectionTop = dynamicTop + 19.45
   const rowHeight = 20.4
   const headerTop = sectionTop + rowHeight
@@ -682,7 +762,6 @@ function drawApplicationTemplatePage({
   const firstPageItems = expenseItems.slice(0, firstPageExpenseItemCount)
 
   const sectionRect = { x: tableX, top: sectionTop, width: tableWidth, height: rowHeight }
-  drawTemplateBorder(page, sectionRect, TABLE_OUTER_BORDER_WIDTH)
   drawTextInTemplateRect({
     page,
     text: "支出明细",
@@ -701,7 +780,6 @@ function drawApplicationTemplatePage({
   let headerX = tableX
   for (const cell of headerCells) {
     const rect = { x: headerX, top: headerTop, width: cell.width, height: rowHeight }
-    drawTemplateBorder(page, rect, 0.6)
     drawTextInTemplateRect({ page, text: cell.text, rect, font: fillFont, fontSize: 10, align: "center" })
     headerX += cell.width
   }
@@ -716,7 +794,6 @@ function drawApplicationTemplatePage({
     let columnX = tableX
     for (const cell of cells) {
       const rect = { x: columnX, top, width: cell.width, height: rowHeight }
-      drawTemplateBorder(page, rect, 0.55)
       drawTextInTemplateRect({ page, text: cell.text, rect, font: fillFont, align: cell.align })
       columnX += cell.width
     }
@@ -726,19 +803,40 @@ function drawApplicationTemplatePage({
   if (!hasExpenseContinuation) {
     const labelRect = { x: tableX, top: contentBottom, width: columnWidths[0], height: rowHeight }
     const amountRect = { x: tableX + columnWidths[0], top: contentBottom, width: columnWidths[1], height: rowHeight }
-    const noteRect = { x: tableX + columnWidths[0] + columnWidths[1], top: contentBottom, width: columnWidths[2], height: rowHeight }
-    ;[labelRect, amountRect, noteRect].forEach((rect) => drawTemplateBorder(page, rect, 0.55))
     drawTextInTemplateRect({ page, text: "总计", rect: labelRect, font: totalFont, fontSize: 10, align: "center" })
     drawTextInTemplateRect({ page, text: formatAmount(totalAmount), rect: amountRect, font: fillFont, align: "center" })
   }
 
   const tableBottom = contentBottom + (hasExpenseContinuation ? 0 : rowHeight)
-  drawTemplateBorder(page, {
-    x: tableX,
-    top: sectionTop,
-    width: tableWidth,
-    height: tableBottom - sectionTop,
-  }, TABLE_OUTER_BORDER_WIDTH)
+  drawAlignedTableFrame(page, sectionTop, tableBottom)
+  drawTemplateRule({
+    page,
+    orientation: "horizontal",
+    position: headerTop,
+    start: tableX,
+    end: tableX + tableWidth,
+    width: TABLE_OUTER_BORDER_WIDTH,
+  })
+  for (let position = headerTop + rowHeight; position < tableBottom; position += rowHeight) {
+    drawTemplateRule({
+      page,
+      orientation: "horizontal",
+      position,
+      start: tableX,
+      end: tableX + tableWidth,
+      width: TABLE_INNER_BORDER_WIDTH,
+    })
+  }
+  for (const position of EXPENSE_COLUMN_DIVIDERS) {
+    drawTemplateRule({
+      page,
+      orientation: "vertical",
+      position,
+      start: headerTop,
+      end: tableBottom,
+      width: TABLE_INNER_BORDER_WIDTH,
+    })
+  }
 
   drawTextInTemplateRect({
     page,

@@ -15,6 +15,8 @@ const fangSongPath = path.join(projectRoot, "public", "fonts", "FZFSK.TTF")
 const shuSongPath = path.join(projectRoot, "public", "fonts", "FZSSK.TTF")
 const kaiTiPath = path.join(projectRoot, "public", "fonts", "FZKTK.TTF")
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "tongclass-academic-exchange-pdf-"))
+const alignedTableLeft = 90.88
+const alignedTableRight = 516.62
 
 function buildGeneratorModule() {
   const bundlePath = path.join(temporaryDirectory, "academic-exchange-pdf.cjs")
@@ -96,8 +98,8 @@ async function assertExpenseTableBottomBorderIsIntact(pdfPath, expectedBottomTop
   })
   const { data, info } = await sharp(`${imagePrefix}.png`).greyscale().raw().toBuffer({ resolveWithObject: true })
   const scale = 2
-  const xStart = Math.round(91.59 * scale)
-  const xEnd = Math.round(515.9 * scale)
+  const xStart = Math.round(alignedTableLeft * scale)
+  const xEnd = Math.round(alignedTableRight * scale)
   const expectedY = Math.round(expectedBottomTop * scale)
   let bestCoverage = 0
 
@@ -136,16 +138,21 @@ async function assertContinuationOuterBordersAreBold(pdfPath) {
     return bestRun
   }
 
-  assert.ok(getDarkRun(91.59) >= 6, "Continuation table left outer border must render at 1.5pt")
-  assert.ok(getDarkRun(515.9) >= 6, "Continuation table right outer border must render at 1.5pt")
+  assert.ok(getDarkRun(alignedTableLeft) >= 6, "Continuation table left outer border must render at 1.5pt")
+  assert.ok(getDarkRun(alignedTableRight) >= 6, "Continuation table right outer border must render at 1.5pt")
 }
 
 async function assertFirstPageOuterBordersAreBold(pdfPath) {
   const imagePrefix = path.join(temporaryDirectory, "first-page-border")
+  const templatePrefix = path.join(temporaryDirectory, "template-border-reference")
   execFileSync("pdftoppm", ["-png", "-r", "288", "-f", "1", "-singlefile", pdfPath, imagePrefix], {
     stdio: "ignore",
   })
+  execFileSync("pdftoppm", ["-png", "-r", "288", "-f", "1", "-singlefile", templatePath, templatePrefix], {
+    stdio: "ignore",
+  })
   const { data, info } = await sharp(`${imagePrefix}.png`).greyscale().raw().toBuffer({ resolveWithObject: true })
+  const { data: templateData } = await sharp(`${templatePrefix}.png`).greyscale().raw().toBuffer({ resolveWithObject: true })
   const scale = 4
 
   const getDarkRun = (pointX, pointY) => {
@@ -164,12 +171,31 @@ async function assertFirstPageOuterBordersAreBold(pdfPath) {
     return bestRun
   }
 
-  for (const y of [360, 520]) {
-    assert.ok(getDarkRun(91.59, y) >= 6, `First-page left outer border at ${y}pt must render at 1.5pt`)
-    assert.ok(getDarkRun(515.9, y) >= 6, `First-page right outer border at ${y}pt must render at 1.5pt`)
+  const getDarkRunBounds = (pointX, pointY, pixels = data) => {
+    const centerX = Math.round(pointX * scale)
+    const y = Math.round(pointY * scale)
+    const runs = []
+    let start = null
+    for (let x = centerX - 12; x <= centerX + 12; x += 1) {
+      const isDark = pixels[y * info.width + x] < 128
+      if (isDark && start === null) start = x
+      if (!isDark && start !== null) {
+        runs.push({ start, end: x - 1 })
+        start = null
+      }
+    }
+    if (start !== null) runs.push({ start, end: centerX + 12 })
+    const run = runs.sort((left, right) => (right.end - right.start) - (left.end - left.start))[0]
+    assert.ok(run, `Expected border near ${pointX}pt at ${pointY}pt`)
+    return { ...run, center: (run.start + run.end) / 2 }
   }
 
-  for (const x of [91.59, 515.9]) {
+  for (const y of [360, 520]) {
+    assert.ok(getDarkRun(alignedTableLeft, y) >= 6, `First-page left outer border at ${y}pt must render at 1.5pt`)
+    assert.ok(getDarkRun(alignedTableRight, y) >= 6, `First-page right outer border at ${y}pt must render at 1.5pt`)
+  }
+
+  for (const x of [alignedTableLeft, alignedTableRight]) {
     const upperProjectBorderRun = getDarkRun(x, 300)
     assert.ok(
       upperProjectBorderRun <= 6,
@@ -184,6 +210,35 @@ async function assertFirstPageOuterBordersAreBold(pdfPath) {
         .some((pixelX) => data[y * info.width + pixelX] < 128)
       assert.ok(hasBorderPixel, `Project-info outer border must remain continuous at ${x}pt around the dynamic-row join`)
     }
+  }
+
+  for (const x of [90.75, 516]) {
+    const fixedBorder = getDarkRunBounds(x, 300)
+    const dynamicBorder = getDarkRunBounds(x, 360)
+    const expenseBorder = getDarkRunBounds(x, 520)
+    assert.ok(
+      Math.abs(dynamicBorder.center - fixedBorder.center) <= 0.5,
+      `Dynamic project border at ${x}pt must align with the template border (${dynamicBorder.center}px vs ${fixedBorder.center}px)`
+    )
+    assert.ok(
+      Math.abs(expenseBorder.center - fixedBorder.center) <= 0.5,
+      `Expense border at ${x}pt must align with the template border (${expenseBorder.center}px vs ${fixedBorder.center}px)`
+    )
+  }
+  const fixedLabelDivider = getDarkRunBounds(171.54, 300)
+  const dynamicLabelDivider = getDarkRunBounds(171.54, 360)
+  assert.ok(
+    Math.abs(dynamicLabelDivider.center - fixedLabelDivider.center) <= 0.5,
+    "Dynamic project label divider must align with the template divider"
+  )
+
+  for (const x of [240.57, 388.23]) {
+    const templateDivider = getDarkRunBounds(x, 600, templateData)
+    const generatedDivider = getDarkRunBounds(x, 550)
+    assert.ok(
+      Math.abs(generatedDivider.center - templateDivider.center) <= 0.5,
+      `Expense column divider at ${x}pt must align with the template divider (${generatedDivider.center}px vs ${templateDivider.center}px)`
+    )
   }
 }
 
