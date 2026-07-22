@@ -139,3 +139,16 @@ test("uses one controlled editor for content audiences and custom tags", () => {
     assert.match(source, /tags: formData\.tags/)
   }
 })
+
+test("exposes a unified updates feed with both filter dimensions", () => {
+  const updatesPage = fs.readFileSync(path.join(projectRoot, "src/app/updates/page.tsx"), "utf8")
+  const navbar = fs.readFileSync(path.join(projectRoot, "src/components/layout/navbar.tsx"), "utf8")
+  const sitemap = fs.readFileSync(path.join(projectRoot, "src/app/sitemap.tsx"), "utf8")
+
+  for (const marker of ["useNews", "useEvents", "mergeUpdates", "filterUpdates", "getAvailableTags", "AUDIENCE_OPTIONS", "全部"]) {
+    assert.ok(updatesPage.includes(marker), `Missing updates page marker: ${marker}`)
+  }
+
+  assert.match(navbar, /\{ name: "动态", href: "\/updates" \}/)
+  assert.ok(sitemap.includes("${baseUrl}/updates"), "Sitemap must include the updates route")
+})

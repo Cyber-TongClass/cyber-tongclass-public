@@ -20,7 +20,7 @@ import { useState } from "react"
 
 const navigation = [
   { name: "关于通班", href: "/about" },
-  { name: "动态", href: "/news" },
+  { name: "动态", href: "/updates" },
   { name: "成员", href: "/members" },
   { name: "成果", href: "/publications" },
   { name: "资源", href: "/resources" },
