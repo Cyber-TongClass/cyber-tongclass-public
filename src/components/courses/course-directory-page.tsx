@@ -143,7 +143,7 @@ export default function CourseDirectoryPage() {
                 </DialogTrigger>
               ) : (
                 <Button asChild className="md:ml-auto">
-                  <Link href={`/login?next=${encodeURIComponent("/courses")}`}>
+                  <Link href={`/login?next=${encodeURIComponent("/tong-class/courses")}`}>
                     <Plus className="h-4 w-4 mr-2" />
                     添加课程
                   </Link>
@@ -246,7 +246,7 @@ function CourseListCard({ course }: { course: Course }) {
   const colorClass = r === 0 ? "bg-slate-300" : r >= 8 ? "bg-green-600" : r >= 6 ? "bg-amber-500" : "bg-red-500"
 
   return (
-    <Link href={`/courses/${encodeURIComponent(course.name)}`} className="block h-full">
+    <Link href={`/tong-class/courses/${encodeURIComponent(course.name)}`} className="block h-full">
       <Card className="group h-full border-0 shadow-sm hover:shadow-md transition-shadow duration-300 cursor-pointer">
         <CardContent className="flex items-center gap-4 px-4 py-3">
           <div className={`w-10 h-10 shrink-0 rounded flex items-center justify-center text-white font-extrabold text-lg ${colorClass}`}>

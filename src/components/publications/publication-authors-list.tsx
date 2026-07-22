@@ -39,7 +39,7 @@ export function PublicationAuthorsList({ authors, emphasizedUserId, className }:
         return (
           <span key={`${rawAuthor}-${index}`}>
             {author.isTongClass && author.userId ? (
-              <Link href={`/members/${author.username || author.userId}`} className="text-slate-900 hover:text-primary">
+              <Link href={`/tong-class/members/${author.username || author.userId}`} className="text-slate-900 hover:text-primary">
                 {content}
               </Link>
             ) : (

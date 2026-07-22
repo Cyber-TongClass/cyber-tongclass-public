@@ -66,7 +66,7 @@ function SearchContent() {
           id: item._id,
           title: item.title,
           description: item.content.slice(0, 100) + (item.content.length > 100 ? "..." : ""),
-          url: item.sourceUrl || `/news/${item._id}`,
+          url: item.sourceUrl || `/tong-class/news/${item._id}`,
           icon: <Newspaper className="h-5 w-5" />,
         })
       }
@@ -88,7 +88,7 @@ function SearchContent() {
           id: user._id,
           title: user.englishName || user.username,
           description: user.bio?.slice(0, 100) || user.email,
-          url: `/members/${user.username || user._id}`,
+          url: `/tong-class/members/${user.username || user._id}`,
           icon: <Users className="h-5 w-5" />,
         })
       }
@@ -107,7 +107,7 @@ function SearchContent() {
           id: pub._id,
           title: pub.title,
           description: `${formatPublicationAuthorsForText(pub.authors)} - ${pub.venue} (${pub.year})`,
-          url: `/publications/${pub._id}`,
+          url: `/tong-class/publications/${pub._id}`,
           icon: <FileText className="h-5 w-5" />,
         })
       }
@@ -129,7 +129,7 @@ function SearchContent() {
           description: eventDescription
             ? eventDescription.slice(0, 100) + (eventDescription.length > 100 ? "..." : "")
             : eventLocation || event.date,
-          url: `/events/${event._id}`,
+          url: `/tong-class/events/${event._id}`,
           icon: <Calendar className="h-5 w-5" />,
         })
       }
@@ -143,7 +143,7 @@ function SearchContent() {
           id: course._id,
           title: course.name,
           description: `${course.reviewCount} 条评测 · 均分 ${course.averageRating.toFixed(1)}`,
-          url: `/resources/courses/${encodeURIComponent(course.name)}`,
+          url: `/tong-class/courses/${encodeURIComponent(course.name)}`,
           icon: <BookOpen className="h-5 w-5" />,
         })
       }

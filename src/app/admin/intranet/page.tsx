@@ -115,7 +115,7 @@ export default function AdminIntranetModulesPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
-            <Link href="/intranet">
+            <Link href="/tong-class/intranet">
               <ExternalLink className="mr-2 h-4 w-4" />
               查看内网首页
             </Link>
