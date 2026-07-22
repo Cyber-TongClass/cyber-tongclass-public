@@ -64,6 +64,7 @@ const generateOAFormUploadUrlRef = makeFunctionReference<"mutation">("oaForms:ge
 const submitOAFormRef = makeFunctionReference<"mutation">("oaForms:submit")
 const updateOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:updateSubmission")
 const listMyOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:listMine")
+const getMyOAFormSubmissionRef = makeFunctionReference<"query">("oaForms:getMine")
 const adminListOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:adminListSubmissions")
 const adminReviewOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:adminReviewSubmission")
 const getOAFormAttachmentUrlRef = makeFunctionReference<"query">("oaForms:getAttachmentUrl")
@@ -709,6 +710,14 @@ export function useMyOAFormSubmissions(formId?: string | null) {
   return useQuery(
     listMyOAFormSubmissionsRef,
     sessionToken && formId !== null ? ({ sessionToken, formId: formId ? (formId as any) : undefined } as any) : "skip"
+  )
+}
+
+export function useMyOAFormSubmission(id?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getMyOAFormSubmissionRef,
+    sessionToken && id ? ({ sessionToken, id: id as any } as any) : "skip"
   )
 }
 

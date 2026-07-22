@@ -3,10 +3,33 @@ import test from "node:test";
 
 import {
   getApprovalTimeline,
+  getSubmissionFormSnapshot,
   getSubmissionTitle,
 } from "../src/lib/oa-submissions.ts";
 
 const submittedAt = 10;
+
+test("getSubmissionFormSnapshot derives a snapshot for legacy submissions from the current form", () => {
+  const fallbackForm = {
+    title: "访客申请",
+    description: "请填写来访信息",
+    fields: [{ id: "name", label: "姓名", type: "text", required: true }],
+    resultFields: [{ fieldId: "name", label: "姓名" }],
+    resultsVisible: true,
+  };
+  const legacySubmission = {
+    _id: "submission-legacy",
+    formId: "form-1",
+    submittedAt,
+    submitterName: "Alice",
+    reviewStatus: "pending",
+  };
+
+  const snapshot = getSubmissionFormSnapshot(legacySubmission, fallbackForm);
+
+  assert.equal(snapshot?.title, "访客申请");
+  assert.deepEqual(snapshot?.fields.map((field) => field.id), ["name"]);
+});
 
 test("getSubmissionTitle numbers submissions chronologically even in a newest-first list", () => {
   const first = {

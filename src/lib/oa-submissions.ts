@@ -1,5 +1,19 @@
 export type ReviewStatus = "pending" | "approved" | "rejected" | "needs_changes";
 
+export type SubmissionFormSnapshot = {
+  title: string;
+  description?: string;
+  fields: unknown[];
+  resultFields?: unknown[];
+  resultsVisible?: boolean;
+};
+
+export type SubmissionWithFormSnapshot = {
+  formSnapshot?: SubmissionFormSnapshot | null;
+};
+
+export type FormSnapshotFallback = SubmissionFormSnapshot | null | undefined;
+
 export type SubmissionForPresentation = {
   _id: string;
   formId: string;
@@ -26,6 +40,28 @@ const reviewDetails: Record<ReviewStatus, string> = {
   rejected: "审核已拒绝",
   needs_changes: "需要补充或修改",
 };
+
+export function getSubmissionFormSnapshot(
+  submission: SubmissionWithFormSnapshot,
+  fallbackForm?: FormSnapshotFallback,
+): SubmissionFormSnapshot | null {
+  if (submission.formSnapshot) return submission.formSnapshot;
+  if (!fallbackForm) return null;
+
+  return {
+    title: fallbackForm.title,
+    ...(fallbackForm.description === undefined
+      ? {}
+      : { description: fallbackForm.description }),
+    fields: fallbackForm.fields,
+    ...(fallbackForm.resultFields === undefined
+      ? {}
+      : { resultFields: fallbackForm.resultFields }),
+    ...(fallbackForm.resultsVisible === undefined
+      ? {}
+      : { resultsVisible: fallbackForm.resultsVisible }),
+  };
+}
 
 export function getSubmissionTitle(
   submission: SubmissionForPresentation,

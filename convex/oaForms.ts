@@ -344,6 +344,20 @@ function serializeSubmission(form: any, submission: any, viewer: "owner" | "admi
   return { ...submission, resultValues }
 }
 
+function getSubmissionSnapshot(submission: any) {
+  return submission.formSnapshot && typeof submission.formSnapshot === "object"
+    ? submission.formSnapshot
+    : undefined
+}
+
+function serializeOwnerSubmission(submission: any, fallbackForm?: any) {
+  const snapshot = getSubmissionSnapshot(submission)
+  const form = snapshot || fallbackForm
+  const serialized = form ? serializeSubmission(form, submission, "owner") : submission
+  const formTitle = snapshot?.title ?? fallbackForm?.title
+  return formTitle === undefined ? serialized : { ...serialized, formTitle }
+}
+
 export const listPublished = query({
   args: {
     sessionToken: v.optional(v.string()),
@@ -527,6 +541,13 @@ export const submit = mutation({
       studentId: user.studentId,
       submitterEmail: user.email,
       answers: normalizedAnswers,
+      formSnapshot: {
+        title: form.title,
+        ...(form.description === undefined ? {} : { description: form.description }),
+        fields: form.fields,
+        ...(form.resultFields === undefined ? {} : { resultFields: form.resultFields }),
+        ...(form.resultsVisible === undefined ? {} : { resultsVisible: form.resultsVisible }),
+      },
       reviewStatus: "pending",
       submittedAt: now,
       createdAt: now,
@@ -565,9 +586,21 @@ export const listMine = query({
       ? await ctx.db.query("oaFormSubmissions").withIndex("by_form_submitter_createdAt", (q) => q.eq("formId", args.formId!).eq("submitterId", user._id)).order("desc").collect()
       : await ctx.db.query("oaFormSubmissions").withIndex("by_submitter_createdAt", (q) => q.eq("submitterId", user._id)).order("desc").collect()
     return await Promise.all(rows.map(async (row) => {
-      const form = await ctx.db.get(row.formId)
-      return form ? serializeSubmission(form, row, "owner") : row
+      const form = getSubmissionSnapshot(row) ? undefined : await ctx.db.get(row.formId)
+      return serializeOwnerSubmission(row, form)
     }))
+  },
+})
+
+export const getMine = query({
+  args: { sessionToken: v.optional(v.string()), id: v.id("oaFormSubmissions") },
+  handler: async (ctx, args) => {
+    const user = requireMember(await getUserBySession(ctx, args.sessionToken))
+    const submission = await ctx.db.get(args.id)
+    if (!submission) return null
+    if (String(submission.submitterId) !== String(user._id)) throw new Error("无权查看该提交")
+    const form = getSubmissionSnapshot(submission) ? undefined : await ctx.db.get(submission.formId)
+    return serializeOwnerSubmission(submission, form)
   },
 })
 

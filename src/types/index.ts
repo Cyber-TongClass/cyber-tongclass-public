@@ -161,6 +161,14 @@ export interface OAResultField {
   options?: OAFormOption[]
 }
 
+export interface OAFormSnapshot {
+  title: string
+  description?: string
+  fields: OAFormField[]
+  resultFields?: OAResultField[]
+  resultsVisible?: boolean
+}
+
 export interface OAForm {
   _id: string
   slug: string
@@ -207,6 +215,8 @@ export interface OAFormSubmission {
   reviewerName?: string
   reviewedAt?: number
   resultValues?: Record<string, unknown>
+  formSnapshot?: OAFormSnapshot
+  formTitle?: string
   submittedAt: number
   createdAt: number
   updatedAt: number

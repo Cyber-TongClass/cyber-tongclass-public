@@ -388,6 +388,7 @@ export default defineSchema({
     studentId: v.string(),
     submitterEmail: v.optional(v.string()),
     answers: v.any(),
+    formSnapshot: v.optional(v.any()),
     reviewStatus: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"), v.literal("needs_changes")),
     adminNote: v.optional(v.string()),
     reviewerId: v.optional(v.id("users")),
