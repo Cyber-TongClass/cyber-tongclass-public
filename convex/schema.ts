@@ -90,6 +90,15 @@ export default defineSchema({
     englishName: v.string(),
     chineseName: v.optional(v.string()),
     role: v.union(v.literal("member"), v.literal("admin"), v.literal("super_admin")),
+    // AIA descriptive identity remains independent from the persisted access
+    // role. It stays optional so legacy accounts can resolve safely without a
+    // destructive migration.
+    identityType: v.optional(v.union(
+      v.literal("undergrad"),
+      v.literal("graduate"),
+      v.literal("teacher"),
+      v.literal("other"),
+    )),
     organization: v.union(v.literal("pku"), v.literal("thu")),
     cohort: v.union(v.number(), v.literal("mascot")),
     studentId: v.string(),

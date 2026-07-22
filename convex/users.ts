@@ -6,6 +6,10 @@ import {
     assertCanProvisionAccount,
     assertCanSetManagedRole,
 } from "./lib/user-account-policy"
+import {
+    assertCanAssignUserIdentityType,
+    getDefaultStoredIdentityType,
+} from "./lib/userIdentity"
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 const normalizeUsername = (username: string) => username.trim().toLowerCase()
@@ -214,6 +218,12 @@ export const create = mutation({
         cohort: v.union(v.number(), v.literal("mascot")),
         studentId: v.string(),
         role: v.optional(v.union(v.literal("member"), v.literal("admin"), v.literal("super_admin"))),
+        identityType: v.optional(v.union(
+            v.literal("undergrad"),
+            v.literal("graduate"),
+            v.literal("teacher"),
+            v.literal("other"),
+        )),
         password: v.optional(v.string()),
         personalEmails: v.optional(v.array(v.string())),
         personalEmail: v.optional(v.string()),
@@ -234,6 +244,9 @@ export const create = mutation({
         const actor = await getUserBySession(ctx, args.sessionToken)
         const requestedRole = args.role || "member"
         assertCanProvisionAccount(actor.role, requestedRole)
+        if (args.identityType !== undefined) {
+            assertCanAssignUserIdentityType(actor.role)
+        }
 
         const email = normalizeEmail(args.email)
         const username = normalizeUsername(args.username)
@@ -274,6 +287,7 @@ export const create = mutation({
             englishName: args.englishName.trim(),
             chineseName: normalizeOptionalString(args.chineseName),
             role: requestedRole,
+            identityType: args.identityType ?? getDefaultStoredIdentityType(requestedRole),
             organization: args.organization,
             cohort: args.cohort,
             studentId,
@@ -335,6 +349,12 @@ export const update = mutation({
         cohort: v.optional(v.union(v.number(), v.literal("mascot"))),
         studentId: v.optional(v.string()),
         role: v.optional(v.union(v.literal("member"), v.literal("admin"), v.literal("super_admin"))),
+        identityType: v.optional(v.union(
+            v.literal("undergrad"),
+            v.literal("graduate"),
+            v.literal("teacher"),
+            v.literal("other"),
+        )),
         personalEmails: v.optional(v.array(v.string())),
         personalEmail: v.optional(v.string()),
         bio: v.optional(v.string()),
@@ -350,7 +370,7 @@ export const update = mutation({
         isClassMember: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
-        const { id, sessionToken, role: requestedRole, ...updates } = args
+        const { id, sessionToken, role: requestedRole, identityType: requestedIdentityType, ...updates } = args
         const actor = await getUserBySession(ctx, sessionToken)
 
         const user = await ctx.db.get(id)
@@ -360,6 +380,9 @@ export const update = mutation({
         }
 
         const isSelf = String(actor._id) === String(user._id)
+        if (requestedIdentityType !== undefined) {
+            assertCanAssignUserIdentityType(actor.role)
+        }
         if (isSelf) {
             if (requestedRole !== undefined && requestedRole !== user.role) {
                 throw new Error("不能修改自己的角色")
@@ -415,6 +438,7 @@ export const update = mutation({
         const patchData = pickDefined({
             ...updates,
             role: isSelf ? undefined : requestedRole,
+            identityType: requestedIdentityType,
             englishName: updates.englishName?.trim(),
             chineseName: normalizeOptionalString(updates.chineseName),
             personalEmails: normalizeStringList(updates.personalEmails),

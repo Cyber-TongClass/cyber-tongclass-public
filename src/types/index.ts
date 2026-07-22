@@ -1,5 +1,6 @@
 // User types
 export type UserRole = 'member' | 'admin' | 'super_admin'
+export type UserIdentityType = 'undergrad' | 'graduate' | 'teacher' | 'other'
 
 export type UserLinkType =
   | 'homepage'
@@ -24,6 +25,7 @@ export interface User {
   englishName: string
   chineseName?: string
   role: UserRole
+  identityType?: UserIdentityType
   organization: 'pku' | 'thu'
   cohort: number | 'mascot'
   studentId: string
