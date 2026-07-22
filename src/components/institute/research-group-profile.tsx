@@ -30,7 +30,7 @@ export function ResearchGroupProfile({
   outputs = [],
   updates = [],
 }: ResearchGroupProfileProps) {
-  const membershipMembers = memberRoles === undefined
+  const membershipMembers: readonly PublicGroupMember[] = memberRoles === undefined
     ? members
       .filter((member) => member.visibility === "public" && group.memberSlugs.includes(member.slug))
       .map((member) => ({ person: member }))
