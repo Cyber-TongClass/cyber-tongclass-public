@@ -1,11 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 
 import { NotificationInbox } from "@/components/notifications/notification-inbox"
 import type { NotificationRowItem } from "@/components/notifications/notification-row"
 import {
   useCoffeeTalkNotifications,
+  useMarkAllCoffeeTalkNotificationsRead,
+  useMarkCoffeeTalkNotificationRead,
   useTongClassSessionToken,
 } from "@/lib/api"
 
@@ -39,10 +42,31 @@ function toNotificationRow(notification: CoffeeTalkNotification): NotificationRo
 
 /** Renders only the current session's generic Coffee Talk notification DTOs. */
 export function AiaNotificationInboxClient() {
-  const sessionToken = useTongClassSessionToken()
+  const signedIn = Boolean(useTongClassSessionToken())
   const notifications = useCoffeeTalkNotifications()
+  const markNotificationRead = useMarkCoffeeTalkNotificationRead()
+  const markAllNotificationsRead = useMarkAllCoffeeTalkNotificationsRead()
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  if (!sessionToken) {
+  const handleMarkRead = async (notification: NotificationRowItem) => {
+    try {
+      setActionError(null)
+      await markNotificationRead(notification.id)
+    } catch {
+      setActionError("更新通知状态失败，请稍后重试。")
+    }
+  }
+
+  const handleMarkAllRead = async () => {
+    try {
+      setActionError(null)
+      await markAllNotificationsRead()
+    } catch {
+      setActionError("更新通知状态失败，请稍后重试。")
+    }
+  }
+
+  if (!signedIn) {
     return (
       <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-700">
         请先登录后查看通知。
@@ -57,5 +81,15 @@ export function AiaNotificationInboxClient() {
     return <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600" role="status">正在加载通知…</p>
   }
 
-  return <NotificationInbox notifications={(notifications as CoffeeTalkNotification[]).map(toNotificationRow)} />
+  return (
+    <div className="space-y-3">
+      {actionError ? <p className="text-sm text-red-700" role="alert">{actionError}</p> : null}
+      <NotificationInbox
+        notifications={(notifications as CoffeeTalkNotification[]).map(toNotificationRow)}
+        onNotificationOpen={(notification) => { void handleMarkRead(notification) }}
+        onMarkRead={(notification) => { void handleMarkRead(notification) }}
+        onMarkAllRead={() => { void handleMarkAllRead() }}
+      />
+    </div>
+  )
 }

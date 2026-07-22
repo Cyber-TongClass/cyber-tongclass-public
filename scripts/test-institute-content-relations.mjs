@@ -129,3 +129,15 @@ test("institute content source uses explicit relations and DTO projections", () 
   assert.doesNotMatch(source, /return\s+(?:publication|publications|news|updates)\s*[;,]/)
   assert.doesNotMatch(source, /\.includes\([^)]*name/i)
 })
+
+test("canonical public content hooks translate the UI group slug to the server contract", () => {
+  const apiSource = readFileSync("src/lib/api.ts", "utf8")
+
+  for (const hook of ["usePublicInstituteResearch", "usePublicInstituteUpdates"]) {
+    const start = apiSource.indexOf(`export function ${hook}(`)
+    assert.notEqual(start, -1, `${hook} should exist`)
+    const end = apiSource.indexOf("export function ", start + 1)
+    const block = apiSource.slice(start, end === -1 ? undefined : end)
+    assert.match(block, /researchGroupSlug:\s*groupSlug/)
+  }
+})

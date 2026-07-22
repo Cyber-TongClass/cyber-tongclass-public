@@ -86,10 +86,14 @@ const listReviewerAccountsRef = makeFunctionReference<"query">("reviewerAuth:lis
 const createReviewerAccountRef = makeFunctionReference<"mutation">("reviewerAuth:createAccount")
 const updateReviewerAccountRef = makeFunctionReference<"mutation">("reviewerAuth:updateAccount")
 const resetReviewerPasswordRef = makeFunctionReference<"mutation">("reviewerAuth:resetPassword")
+const upsertTeacherReviewerBindingRef = makeFunctionReference<"mutation">("reviewerAuth:upsertTeacherBinding")
+const clearTeacherReviewerBindingRef = makeFunctionReference<"mutation">("reviewerAuth:clearTeacherBinding")
 const listPublicInstitutePeopleRef = makeFunctionReference<"query">("instituteDirectory:listPublicPeople")
 const getPublicInstitutePersonRef = makeFunctionReference<"query">("instituteDirectory:getPublicPerson")
 const listPublicResearchGroupsRef = makeFunctionReference<"query">("instituteDirectory:listPublicResearchGroups")
 const getPublicResearchGroupRef = makeFunctionReference<"query">("instituteDirectory:getPublicResearchGroup")
+const listInstituteAccountBindingCandidatesRef = makeFunctionReference<"query">("instituteDirectory:listAccountBindingCandidates")
+const bindInstitutePersonAccountRef = makeFunctionReference<"mutation">("instituteDirectory:bindPersonAccount")
 const listPublicInstituteResearchRef = makeFunctionReference<"query">("instituteContent:listPublicInstituteResearch")
 const listPublicInstituteUpdatesRef = makeFunctionReference<"query">("instituteContent:listPublicInstituteUpdates")
 const submitCoffeeTalkApplicationRef = makeFunctionReference<"mutation">("coffeeTalk:submitApplication")
@@ -97,6 +101,8 @@ const listMyCoffeeTalkApplicationsRef = makeFunctionReference<"query">("coffeeTa
 const listTeacherCoffeeTalkApplicationsRef = makeFunctionReference<"query">("coffeeTalk:listForTeacher")
 const actOnCoffeeTalkApplicationRef = makeFunctionReference<"mutation">("coffeeTalk:actOnApplication")
 const listCoffeeTalkNotificationsRef = makeFunctionReference<"query">("coffeeTalk:listNotifications")
+const markCoffeeTalkNotificationReadRef = makeFunctionReference<"mutation">("coffeeTalk:markNotificationRead")
+const markAllCoffeeTalkNotificationsReadRef = makeFunctionReference<"mutation">("coffeeTalk:markAllNotificationsRead")
 const TECHDAY_AUTH_STORAGE_EVENT = "techday-auth-storage"
 const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
 
@@ -440,7 +446,11 @@ export function usePublicInstituteResearch(args?: {
   personSlug?: string
   limit?: number
 }) {
-  return useQuery(listPublicInstituteResearchRef, args || {})
+  const queryArgs = useMemo(() => {
+    const { groupSlug, ...rest } = args || {}
+    return groupSlug ? { ...rest, researchGroupSlug: groupSlug } : rest
+  }, [args])
+  return useQuery(listPublicInstituteResearchRef, queryArgs)
 }
 
 export function usePublicInstituteUpdates(args?: {
@@ -448,7 +458,34 @@ export function usePublicInstituteUpdates(args?: {
   personSlug?: string
   limit?: number
 }) {
-  return useQuery(listPublicInstituteUpdatesRef, args || {})
+  const queryArgs = useMemo(() => {
+    const { groupSlug, ...rest } = args || {}
+    return groupSlug ? { ...rest, researchGroupSlug: groupSlug } : rest
+  }, [args])
+  return useQuery(listPublicInstituteUpdatesRef, queryArgs)
+}
+
+/** Super-admin-only metadata for explicit Institute person-to-account links. */
+export function useInstituteAccountBindingCandidates() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listInstituteAccountBindingCandidatesRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  )
+}
+
+/** Binds an Institute profile to an exact existing main-site account. */
+export function useBindInstitutePersonAccount() {
+  const bind = useMutation(bindInstitutePersonAccountRef)
+  return useCallback((args: { personSlug: string; accountUserId?: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return bind({
+      sessionToken,
+      personSlug: args.personSlug,
+      ...(args.accountUserId ? { accountUserId: args.accountUserId as any } : {}),
+    } as any)
+  }, [bind])
 }
 
 export type CoffeeTalkApplicationInput = {
@@ -507,6 +544,24 @@ export function useCoffeeTalkNotifications() {
     listCoffeeTalkNotificationsRef,
     sessionToken ? ({ sessionToken } as any) : "skip",
   )
+}
+
+export function useMarkCoffeeTalkNotificationRead() {
+  const markRead = useMutation(markCoffeeTalkNotificationReadRef)
+  return useCallback((notificationId: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return markRead({ sessionToken, notificationId: notificationId as any } as any)
+  }, [markRead])
+}
+
+export function useMarkAllCoffeeTalkNotificationsRead() {
+  const markAllRead = useMutation(markAllCoffeeTalkNotificationsReadRef)
+  return useCallback(() => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return markAllRead({ sessionToken } as any)
+  }, [markAllRead])
 }
 
 // ==================== 新闻相关 ====================
@@ -1051,6 +1106,30 @@ export function useResetReviewerPassword() {
     if (!requesterSessionToken) throw new Error("请先登录")
     return reset({ ...args, requesterSessionToken, id: args.id as any } as any)
   }, [reset])
+}
+
+/** Enables teacher-derived reviewer access through an exact, super-admin link. */
+export function useUpsertTeacherReviewerBinding() {
+  const upsert = useMutation(upsertTeacherReviewerBindingRef)
+  return useCallback((args: { reviewerAccountId: string; mainUserId: string }) => {
+    const requesterSessionToken = getTongClassStoredSessionToken()
+    if (!requesterSessionToken) throw new Error("请先登录")
+    return upsert({
+      requesterSessionToken,
+      reviewerAccountId: args.reviewerAccountId as any,
+      mainUserId: args.mainUserId as any,
+      teacherDerivedEnabled: true,
+    } as any)
+  }, [upsert])
+}
+
+export function useClearTeacherReviewerBinding() {
+  const clear = useMutation(clearTeacherReviewerBindingRef)
+  return useCallback((reviewerAccountId: string) => {
+    const requesterSessionToken = getTongClassStoredSessionToken()
+    if (!requesterSessionToken) throw new Error("请先登录")
+    return clear({ requesterSessionToken, reviewerAccountId: reviewerAccountId as any } as any)
+  }, [clear])
 }
 
 export function usePublicationVenues() {

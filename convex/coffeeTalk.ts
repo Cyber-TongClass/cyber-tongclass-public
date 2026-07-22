@@ -443,7 +443,15 @@ export const actOnApplication = mutation({
 export const listNotifications = query({
   args: { sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const actor = await getUserBySession(ctx, args.sessionToken)
+    // The public shell polls this lightweight count on every AIA page. A
+    // browser can retain an expired local token, which must behave like a
+    // signed-out state rather than breaking navigation with a query error.
+    let actor: any
+    try {
+      actor = await getUserBySession(ctx, args.sessionToken)
+    } catch {
+      return []
+    }
     const notifications = await ctx.db
       .query("notifications")
       .withIndex("by_user_createdAt", (index: any) => index.eq("userId", actor._id))

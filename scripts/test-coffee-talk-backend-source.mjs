@@ -58,3 +58,12 @@ test("Coffee Talk notifications can only be marked read by the current session o
   assert.match(source, /String\(notification\.userId\)\s*!==\s*String\(actor\._id\)/)
   assert.match(source, /readAt:\s*now/)
 })
+
+test("Coffee Talk notification polling is safe for an expired browser session", () => {
+  const source = readFileSync(backendPath, "utf8")
+  const start = source.indexOf("export const listNotifications = query({")
+  const end = source.indexOf("export const markNotificationRead", start)
+  const block = source.slice(start, end)
+
+  assert.match(block, /try\s*\{[\s\S]*?getUserBySession\(ctx, args\.sessionToken\)[\s\S]*?\}\s*catch\s*\{\s*return \[\]\s*\}/)
+})
