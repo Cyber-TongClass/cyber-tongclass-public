@@ -11,6 +11,10 @@ import {
   type CoffeeTalkStatus,
 } from "./lib/coffeeTalk"
 import { resolveCoffeeTalkActorKind } from "./lib/coffeeTalkAuthorization"
+import {
+  deriveCoffeeTalkApplicantProfile,
+  type CoffeeTalkApplicantProfile,
+} from "./lib/coffeeTalkApplicantProfile"
 import { normalizeCoffeeTalkSubmission } from "./lib/coffeeTalkSubmission"
 import { getUserBySession } from "./reviewer/lib"
 
@@ -34,10 +38,10 @@ type StoredCoffeeTalkApplication = {
   _id: any
   applicantUserId: any
   assignedTeacherPersonId: any
-  applicantName: string
-  applicantAffiliation: string
-  applicantIdentity: "undergraduate" | "graduate" | "other"
-  applicantEmail: string
+  applicantName?: string
+  applicantAffiliation?: string
+  applicantIdentity?: "undergraduate" | "graduate" | "teacher" | "other"
+  applicantEmail?: string
   topic: string
   availability: string
   notes?: string
@@ -68,6 +72,7 @@ function toApplicationId(application: StoredCoffeeTalkApplication): string {
 function toApplicantApplicationDto(
   application: StoredCoffeeTalkApplication,
   teacher: StoredInstituteTeacher | null,
+  applicant: CoffeeTalkApplicantProfile | null,
 ) {
   return {
     id: toApplicationId(application),
@@ -78,6 +83,7 @@ function toApplicantApplicationDto(
         nameEn: teacher.nameEn,
       }
       : null,
+    applicant,
     status: application.status,
     topic: application.topic,
     availability: application.availability,
@@ -90,14 +96,19 @@ function toApplicantApplicationDto(
   }
 }
 
-function toTeacherApplicationDto(application: StoredCoffeeTalkApplication) {
+function toTeacherApplicationDto(
+  application: StoredCoffeeTalkApplication,
+  applicant: CoffeeTalkApplicantProfile | null,
+) {
   const redacted = redactCoffeeTalkForTeacher({
     status: application.status,
     topic: application.topic,
-    contactSnapshot: {
-      displayName: application.applicantName,
-      email: application.applicantEmail,
-    },
+    contactSnapshot: applicant
+      ? {
+        displayName: applicant.applicantName,
+        email: applicant.email,
+      }
+      : undefined,
     createdAt: application.createdAt,
     submittedAt: application.submittedAt,
     updatedAt: application.updatedAt,
@@ -108,11 +119,31 @@ function toTeacherApplicationDto(application: StoredCoffeeTalkApplication) {
   return {
     id: toApplicationId(application),
     ...redacted,
-    affiliation: application.applicantAffiliation,
-    identity: application.applicantIdentity,
+    applicant: applicant
+      ? {
+        applicantName: applicant.applicantName,
+        affiliation: applicant.affiliation,
+        identity: applicant.identity,
+        identityLabel: applicant.identityLabel,
+      }
+      : null,
     availability: application.availability,
     ...(application.notes !== undefined ? { notes: application.notes } : {}),
     allowedActions: allowedCoffeeTalkActions(application.status, "teacher"),
+  }
+}
+
+async function getCurrentApplicantProfile(
+  ctx: any,
+  application: StoredCoffeeTalkApplication,
+): Promise<CoffeeTalkApplicantProfile | null> {
+  const applicant = await ctx.db.get(application.applicantUserId)
+  if (!applicant) return null
+
+  try {
+    return deriveCoffeeTalkApplicantProfile(applicant)
+  } catch {
+    return null
   }
 }
 
@@ -228,10 +259,6 @@ async function coffeeTalkNotificationHref(
 export const submitApplication = mutation({
   args: {
     sessionToken: v.optional(v.string()),
-    applicantName: v.string(),
-    affiliation: v.string(),
-    identity: v.string(),
-    email: v.string(),
     teacherSlug: v.string(),
     topic: v.string(),
     availability: v.string(),
@@ -239,6 +266,7 @@ export const submitApplication = mutation({
   },
   handler: async (ctx, args) => {
     const applicant = await getUserBySession(ctx, args.sessionToken)
+    deriveCoffeeTalkApplicantProfile(applicant)
     const submission = normalizeCoffeeTalkSubmission(args)
     const teacher = await getAvailableTeacherBySlug(ctx, submission.teacherSlug)
     const fingerprint = await requestFingerprint({
@@ -265,10 +293,6 @@ export const submitApplication = mutation({
     const applicationId = await ctx.db.insert("coffeeTalkApplications", {
       applicantUserId: applicant._id,
       assignedTeacherPersonId: teacher._id,
-      applicantName: submission.applicantName,
-      applicantAffiliation: submission.affiliation,
-      applicantIdentity: submission.identity,
-      applicantEmail: submission.email,
       topic: submission.topic,
       availability: submission.availability,
       ...(submission.notes !== undefined ? { notes: submission.notes } : {}),
@@ -316,8 +340,11 @@ export const listMine = query({
       .collect() as StoredCoffeeTalkApplication[]
 
     return Promise.all(applications.map(async (application) => {
-      const teacher = await ctx.db.get(application.assignedTeacherPersonId) as StoredInstituteTeacher | null
-      return toApplicantApplicationDto(application, teacher)
+      const [teacher, applicantProfile] = await Promise.all([
+        ctx.db.get(application.assignedTeacherPersonId) as Promise<StoredInstituteTeacher | null>,
+        getCurrentApplicantProfile(ctx, application),
+      ])
+      return toApplicantApplicationDto(application, teacher, applicantProfile)
     }))
   },
 })
@@ -346,10 +373,12 @@ export const listForTeacher = query({
         .collect()
     )))
 
-    return applicationLists
+    return Promise.all(applicationLists
       .flat()
       .sort((left: StoredCoffeeTalkApplication, right: StoredCoffeeTalkApplication) => right.updatedAt - left.updatedAt)
-      .map((application: StoredCoffeeTalkApplication) => toTeacherApplicationDto(application))
+      .map(async (application: StoredCoffeeTalkApplication) => (
+        toTeacherApplicationDto(application, await getCurrentApplicantProfile(ctx, application))
+      )))
   },
 })
 

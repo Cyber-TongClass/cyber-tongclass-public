@@ -1,16 +1,4 @@
-export const coffeeTalkApplicantIdentities = [
-  "undergraduate",
-  "graduate",
-  "other",
-] as const
-
-export type CoffeeTalkApplicantIdentity = (typeof coffeeTalkApplicantIdentities)[number]
-
 export type CoffeeTalkSubmissionInput = {
-  applicantName: string
-  affiliation: string
-  identity: string
-  email: string
   teacherSlug: string
   topic: string
   availability: string
@@ -18,10 +6,6 @@ export type CoffeeTalkSubmissionInput = {
 }
 
 export type NormalizedCoffeeTalkSubmission = {
-  applicantName: string
-  affiliation: string
-  identity: CoffeeTalkApplicantIdentity
-  email: string
   teacherSlug: string
   topic: string
   availability: string
@@ -29,12 +13,9 @@ export type NormalizedCoffeeTalkSubmission = {
 }
 
 export const COFFEE_TALK_REQUIRED_FIELD = "COFFEE_TALK_REQUIRED_FIELD"
-export const COFFEE_TALK_EMAIL_INVALID = "COFFEE_TALK_EMAIL_INVALID"
-export const COFFEE_TALK_IDENTITY_INVALID = "COFFEE_TALK_IDENTITY_INVALID"
 export const COFFEE_TALK_TEACHER_INVALID = "COFFEE_TALK_TEACHER_INVALID"
 export const COFFEE_TALK_FIELD_TOO_LONG = "COFFEE_TALK_FIELD_TOO_LONG"
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 function normalizeRequired(value: string, maximumLength: number): string {
@@ -58,21 +39,6 @@ function normalizeOptional(value: string | undefined, maximumLength: number): st
   return normalized
 }
 
-function normalizeIdentity(value: string): CoffeeTalkApplicantIdentity {
-  if ((coffeeTalkApplicantIdentities as readonly string[]).includes(value)) {
-    return value as CoffeeTalkApplicantIdentity
-  }
-  throw new Error(COFFEE_TALK_IDENTITY_INVALID)
-}
-
-function normalizeEmail(value: string): string {
-  const normalized = normalizeRequired(value, 320).toLowerCase()
-  if (!emailPattern.test(normalized)) {
-    throw new Error(COFFEE_TALK_EMAIL_INVALID)
-  }
-  return normalized
-}
-
 function normalizeTeacherSlug(value: string): string {
   const normalized = normalizeRequired(value, 120).toLowerCase()
   if (!slugPattern.test(normalized)) {
@@ -90,10 +56,6 @@ export function normalizeCoffeeTalkSubmission(
   input: CoffeeTalkSubmissionInput,
 ): NormalizedCoffeeTalkSubmission {
   const normalized: NormalizedCoffeeTalkSubmission = {
-    applicantName: normalizeRequired(input.applicantName, 160),
-    affiliation: normalizeRequired(input.affiliation, 240),
-    identity: normalizeIdentity(input.identity),
-    email: normalizeEmail(input.email),
     teacherSlug: normalizeTeacherSlug(input.teacherSlug),
     topic: normalizeRequired(input.topic, 240),
     availability: normalizeRequired(input.availability, 2_000),

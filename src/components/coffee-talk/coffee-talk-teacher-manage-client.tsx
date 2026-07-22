@@ -32,7 +32,12 @@ type TeacherCoffeeTalkApplication = {
   id: string
   status: CoffeeTalkStatus
   topic: string
-  contact: { displayName?: string }
+  contact: { displayName?: string; email?: string }
+  applicant: {
+    applicantName: string
+    affiliation: string
+    identityLabel: string
+  } | null
   version: number
   updatedAt: number
   allowedActions: readonly CoffeeTalkAction[]
@@ -68,9 +73,12 @@ function itemForApplication(application: TeacherCoffeeTalkApplication): CoffeeTa
   return {
     id: application.id,
     title: application.topic,
-    participantLabel: application.contact.displayName
-      ? `申请人：${application.contact.displayName}`
-      : "申请人资料暂不可用",
+    participantLabel: [
+      application.applicant
+        ? `申请人：${application.applicant.applicantName} · ${application.applicant.affiliation} · ${application.applicant.identityLabel}`
+        : "申请人资料暂不可用",
+      application.contact.email ? `邮箱：${application.contact.email}` : null,
+    ].filter(Boolean).join(" · "),
     status: application.status,
     expectedVersion: application.version,
     updatedAtLabel: formatUpdatedAt(application.updatedAt),

@@ -10,15 +10,13 @@ import {
 } from "@/components/coffee-talk/coffee-talk-application-form"
 import {
   type CoffeeTalkApplicationInput,
+  useCurrentUser,
   usePublicInstitutePeople,
   useSubmitCoffeeTalkApplication,
   useTongClassSessionToken,
 } from "@/lib/api"
+import { deriveCoffeeTalkApplicantProfile } from "@/lib/coffee-talk-applicant-profile"
 import type { PublicInstitutePerson } from "@/types/institute"
-
-function isCoffeeTalkIdentity(value: string): value is CoffeeTalkApplicationInput["identity"] {
-  return value === "undergraduate" || value === "graduate" || value === "other"
-}
 
 function toTeacherOptions(people: readonly PublicInstitutePerson[]): CoffeeTalkTeacherOption[] {
   return people
@@ -35,19 +33,13 @@ function toTeacherOptions(people: readonly PublicInstitutePerson[]): CoffeeTalkT
 export function CoffeeTalkApplyClient() {
   const router = useRouter()
   const sessionToken = useTongClassSessionToken()
+  const currentUser = useCurrentUser()
   const people = usePublicInstitutePeople({ kind: "teacher", limit: 100 })
   const submitApplication = useSubmitCoffeeTalkApplication()
   const teachers = toTeacherOptions((people ?? []) as PublicInstitutePerson[])
 
   async function handleSubmit(draft: CoffeeTalkApplicationDraft) {
-    if (!isCoffeeTalkIdentity(draft.identity)) {
-      throw new Error("请选择身份")
-    }
     await submitApplication({
-      applicantName: draft.applicantName,
-      affiliation: draft.affiliation,
-      identity: draft.identity,
-      email: draft.email,
       teacherSlug: draft.teacherPreference,
       topic: draft.topic,
       availability: draft.availability,
@@ -67,6 +59,15 @@ export function CoffeeTalkApplyClient() {
     )
   }
 
+  if (currentUser === undefined) {
+    return <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600" role="status">正在加载个人资料…</p>
+  }
+
+  const applicantProfile = currentUser ? deriveCoffeeTalkApplicantProfile(currentUser) : null
+  if (!applicantProfile) {
+    return <p className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950" role="alert">个人资料不完整，暂时无法提交 Coffee Talk 申请。</p>
+  }
+
   if (people === undefined) {
     return <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600" role="status">正在加载可选教师…</p>
   }
@@ -79,5 +80,5 @@ export function CoffeeTalkApplyClient() {
     )
   }
 
-  return <CoffeeTalkApplicationForm teachers={teachers} backendAvailable onSubmit={handleSubmit} />
+  return <CoffeeTalkApplicationForm applicantProfile={applicantProfile} teachers={teachers} backendAvailable onSubmit={handleSubmit} />
 }

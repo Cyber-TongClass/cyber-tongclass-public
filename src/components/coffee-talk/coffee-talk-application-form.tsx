@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import type { CoffeeTalkApplicantProfileView } from "@/lib/coffee-talk-applicant-profile"
 
 export interface CoffeeTalkTeacherOption {
   id: string
@@ -16,10 +17,6 @@ export interface CoffeeTalkTeacherOption {
 }
 
 export interface CoffeeTalkApplicationDraft {
-  applicantName: string
-  affiliation: string
-  identity: string
-  email: string
   teacherPreference: string
   topic: string
   availability: string
@@ -28,15 +25,12 @@ export interface CoffeeTalkApplicationDraft {
 
 export interface CoffeeTalkApplicationFormProps {
   teachers: readonly CoffeeTalkTeacherOption[]
+  applicantProfile: CoffeeTalkApplicantProfileView
   backendAvailable?: boolean
   onSubmit?: (draft: CoffeeTalkApplicationDraft) => void | Promise<void>
 }
 
 const initialDraft: CoffeeTalkApplicationDraft = {
-  applicantName: "",
-  affiliation: "",
-  identity: "",
-  email: "",
   teacherPreference: "",
   topic: "",
   availability: "",
@@ -45,6 +39,7 @@ const initialDraft: CoffeeTalkApplicationDraft = {
 
 export function CoffeeTalkApplicationForm({
   teachers,
+  applicantProfile,
   backendAvailable = false,
   onSubmit,
 }: CoffeeTalkApplicationFormProps) {
@@ -92,8 +87,8 @@ export function CoffeeTalkApplicationForm({
             name="applicantName"
             autoComplete="name"
             required
-            value={draft.applicantName}
-            onChange={(event) => setDraft((current) => ({ ...current, applicantName: event.target.value }))}
+            readOnly
+            value={applicantProfile.applicantName}
           />
         </div>
         <div className="space-y-2">
@@ -104,8 +99,8 @@ export function CoffeeTalkApplicationForm({
             type="email"
             autoComplete="email"
             required
-            value={draft.email}
-            onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
+            readOnly
+            value={applicantProfile.email}
           />
         </div>
         <div className="space-y-2">
@@ -114,27 +109,22 @@ export function CoffeeTalkApplicationForm({
             id="coffee-talk-affiliation"
             name="affiliation"
             required
-            value={draft.affiliation}
-            onChange={(event) => setDraft((current) => ({ ...current, affiliation: event.target.value }))}
+            readOnly
+            value={applicantProfile.affiliation}
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="coffee-talk-identity">身份</Label>
-          <select
+          <Input
             id="coffee-talk-identity"
             name="identity"
             required
-            value={draft.identity}
-            onChange={(event) => setDraft((current) => ({ ...current, identity: event.target.value }))}
-            className="flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <option value="" disabled>请选择</option>
-            <option value="undergraduate">本科生</option>
-            <option value="graduate">研究生</option>
-            <option value="other">其他</option>
-          </select>
+            readOnly
+            value={applicantProfile.identity}
+          />
         </div>
       </div>
+      <p className="-mt-3 text-xs leading-5 text-slate-500">以下资料来自个人账户，无法在此修改。</p>
 
       <div className="space-y-2">
         <Label htmlFor="coffee-talk-teacher">教师偏好</Label>

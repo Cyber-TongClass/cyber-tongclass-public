@@ -501,10 +501,6 @@ export function useBindInstitutePersonAccount() {
 }
 
 export type CoffeeTalkApplicationInput = {
-  applicantName: string
-  affiliation: string
-  identity: "undergraduate" | "graduate" | "other"
-  email: string
   teacherSlug: string
   topic: string
   availability: string

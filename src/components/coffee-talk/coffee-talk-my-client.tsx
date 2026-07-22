@@ -21,6 +21,12 @@ import {
 type MyCoffeeTalkApplication = {
   id: string
   teacher: { slug: string; nameZh: string; nameEn: string } | null
+  applicant: {
+    applicantName: string
+    email: string
+    affiliation: string
+    identityLabel: string
+  } | null
   status: CoffeeTalkStatus
   topic: string
   version: number
@@ -49,9 +55,14 @@ function itemForApplication(application: MyCoffeeTalkApplication): CoffeeTalkApp
   return {
     id: application.id,
     title: application.topic,
-    participantLabel: application.teacher
-      ? `交流教师：${application.teacher.nameZh || application.teacher.nameEn}`
-      : "交流教师资料暂不可用",
+    participantLabel: [
+      application.teacher
+        ? `交流教师：${application.teacher.nameZh || application.teacher.nameEn}`
+        : "交流教师资料暂不可用",
+      application.applicant
+        ? `申请资料：${application.applicant.applicantName} · ${application.applicant.email} · ${application.applicant.affiliation} · ${application.applicant.identityLabel}`
+        : "申请人资料暂不可用",
+    ].join(" · "),
     status: application.status,
     expectedVersion: application.version,
     updatedAtLabel: formatUpdatedAt(application.updatedAt),

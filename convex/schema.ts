@@ -417,14 +417,15 @@ export default defineSchema({
   coffeeTalkApplications: defineTable({
     applicantUserId: v.id("users"),
     assignedTeacherPersonId: v.id("institutePeople"),
-    applicantName: v.string(),
-    applicantAffiliation: v.string(),
-    applicantIdentity: v.union(
+    applicantName: v.optional(v.string()),
+    applicantAffiliation: v.optional(v.string()),
+    applicantIdentity: v.optional(v.union(
       v.literal("undergraduate"),
       v.literal("graduate"),
+      v.literal("teacher"),
       v.literal("other"),
-    ),
-    applicantEmail: v.string(),
+    )),
+    applicantEmail: v.optional(v.string()),
     topic: v.string(),
     availability: v.string(),
     notes: v.optional(v.string()),
