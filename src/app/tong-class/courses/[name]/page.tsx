@@ -53,6 +53,12 @@ const MarkdownSplitEditor = dynamic(
   }
 )
 
+type CourseReviewAuthor = {
+  _id?: string
+  chineseName?: string
+  englishName?: string
+}
+
 type ReviewFormState = {
   instructor: string
   semesterYear: string
@@ -204,7 +210,7 @@ export default function CourseDetailPage() {
   const reviewsData = useCourseReviews(course?.name || courseName)
   const reviews = React.useMemo(() => (reviewsData || []) as unknown as CourseReview[], [reviewsData])
   const usersById = React.useMemo(() => {
-    const entries = (usersData || []).map((user) => [String(user._id), user] as const)
+    const entries = ((usersData || []) as CourseReviewAuthor[]).map((user) => [String(user._id), user] as const)
     return new Map(entries)
   }, [usersData])
 

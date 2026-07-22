@@ -25,6 +25,10 @@ type Member = {
   avatar?: string
 }
 
+type DirectoryMember = Omit<Member, "id" | "researchInterests"> & {
+  researchInterests?: string[]
+}
+
 export function MembersList() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedOrganization, setSelectedOrganization] = useState<string>("all")
@@ -32,10 +36,10 @@ export function MembersList() {
 
   // Fetch users from Convex
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
-  const users = useMemo(() => usersData || [], [usersData])
+  const users = useMemo<DirectoryMember[]>(() => usersData || [], [usersData])
 
   // Public directory projections intentionally do not expose account roles.
-  const registeredUsers = useMemo(() => {
+  const registeredUsers = useMemo<Member[]>(() => {
     return users
       .map((u) => ({
         id: u.username,

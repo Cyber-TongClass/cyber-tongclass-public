@@ -105,15 +105,19 @@ test("public directory relationship DTOs emit only explicit roles and safe profi
 
 test("public directory resolves relationships only through active public membership rows", () => {
   const directorySource = readFileSync("convex/instituteDirectory.ts", "utf8")
+  const publicDirectorySource = directorySource.slice(
+    directorySource.indexOf("function isPublicActiveMembership"),
+    directorySource.indexOf("A super-admin-only selector for explicit directory-to-account links"),
+  )
 
-  assert.match(directorySource, /\.query\("researchGroupMemberships"\)/)
-  assert.match(directorySource, /by_group_order/)
-  assert.match(directorySource, /by_person_order/)
-  assert.match(directorySource, /isPublicActiveMembership\(membership\)/)
-  assert.match(directorySource, /membership\.visibility\s*===\s*["']public["']/)
-  assert.match(directorySource, /membership\.endedAt\s*===\s*undefined/)
-  assert.doesNotMatch(directorySource, /\.query\("users"\)/)
-  assert.doesNotMatch(directorySource, /accountUserId|publicEmail|studentId/)
+  assert.match(publicDirectorySource, /\.query\("researchGroupMemberships"\)/)
+  assert.match(publicDirectorySource, /by_group_order/)
+  assert.match(publicDirectorySource, /by_person_order/)
+  assert.match(publicDirectorySource, /isPublicActiveMembership\(membership\)/)
+  assert.match(publicDirectorySource, /membership\.visibility\s*===\s*["']public["']/)
+  assert.match(publicDirectorySource, /membership\.endedAt\s*===\s*undefined/)
+  assert.doesNotMatch(publicDirectorySource, /\.query\("users"\)/)
+  assert.doesNotMatch(publicDirectorySource, /accountUserId|publicEmail|studentId/)
 })
 
 test("live profiles render explicit group membership roles without private profile fields", () => {

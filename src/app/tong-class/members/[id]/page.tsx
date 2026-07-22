@@ -10,7 +10,7 @@ import { parsePublicationAuthors } from "@/lib/publication-authors"
 import { normalizeUrl } from "@/lib/utils"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import { getResearchDirectionLabel } from "@/lib/research-directions"
-import type { Publication } from "@/types"
+import type { Publication, UserLink } from "@/types"
 import { getCohortClassLabel } from "@/lib/cohort"
 
 export default function MemberDetailPage() {
@@ -25,7 +25,7 @@ export default function MemberDetailPage() {
       (author) => author.username?.toLowerCase() === member.username.toLowerCase(),
     )
   )
-  const profileLinks = member?.links || []
+  const profileLinks: UserLink[] = member?.links || []
   const researchDirections = member?.researchDirections || []
   const profilePhoto = member?.realPhoto || member?.avatar
 

@@ -45,7 +45,7 @@ assert.equal(koreaDisplayRows[1].showCountryCell, false)
 assert.equal(koreaDisplayRows[1].isCountryContinuation, true)
 
 const tablePageSource = readFileSync(
-  resolve(__dirname, "../src/app/intranet/reimbursements/tables/[slug]/page.tsx"),
+  resolve(__dirname, "../src/app/tong-class/intranet/reimbursements/tables/[slug]/page.tsx"),
   "utf8"
 )
 assert.equal(
@@ -55,20 +55,20 @@ assert.equal(
 )
 
 const materialDocumentPageSource = readFileSync(
-  resolve(__dirname, "../src/app/intranet/reimbursements/materials/[slug]/page.tsx"),
+  resolve(__dirname, "../src/app/tong-class/intranet/reimbursements/materials/[slug]/page.tsx"),
   "utf8"
 )
 assert.equal(materialDocumentPageSource.includes("sourceFile"), false)
 assert.equal(materialDocumentPageSource.includes("download"), false)
 
 const academicExchangePageSource = readFileSync(
-  resolve(__dirname, "../src/app/intranet/reimbursements/academic-exchange/page.tsx"),
+  resolve(__dirname, "../src/app/tong-class/intranet/reimbursements/academic-exchange/page.tsx"),
   "utf8"
 )
 assert.equal(academicExchangePageSource.includes("原始 {item.sourceType}"), false)
 
 const materialsPageSource = readFileSync(
-  resolve(__dirname, "../src/app/intranet/materials/page.tsx"),
+  resolve(__dirname, "../src/app/tong-class/intranet/materials/page.tsx"),
   "utf8"
 )
 assert.equal(materialsPageSource.includes("原始 {item.sourceType}"), false)

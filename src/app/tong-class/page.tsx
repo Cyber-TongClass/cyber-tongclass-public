@@ -6,12 +6,13 @@ import { useEffect, useMemo, useState } from "react"
 import { ArrowRight, BookOpen, Users, FileText, Award, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useNews, usePublications } from "@/lib/api"
+import type { News, Publication } from "@/types"
 
 export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0)
   const [activeFeature, setActiveFeature] = useState(0)
-  const newsItems = useNews({ limit: 50 })
-  const publications = usePublications({ limit: 50 })
+  const newsItems: News[] | undefined = useNews({ limit: 50 })
+  const publications: Publication[] | undefined = usePublications({ limit: 50 })
   const featuredSlides = useMemo(() => {
     if (!newsItems) return []
 

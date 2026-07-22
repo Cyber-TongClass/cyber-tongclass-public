@@ -11,7 +11,7 @@ import type { Event } from "@/types"
 export function EventsList() {
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
   const eventsData = useEvents()
-  const events = eventsData || []
+  const events: Event[] = eventsData || []
 
   return (
     <div className="space-y-6">

@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye, Send, XCircle } from "lucide-react"
 import { useAllNews, useDeleteNews, useUpdateNews } from "@/lib/api"
+import type { News } from "@/types"
 import { NEWS_CATEGORY_OPTIONS } from "@/lib/news"
 
 const statusLabels: Record<string, string> = {
@@ -43,7 +44,7 @@ export default function NewsPage() {
 
   // Fetch news from Convex
   const newsData = useAllNews()
-  const newsList = newsData || []
+  const newsList: News[] = newsData || []
   const deleteNewsMutation = useDeleteNews()
   const updateNewsMutation = useUpdateNews()
 

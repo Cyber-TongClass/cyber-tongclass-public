@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
 import { usePublications } from "@/lib/api"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
+import type { Publication } from "@/types"
 
 const categories = [
   { value: "all", label: "全部领域" },
@@ -37,7 +38,7 @@ export function PublicationsList() {
 
   // Fetch publications from Convex
   const publicationsData = usePublications({})
-  const publications = useMemo(() => publicationsData || [], [publicationsData])
+  const publications: Publication[] = useMemo(() => publicationsData || [], [publicationsData])
 
   const filteredPublications = useMemo(() => {
     return publications.filter((pub) => {

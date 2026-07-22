@@ -9,6 +9,7 @@ import { formatPublicationAuthorsForText, getPublicationAuthorName } from "@/lib
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import type { Course, Event, News, Publication, User } from "@/types"
 
 interface SearchResult {
   type: "news" | "member" | "publication" | "event" | "course"
@@ -18,6 +19,11 @@ interface SearchResult {
   url: string
   icon: React.ReactNode
 }
+
+type SearchMember = Pick<
+  User,
+  "username" | "englishName" | "chineseName" | "bio" | "researchInterests" | "researchDirections"
+>
 
 function SearchContent() {
   const searchParams = useSearchParams()
@@ -35,11 +41,11 @@ function SearchContent() {
   const eventsData = useEvents({})
   const coursesData = useCourses({})
 
-  const news = useMemo(() => newsData || [], [newsData])
-  const users = useMemo(() => usersData || [], [usersData])
-  const publications = useMemo(() => publicationsData || [], [publicationsData])
-  const events = useMemo(() => eventsData || [], [eventsData])
-  const courses = useMemo(() => coursesData || [], [coursesData])
+  const news = useMemo<News[]>(() => newsData || [], [newsData])
+  const users = useMemo<SearchMember[]>(() => usersData || [], [usersData])
+  const publications = useMemo<Publication[]>(() => publicationsData || [], [publicationsData])
+  const events = useMemo<Event[]>(() => eventsData || [], [eventsData])
+  const courses = useMemo<Course[]>(() => coursesData || [], [coursesData])
 
   const performSearch = useCallback((searchQuery: string) => {
     if (!searchQuery.trim()) {

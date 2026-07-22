@@ -232,7 +232,10 @@ export default function ReviewsPage() {
   const commonTagsData = useCommonReviewTags()
   const commonTagList = useMemo(() => commonTagsData || [], [commonTagsData])
   const reviewTagsData = useReviewTags()
-  const reviewTags = useMemo(() => reviewTagsData || [], [reviewTagsData])
+  const reviewTags = useMemo<Array<{ name: string; color?: string }>>(
+    () => reviewTagsData || [],
+    [reviewTagsData]
+  )
   const editTag = useEditReviewTag()
   const setTagColor = useSetReviewTagColor()
   const updateReview = useUpdateCourseReview()

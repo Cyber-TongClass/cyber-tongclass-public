@@ -33,7 +33,7 @@ import {
 } from "@/lib/api"
 import { getPublicationCategoryOptions } from "@/lib/publication-taxonomy"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
-import type { Publication, PublicationVenue } from "@/types"
+import type { Publication, PublicationVenue, User } from "@/types"
 
 export default function AdminPublicationsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -53,7 +53,7 @@ export default function AdminPublicationsPage() {
   const updatePublicationVenue = useUpdatePublicationVenue()
 
   const publications: Publication[] = useMemo(() => publicationsData || [], [publicationsData])
-  const users = useMemo(() => usersData || [], [usersData])
+  const users: User[] = useMemo(() => usersData || [], [usersData])
   const publicationVenues: PublicationVenue[] = publicationVenuesData || []
 
   const { confirm, ConfirmDialog } = useConfirmDialog()
