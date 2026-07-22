@@ -104,3 +104,22 @@ test("persists optional audiences and tags for both shared content collections",
     assert.match(source, /normalizeTags\(args\.tags\)/)
   }
 })
+
+test("provides an idempotent manual audience migration without changing tags", () => {
+  const migrationSource = fs.readFileSync(path.join(projectRoot, "convex/updateMigrations.ts"), "utf8")
+  const scriptSource = fs.readFileSync(path.join(projectRoot, "scripts/migrate-default-update-audiences.mjs"), "utf8")
+
+  assert.match(migrationSource, /filter\(\(document\) => !document\.audiences\?\.length\)/)
+  assert.match(migrationSource, /const DEFAULT_AUDIENCES = \["undergraduate", "graduate", "teacher"\]/)
+  assert.doesNotMatch(migrationSource, /patch\([^\n]+\{[^}]*tags:/)
+  assert.match(scriptSource, /CONFIRM_UPDATE_AUDIENCE_MIGRATION/)
+  assert.match(scriptSource, /updateMigrations:backfillDefaultAudiences/)
+})
+
+test("accepts the existing academic exchange updatedAt field during schema deployment", () => {
+  const schema = fs.readFileSync(path.join(projectRoot, "convex/schema.ts"), "utf8")
+  assert.match(
+    schema,
+    /academicExchangeSupportApplications: defineTable\([\s\S]*?createdAt: v\.number\(\),\s*updatedAt: v\.optional\(v\.number\(\)\)/,
+  )
+})
