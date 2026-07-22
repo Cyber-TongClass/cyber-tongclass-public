@@ -193,33 +193,11 @@ type SignUpInput = {
 }
 
 export function useSignUp() {
-  const createUser = useMutation(api.users.create)
-
   return useCallback(
-    async (input: SignUpInput) => {
-      return createUser({
-        email: input.email,
-        username: input.username,
-        englishName: input.englishName,
-        chineseName: input.chineseName,
-        organization: input.organization,
-        cohort: input.cohort,
-        studentId: input.studentId,
-        password: input.password,
-        personalEmails: input.personalEmails,
-        personalEmail: input.personalEmail,
-        bio: input.bio,
-        researchDirections: input.researchDirections,
-        researchInterests: input.researchInterests,
-        links: input.links,
-        titles: input.titles,
-        scholarUrl: input.scholarUrl,
-        orcidUrl: input.orcidUrl,
-        avatar: input.avatar,
-        isEmailVerified: input.isEmailVerified,
-      } as any)
+    async (_input: SignUpInput) => {
+      throw new Error("公开注册已停用，请联系管理员创建账户")
     },
-    [createUser]
+    []
   )
 }
 
@@ -270,6 +248,22 @@ export function useUserById(id?: string | null) {
   return useQuery(api.users.getById, id ? ({ id: id as any } as any) : "skip")
 }
 
+export function useUserByEmail(email?: string | null) {
+  return useQuery(api.users.getByEmail, email ? ({ email } as any) : "skip")
+}
+
+export function useUserByStudentId(studentId?: string | null) {
+  return useQuery(api.users.getByStudentId, studentId ? ({ studentId } as any) : "skip")
+}
+
+export function useSearchUsers(query: string, classMembersOnly?: boolean) {
+  const normalizedQuery = query.trim()
+  return useQuery(
+    api.users.search,
+    normalizedQuery ? ({ query: normalizedQuery, classMembersOnly } as any) : "skip"
+  )
+}
+
 export function useUserByProfileSlug(slug?: string | null) {
   const users = useUsers({ limit: 1000, classMembersOnly: true })
   const normalizedSlug = slug?.trim().toLowerCase()
@@ -285,28 +279,57 @@ export function useUserByProfileSlug(slug?: string | null) {
 }
 
 export function useCreateUser() {
-  return useMutation(api.users.create)
+  const create = useMutation(api.users.create)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateUser() {
-  return useMutation(api.users.update)
+  const update = useMutation(api.users.update)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useUpdateUserRole() {
-  return useMutation(api.users.updateRole)
+  const updateRole = useMutation(api.users.updateRole)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return updateRole({ ...args, sessionToken } as any)
+  }, [updateRole])
 }
 
 export function useUpdatePasswordWithCurrent() {
-  return useMutation(api.users.updatePasswordWithCurrent)
+  const updatePassword = useMutation(api.users.updatePasswordWithCurrent)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return updatePassword({ ...args, sessionToken } as any)
+  }, [updatePassword])
 }
 
 export function useResetPasswordAsSuperAdmin() {
-  return useMutation(api.users.resetPasswordAsSuperAdmin)
+  const resetPassword = useMutation(api.users.resetPasswordAsSuperAdmin)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return resetPassword({ ...args, sessionToken } as any)
+  }, [resetPassword])
 }
 
 export function useDeleteUser() {
   const remove = useMutation(api.users.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function useSimpleLogin() {

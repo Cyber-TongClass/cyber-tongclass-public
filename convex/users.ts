@@ -1,5 +1,11 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserBySession } from "./reviewer/lib"
+import {
+    assertCanManageAccount,
+    assertCanProvisionAccount,
+    assertCanSetManagedRole,
+} from "./lib/user-account-policy"
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 const normalizeUsername = (username: string) => username.trim().toLowerCase()
@@ -199,6 +205,7 @@ export const getByStudentId = query({
 // Create a new user
 export const create = mutation({
     args: {
+        sessionToken: v.string(),
         email: v.string(),
         username: v.string(),
         englishName: v.string(),
@@ -224,6 +231,10 @@ export const create = mutation({
         isEmailVerified: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
+        const actor = await getUserBySession(ctx, args.sessionToken)
+        const requestedRole = args.role || "member"
+        assertCanProvisionAccount(actor.role, requestedRole)
+
         const email = normalizeEmail(args.email)
         const username = normalizeUsername(args.username)
         const studentId = normalizeStudentId(args.studentId)
@@ -262,7 +273,7 @@ export const create = mutation({
             username,
             englishName: args.englishName.trim(),
             chineseName: normalizeOptionalString(args.chineseName),
-            role: args.role || "member",
+            role: requestedRole,
             organization: args.organization,
             cohort: args.cohort,
             studentId,
@@ -314,6 +325,7 @@ export const create = mutation({
 // Update user profile
 export const update = mutation({
     args: {
+        sessionToken: v.string(),
         id: v.id("users"),
         email: v.optional(v.string()),
         username: v.optional(v.string()),
@@ -338,12 +350,25 @@ export const update = mutation({
         isClassMember: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
-        const { id, ...updates } = args
+        const { id, sessionToken, role: requestedRole, ...updates } = args
+        const actor = await getUserBySession(ctx, sessionToken)
 
         const user = await ctx.db.get(id)
 
         if (!user) {
             throw new Error("User not found")
+        }
+
+        const isSelf = String(actor._id) === String(user._id)
+        if (isSelf) {
+            if (requestedRole !== undefined && requestedRole !== user.role) {
+                throw new Error("不能修改自己的角色")
+            }
+        } else {
+            assertCanManageAccount(actor.role, user.role)
+            if (requestedRole !== undefined) {
+                assertCanSetManagedRole(actor.role, user.role, requestedRole)
+            }
         }
 
         const nextEmail = updates.email ? normalizeEmail(updates.email) : undefined
@@ -389,6 +414,7 @@ export const update = mutation({
 
         const patchData = pickDefined({
             ...updates,
+            role: isSelf ? undefined : requestedRole,
             englishName: updates.englishName?.trim(),
             chineseName: normalizeOptionalString(updates.chineseName),
             personalEmails: normalizeStringList(updates.personalEmails),
@@ -493,7 +519,7 @@ export const updatePasswordByUserId = mutation({
 
 export const resetPasswordAsSuperAdmin = mutation({
     args: {
-        requesterId: v.id("users"),
+        sessionToken: v.string(),
         targetUserId: v.id("users"),
         newPassword: v.string(),
     },
@@ -502,18 +528,12 @@ export const resetPasswordAsSuperAdmin = mutation({
             throw new Error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
         }
 
-        const [requester, targetUser] = await Promise.all([
-            ctx.db.get(args.requesterId),
-            ctx.db.get(args.targetUserId),
-        ])
-
-        if (!requester) {
-            throw new Error("Requester not found")
-        }
-
+        const requester = await getUserBySession(ctx, args.sessionToken)
         if (requester.role !== "super_admin") {
             throw new Error("Only super admins can reset another user's password")
         }
+
+        const targetUser = await ctx.db.get(args.targetUserId)
 
         if (!targetUser) {
             throw new Error("User not found")
@@ -550,6 +570,7 @@ export const resetPasswordAsSuperAdmin = mutation({
 
 export const updatePasswordWithCurrent = mutation({
     args: {
+        sessionToken: v.string(),
         userId: v.id("users"),
         currentPassword: v.string(),
         newPassword: v.string(),
@@ -557,6 +578,11 @@ export const updatePasswordWithCurrent = mutation({
     handler: async (ctx, args) => {
         if (args.newPassword.length < PASSWORD_MIN_LENGTH) {
             throw new Error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+        }
+
+        const actor = await getUserBySession(ctx, args.sessionToken)
+        if (String(actor._id) !== String(args.userId)) {
+            throw new Error("只能修改自己的密码")
         }
 
         const user = await ctx.db.get(args.userId)
@@ -597,15 +623,23 @@ export const updatePasswordWithCurrent = mutation({
 // Update user role (admin only)
 export const updateRole = mutation({
     args: {
+        sessionToken: v.string(),
         id: v.id("users"),
         role: v.union(v.literal("member"), v.literal("admin"), v.literal("super_admin")),
     },
     handler: async (ctx, args) => {
+        const actor = await getUserBySession(ctx, args.sessionToken)
         const user = await ctx.db.get(args.id)
 
         if (!user) {
             throw new Error("User not found")
         }
+
+        if (String(actor._id) === String(user._id) && args.role !== user.role) {
+            throw new Error("不能修改自己的角色")
+        }
+
+        assertCanSetManagedRole(actor.role, user.role, args.role)
 
         await ctx.db.patch(args.id, {
             role: args.role,
@@ -657,13 +691,23 @@ export const updateProfileMarkdown = mutation({
 
 // Delete a user (admin only)
 export const remove = mutation({
-    args: { id: v.id("users") },
+    args: {
+        sessionToken: v.string(),
+        id: v.id("users"),
+    },
     handler: async (ctx, args) => {
+        const actor = await getUserBySession(ctx, args.sessionToken)
         const user = await ctx.db.get(args.id)
 
         if (!user) {
             throw new Error("User not found")
         }
+
+        if (String(actor._id) === String(user._id)) {
+            throw new Error("不能删除自己的账号")
+        }
+
+        assertCanManageAccount(actor.role, user.role)
 
         const credential = await ctx.db
             .query("authCredentials")

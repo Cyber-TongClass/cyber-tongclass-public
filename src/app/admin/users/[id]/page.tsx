@@ -58,7 +58,7 @@ export default function UserFormPage() {
   const params = useParams<{ id: string }>()
   const userId = params.id
   const isCreateMode = userId === "new"
-  const { currentUser, isSuperAdmin } = useAuth()
+  const { isSuperAdmin } = useAuth()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -211,7 +211,6 @@ export default function UserFormPage() {
 
       if (isSuperAdmin && formData.password.trim()) {
         await resetPasswordAsSuperAdmin({
-          requesterId: currentUser?._id as any,
           targetUserId: userId as any,
           newPassword: formData.password,
         })
