@@ -622,12 +622,24 @@ export default defineSchema({
     enabled: v.boolean(),
     permissions: v.array(v.string()),
     createdBy: v.id("users"),
+    // A Reviewer credential stays independent. This optional link is the
+    // only way a main-site teacher can derive the narrow Reviewer capability.
+    // No name or email is stored or used as a fallback identifier.
+    mainUserId: v.optional(v.id("users")),
+    teacherDerivedEnabled: v.optional(v.boolean()),
+    linkedAt: v.optional(v.number()),
+    linkedByUserId: v.optional(v.id("users")),
+    linkMethod: v.optional(v.union(
+      v.literal("super_admin"),
+      v.literal("dual_session"),
+    )),
     lastLoginAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_username", ["username"])
-    .index("by_enabled", ["enabled"]),
+    .index("by_enabled", ["enabled"])
+    .index("by_mainUserId", ["mainUserId"]),
 
   reviewerSessions: defineTable({
     reviewerId: v.id("reviewerAccounts"),
@@ -644,6 +656,11 @@ export default defineSchema({
     action: v.string(),
     targetType: v.string(),
     targetId: v.string(),
+    credentialSource: v.optional(v.union(
+      v.literal("independent"),
+      v.literal("teacher_derived"),
+    )),
+    mainUserId: v.optional(v.id("users")),
     createdAt: v.number(),
   })
     .index("by_reviewer_createdAt", ["reviewerId", "createdAt"])

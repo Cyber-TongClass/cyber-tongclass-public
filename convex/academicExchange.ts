@@ -1,41 +1,11 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { createR2UploadTarget, getR2DownloadUrl, getR2ObjectKeyFromStorageId, r2StorageIdMatches } from "./lib/r2"
-import { REVIEWER_ACADEMIC_EXCHANGE_READ, requireReviewerPermission } from "./reviewer/lib"
+import { getUserBySession, requireAcademicExchangeReviewerAccess } from "./reviewer/lib"
 
 const AUTHOR_META_PATTERN = /^(.*?)\s*\[tc-author:([^\]]+)\]\s*$/
 const MAX_PAPER_PDF_BYTES = 30 * 1024 * 1024
 const PAPER_PDF_MIME_TYPES = new Set(["application/pdf", "application/octet-stream"])
-
-const sha256Hex = async (input: string) => {
-  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
-  const enc = new TextEncoder().encode(input)
-  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
-  return Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, "0")).join("")
-}
-
-async function getUserBySession(ctx: any, sessionToken?: string) {
-  if (!sessionToken) {
-    throw new Error("请先登录")
-  }
-
-  const tokenHash = await sha256Hex(sessionToken)
-  const session = await ctx.db
-    .query("authSessions")
-    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
-    .first()
-
-  if (!session || session.revokedAt || session.expiresAt <= Date.now()) {
-    throw new Error("登录已过期，请重新登录")
-  }
-
-  const user = await ctx.db.get(session.userId)
-  if (!user) {
-    throw new Error("用户不存在")
-  }
-
-  return user
-}
 
 async function requireSuperAdmin(ctx: any, sessionToken?: string) {
   const user = await getUserBySession(ctx, sessionToken)
@@ -320,9 +290,15 @@ export const getApplicationForSuperAdmin = query({
 })
 
 export const listApplicationsForReviewer = query({
-  args: { reviewerSessionToken: v.optional(v.string()) },
+  args: {
+    reviewerSessionToken: v.optional(v.string()),
+    mainSessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    await requireReviewerPermission(ctx, args.reviewerSessionToken, REVIEWER_ACADEMIC_EXCHANGE_READ)
+    await requireAcademicExchangeReviewerAccess(ctx, {
+      reviewerSessionToken: args.reviewerSessionToken,
+      mainSessionToken: args.mainSessionToken,
+    })
     return await ctx.db
       .query("academicExchangeSupportApplications")
       .withIndex("by_createdAt")
@@ -334,10 +310,14 @@ export const listApplicationsForReviewer = query({
 export const getApplicationForReviewer = query({
   args: {
     reviewerSessionToken: v.optional(v.string()),
+    mainSessionToken: v.optional(v.string()),
     id: v.id("academicExchangeSupportApplications"),
   },
   handler: async (ctx, args) => {
-    await requireReviewerPermission(ctx, args.reviewerSessionToken, REVIEWER_ACADEMIC_EXCHANGE_READ)
+    await requireAcademicExchangeReviewerAccess(ctx, {
+      reviewerSessionToken: args.reviewerSessionToken,
+      mainSessionToken: args.mainSessionToken,
+    })
     return await ctx.db.get(args.id)
   },
 })
@@ -346,6 +326,7 @@ export const getPaperPdfUrl = query({
   args: {
     sessionToken: v.optional(v.string()),
     reviewerSessionToken: v.optional(v.string()),
+    mainSessionToken: v.optional(v.string()),
     id: v.id("academicExchangeSupportApplications"),
   },
   handler: async (ctx, args) => {
@@ -354,8 +335,11 @@ export const getPaperPdfUrl = query({
       return null
     }
 
-    if (args.reviewerSessionToken) {
-      await requireReviewerPermission(ctx, args.reviewerSessionToken, REVIEWER_ACADEMIC_EXCHANGE_READ)
+    if (args.reviewerSessionToken || args.mainSessionToken) {
+      await requireAcademicExchangeReviewerAccess(ctx, {
+        reviewerSessionToken: args.reviewerSessionToken,
+        mainSessionToken: args.mainSessionToken,
+      })
     } else {
       const user = await getUserBySession(ctx, args.sessionToken)
       if (String(application.userId) !== String(user._id)) {
@@ -373,20 +357,26 @@ export const getPaperPdfUrl = query({
 export const logReviewerApplicationDownload = mutation({
   args: {
     reviewerSessionToken: v.optional(v.string()),
+    mainSessionToken: v.optional(v.string()),
     id: v.id("academicExchangeSupportApplications"),
   },
   handler: async (ctx, args) => {
-    const reviewer = await requireReviewerPermission(ctx, args.reviewerSessionToken, REVIEWER_ACADEMIC_EXCHANGE_READ)
+    const reviewerAccess = await requireAcademicExchangeReviewerAccess(ctx, {
+      reviewerSessionToken: args.reviewerSessionToken,
+      mainSessionToken: args.mainSessionToken,
+    })
     const application = await ctx.db.get(args.id)
     if (!application) {
       throw new Error("未找到申请记录")
     }
 
     await ctx.db.insert("reviewerAuditLogs", {
-      reviewerId: reviewer._id,
+      reviewerId: reviewerAccess.reviewer._id,
       action: "downloadAcademicExchangePdf",
       targetType: "academicExchangeSupportApplication",
       targetId: String(args.id),
+      credentialSource: reviewerAccess.credentialSource,
+      mainUserId: reviewerAccess.mainUserId,
       createdAt: Date.now(),
     })
 

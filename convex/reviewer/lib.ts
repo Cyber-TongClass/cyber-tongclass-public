@@ -1,3 +1,5 @@
+import { resolveTeacherReviewerCapability } from "../lib/reviewerBinding"
+
 export const REVIEWER_ACADEMIC_EXCHANGE_READ = "academicExchange:read"
 export const REVIEWER_PERMISSIONS = [REVIEWER_ACADEMIC_EXCHANGE_READ] as const
 
@@ -116,6 +118,86 @@ export const requireReviewerPermission = async (
     throw new Error("Reviewer 账号没有访问该功能的权限")
   }
   return reviewer
+}
+
+export type ReviewerCredentialSource = "independent" | "teacher_derived"
+
+export type AcademicExchangeReviewerAccess = Readonly<{
+  reviewer: any
+  credentialSource: ReviewerCredentialSource
+  mainUserId?: any
+}>
+
+/**
+ * Resolves a Reviewer principal for the limited Academic Exchange read
+ * surface. A teacher-derived principal is not a Reviewer session and never
+ * receives a Reviewer password or a copied bearer token; each request starts
+ * from the active main-site session and exact stored IDs.
+ */
+export const requireAcademicExchangeReviewerAccess = async (
+  ctx: any,
+  args: {
+    reviewerSessionToken?: string | null
+    mainSessionToken?: string | null
+  },
+): Promise<AcademicExchangeReviewerAccess> => {
+  const { reviewerSessionToken, mainSessionToken } = args
+
+  if (reviewerSessionToken && mainSessionToken) {
+    throw new Error("不能混用 Reviewer 会话和主站会话")
+  }
+
+  if (reviewerSessionToken) {
+    const reviewer = await requireReviewerPermission(
+      ctx,
+      reviewerSessionToken,
+      REVIEWER_ACADEMIC_EXCHANGE_READ,
+    )
+    return {
+      reviewer,
+      credentialSource: "independent",
+    }
+  }
+
+  const mainUser = await getUserBySession(ctx, mainSessionToken)
+  const people = await ctx.db
+    .query("institutePeople")
+    .withIndex("by_accountUserId", (q: any) => q.eq("accountUserId", mainUser._id))
+    .collect()
+  const teacherIdentity = people.find((person: any) => (
+    person.kind === "teacher" && String(person.accountUserId) === String(mainUser._id)
+  ))
+
+  const reviewerAccounts = await ctx.db
+    .query("reviewerAccounts")
+    .withIndex("by_mainUserId", (q: any) => q.eq("mainUserId", mainUser._id))
+    .collect()
+
+  for (const reviewer of reviewerAccounts) {
+    const decision = resolveTeacherReviewerCapability({
+      mainUserId: String(mainUser._id),
+      mainIdentityType: teacherIdentity ? "teacher" : "other",
+      mainAccountActive: true,
+      reviewerAccountId: String(reviewer._id),
+      reviewerAccountEnabled: reviewer.enabled === true,
+      explicitBinding: {
+        mainUserId: reviewer.mainUserId ? String(reviewer.mainUserId) : "",
+        reviewerAccountId: String(reviewer._id),
+        teacherDerivedEnabled: reviewer.teacherDerivedEnabled === true,
+        linkMethod: reviewer.linkMethod || "",
+      },
+    })
+
+    if (decision.allowed) {
+      return {
+        reviewer,
+        credentialSource: "teacher_derived",
+        mainUserId: mainUser._id,
+      }
+    }
+  }
+
+  throw new Error("当前主站账号没有可用的教师 Reviewer 授权")
 }
 
 export const serializeReviewerAccount = (reviewer: any) => ({

@@ -35,6 +35,24 @@ function assertValidPassword(password: string) {
   }
 }
 
+async function requireExplicitTeacherDirectoryRecord(ctx: any, mainUserId: any) {
+  const mainUser = await ctx.db.get(mainUserId)
+  if (!mainUser) {
+    throw new Error("要绑定的主站账号不存在")
+  }
+
+  const people = await ctx.db
+    .query("institutePeople")
+    .withIndex("by_accountUserId", (q: any) => q.eq("accountUserId", mainUserId))
+    .collect()
+
+  if (!people.some((person: any) => person.kind === "teacher")) {
+    throw new Error("要绑定的主站账号没有明确的教师目录身份")
+  }
+
+  return mainUser
+}
+
 export const listAccounts = query({
   args: {
     requesterSessionToken: v.optional(v.string()),
@@ -131,6 +149,86 @@ export const updateAccount = mutation({
 
     await ctx.db.patch(args.id, patch)
     return args.id
+  },
+})
+
+/**
+ * Creates or updates the only persisted main-site-to-Reviewer binding.
+ * The caller can select target IDs only after a main-site super-admin session
+ * has been verified. The binding method is server-owned rather than a client
+ * claim, so this endpoint never establishes authority from a name or email.
+ */
+export const upsertTeacherBinding = mutation({
+  args: {
+    requesterSessionToken: v.optional(v.string()),
+    reviewerAccountId: v.id("reviewerAccounts"),
+    mainUserId: v.id("users"),
+    teacherDerivedEnabled: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const requester = await requireSuperAdminBySession(ctx, args.requesterSessionToken)
+    const reviewer = await ctx.db.get(args.reviewerAccountId)
+    if (!reviewer) {
+      throw new Error("Reviewer 账号不存在")
+    }
+    if (!reviewer.enabled) {
+      throw new Error("已停用的 Reviewer 账号不能绑定教师能力")
+    }
+
+    await requireExplicitTeacherDirectoryRecord(ctx, args.mainUserId)
+
+    const existingBindings = await ctx.db
+      .query("reviewerAccounts")
+      .withIndex("by_mainUserId", (q) => q.eq("mainUserId", args.mainUserId))
+      .collect()
+    const conflictingBinding = existingBindings.find((candidate) => (
+      String(candidate._id) !== String(args.reviewerAccountId)
+    ))
+
+    if (conflictingBinding) {
+      throw new Error("该教师主站账号已绑定到另一个 Reviewer 账号；请先解除原绑定")
+    }
+
+    const now = Date.now()
+    await ctx.db.patch(args.reviewerAccountId, {
+      mainUserId: args.mainUserId,
+      teacherDerivedEnabled: args.teacherDerivedEnabled,
+      linkedAt: now,
+      linkedByUserId: requester._id,
+      linkMethod: "super_admin",
+      updatedAt: now,
+    })
+
+    return args.reviewerAccountId
+  },
+})
+
+/**
+ * Removes an explicit binding without touching the separate Reviewer
+ * credential, password, permissions, or independent sessions.
+ */
+export const clearTeacherBinding = mutation({
+  args: {
+    requesterSessionToken: v.optional(v.string()),
+    reviewerAccountId: v.id("reviewerAccounts"),
+  },
+  handler: async (ctx, args) => {
+    await requireSuperAdminBySession(ctx, args.requesterSessionToken)
+    const reviewer = await ctx.db.get(args.reviewerAccountId)
+    if (!reviewer) {
+      throw new Error("Reviewer 账号不存在")
+    }
+
+    await ctx.db.patch(args.reviewerAccountId, {
+      mainUserId: undefined,
+      teacherDerivedEnabled: undefined,
+      linkedAt: undefined,
+      linkedByUserId: undefined,
+      linkMethod: undefined,
+      updatedAt: Date.now(),
+    })
+
+    return args.reviewerAccountId
   },
 })
 
