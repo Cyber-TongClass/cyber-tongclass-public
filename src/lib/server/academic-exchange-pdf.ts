@@ -14,6 +14,7 @@ const NUMBER_FONT_SIZE = 10.2
 const DETAIL_LABEL_FONT_SIZE = 10
 const DETAIL_CONTENT_VERTICAL_PADDING = FILL_FONT_SIZE * 0.5
 const DETAIL_LABEL_VERTICAL_PADDING = DETAIL_LABEL_FONT_SIZE * 0.5
+const DETAIL_LINE_HEIGHT_MULTIPLIER = 1.3
 const TABLE_OUTER_BORDER_WIDTH = 1.5
 const CONTINUATION_ROWS_PER_PAGE = 20
 const APPLICATION_NUMBER_RECT = { x: 185, top: 145, width: 225, height: 23 }
@@ -93,6 +94,7 @@ function getWrappedTextRectHeight({
   width,
   paddingX,
   paddingY,
+  lineHeightMultiplier,
 }: {
   text: unknown
   font: any
@@ -100,9 +102,12 @@ function getWrappedTextRectHeight({
   width: number
   paddingX: number
   paddingY: number
+  lineHeightMultiplier?: number
 }) {
   const content = normalizeText(text) || " "
-  const lineHeight = Math.max(fontSize + 1.3, fontSize * 1.15)
+  const lineHeight = lineHeightMultiplier
+    ? fontSize * lineHeightMultiplier
+    : Math.max(fontSize + 1.3, fontSize * 1.15)
   const lineCount = wrapText(content, font, fontSize, Math.max(1, width - paddingX * 2)).length
   return Math.ceil((lineCount * lineHeight + paddingY * 2 + 0.01) * 100) / 100
 }
@@ -115,6 +120,7 @@ function getFixedTextLayout({
   height,
   paddingX,
   paddingY,
+  lineHeightMultiplier,
 }: {
   text: string
   font: any
@@ -123,8 +129,11 @@ function getFixedTextLayout({
   height: number
   paddingX: number
   paddingY: number
+  lineHeightMultiplier?: number
 }) {
-  const lineHeight = Math.max(fontSize + 1.3, fontSize * 1.15)
+  const lineHeight = lineHeightMultiplier
+    ? fontSize * lineHeightMultiplier
+    : Math.max(fontSize + 1.3, fontSize * 1.15)
   const lines = wrapText(text, font, fontSize, Math.max(1, width - paddingX * 2))
   const maxLines = Math.max(1, Math.floor((height - paddingY * 2) / lineHeight))
   const visibleLines = lines.slice(0, maxLines)
@@ -155,6 +164,7 @@ function drawTextInTemplateRect({
   vertical = "middle",
   paddingX = 5,
   paddingY = 3,
+  lineHeightMultiplier,
 }: {
   page: any
   text: unknown
@@ -165,6 +175,7 @@ function drawTextInTemplateRect({
   vertical?: "top" | "middle"
   paddingX?: number
   paddingY?: number
+  lineHeightMultiplier?: number
 }) {
   const content = normalizeText(text)
   if (!content) return
@@ -177,6 +188,7 @@ function drawTextInTemplateRect({
     height: rect.height,
     paddingX,
     paddingY,
+    lineHeightMultiplier,
   })
   const contentHeight = lines.length * lineHeight
   const topOffset = vertical === "middle"
@@ -570,6 +582,7 @@ function drawApplicationTemplatePage({
         width: labelWidth,
         paddingX: 4,
         paddingY: DETAIL_LABEL_VERTICAL_PADDING,
+        lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
       }),
       getWrappedTextRectHeight({
         text: row.text,
@@ -578,6 +591,7 @@ function drawApplicationTemplatePage({
         width: contentWidth,
         paddingX: 5,
         paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
+        lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
       })
     ),
   }))
@@ -607,6 +621,7 @@ function drawApplicationTemplatePage({
       vertical: "middle",
       paddingX: 4,
       paddingY: DETAIL_LABEL_VERTICAL_PADDING,
+      lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
     })
     drawTextInTemplateRect({
       page,
@@ -616,6 +631,7 @@ function drawApplicationTemplatePage({
       vertical: "top",
       paddingX: 5,
       paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
+      lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
     })
     dynamicTop += row.height
   }

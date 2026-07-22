@@ -343,6 +343,13 @@ try {
     paperTitleTopPadding >= 6.25,
     `Dynamic detail cells must keep 0.5em vertical padding (top padding ${paperTitleTopPadding.toFixed(2)}px)`
   )
+  const paperAuthorRun = findTopmostRun(paperRuns, "作者：张三")
+  const applicantRankRun = findTopmostRun(paperRuns, "申请人位次：张三")
+  const detailLineSpacing = applicantRankRun.top - paperAuthorRun.top
+  assert.ok(
+    detailLineSpacing >= 16 && detailLineSpacing <= 18,
+    `Dynamic detail content must use 1.3 line spacing (line advance ${detailLineSpacing}px)`
+  )
   await assertFirstPageOuterBordersAreBold(paperInspection.pdfPath)
   const singleExpenseRun = findRun(paperRuns, "费用项目 1")
   const singleExpenseTotalRun = paperRuns
