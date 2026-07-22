@@ -10,24 +10,42 @@ test("AIA research page consumes only the safe public research projection", () =
   const research = source("src/app/research/page.tsx")
 
   assert.match(research, /^"use client"/)
-  assert.match(research, /usePublicInstituteResearch/)
+  assert.match(research, /usePublicInstituteResearch\(\{\s*limit:\s*100\s*\}\)/)
+  assert.match(research, /<PublicationArchive/)
+  assert.match(research, /<AudienceTabs/)
+  assert.match(research, /buildAudienceCollections/)
+  assert.match(research, /research\s*===\s*undefined\s*\?\s*undefined/)
   assert.doesNotMatch(research, /from\s+["'][^"']*convex[^"']*["']/i)
   assert.doesNotMatch(research, /demoResearch|demoPeople|accountUserId|studentId|email/i)
-  assert.match(research, /research\s*===\s*undefined/)
-  assert.match(research, /research\.length\s*===\s*0/)
-  assert.match(research, /正在加载公开研究成果/)
-  assert.match(research, /暂无已公开的研究成果/)
 })
 
 test("AIA updates page consumes only the safe public update projection", () => {
   const updates = source("src/app/updates/page.tsx")
 
   assert.match(updates, /^"use client"/)
-  assert.match(updates, /usePublicInstituteUpdates/)
+  assert.match(updates, /usePublicInstituteUpdates\(\{\s*limit:\s*100\s*\}\)/)
+  assert.match(updates, /<NewsTimeline/)
+  assert.match(updates, /<AudienceTabs/)
+  assert.match(updates, /buildAudienceCollections/)
+  assert.match(updates, /updates\s*===\s*undefined\s*\?\s*undefined/)
   assert.doesNotMatch(updates, /from\s+["'][^"']*convex[^"']*["']/i)
   assert.doesNotMatch(updates, /demoResearch|demoPeople|accountUserId|studentId|email/i)
-  assert.match(updates, /updates\s*===\s*undefined/)
-  assert.match(updates, /updates\.length\s*===\s*0/)
-  assert.match(updates, /正在加载公开动态/)
-  assert.match(updates, /暂无已公开的动态/)
+})
+
+test("the shared publication archive owns research loading and empty states", () => {
+  const archive = source("src/components/content/publication-archive.tsx")
+
+  assert.match(archive, /items\s*===\s*undefined/)
+  assert.match(archive, /filteredPublications\.length\s*===\s*0/)
+  assert.match(archive, /正在加载学术成果/)
+  assert.match(archive, /未找到相关成果/)
+})
+
+test("the shared news timeline owns update loading and empty states", () => {
+  const timeline = source("src/components/content/news-timeline.tsx")
+
+  assert.match(timeline, /items\s*===\s*undefined/)
+  assert.match(timeline, /filteredNews\.length\s*===\s*0/)
+  assert.match(timeline, /加载中/)
+  assert.match(timeline, /未找到匹配新闻/)
 })

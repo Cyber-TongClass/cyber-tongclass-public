@@ -1,5 +1,10 @@
 import { queryGeneric } from "convex/server"
 import { v } from "convex/values"
+import {
+  publicationAuthorDisplayName,
+  resolvePublicationAudiences,
+  toPublicAudiences,
+} from "./lib/contentAudience"
 import type {
   InstituteContentRelationSources,
   InstituteNewsRecord,
@@ -8,12 +13,13 @@ import type {
   ResearchGroupRecord,
 } from "./lib/instituteDto"
 import type {
-  InstitutePublicLink,
-  PublicInstitutePerson,
+  PublicContentAudience,
+  PublicInstitutePersonReference,
   PublicInstituteResearch,
   PublicInstituteResearchGroupReference,
   PublicInstituteUpdate,
 } from "../src/types/institute"
+import { resolveUserIdentityType } from "./lib/userIdentity"
 
 const DEFAULT_PUBLIC_LIMIT = 24
 const MAX_PUBLIC_LIMIT = 100
@@ -46,49 +52,45 @@ type StoredResearchGroup = ResearchGroupRecord & {
 
 type StoredPublication = InstitutePublicationRecord & {
   _id: string
+  _creationTime: number
   siteScope?: "tong_class" | "institute"
   visibility?: "public" | "hidden"
+  userId: string
 }
 
 type StoredNews = InstituteNewsRecord & {
   _id: string
+  _creationTime: number
   siteScope?: "tong_class" | "institute"
   isPublished: boolean
+  authorId: string
 }
 
 type StoredContentMention = InstituteContentMentionRelation & {
   sortOrder: number
 }
 
-function copyStringList(values: readonly string[]): string[] {
-  return values.map((value) => value)
+type PublicationAuthorshipSource = {
+  personId: string
 }
 
-function copyPersonLinks(person: InstitutePersonRecord): InstitutePublicLink[] {
-  return person.publicLinks.map((link) => ({
-    kind: link.kind,
-    label: link.label,
-    href: link.href,
-  }))
+type PublicationAuthorSources = {
+  authorships: PublicationAuthorshipSource[]
+  peopleById: Map<string, StoredInstitutePerson>
 }
 
-function toPublicInstitutePerson(person: InstitutePersonRecord): PublicInstitutePerson {
-  const dto: PublicInstitutePerson = {
+function toPublicInstitutePersonReference(
+  person: InstitutePersonRecord,
+): PublicInstitutePersonReference {
+  const dto: PublicInstitutePersonReference = {
     slug: person.slug,
     kind: person.kind,
     nameZh: person.nameZh,
     nameEn: person.nameEn,
-    researchAreas: copyStringList(person.researchAreas),
-    publicLinks: copyPersonLinks(person),
     isDemo: person.isDemo,
   }
   if (person.titleZh !== undefined) dto.titleZh = person.titleZh
   if (person.titleEn !== undefined) dto.titleEn = person.titleEn
-  if (person.bioZh !== undefined) dto.bioZh = person.bioZh
-  if (person.bioEn !== undefined) dto.bioEn = person.bioEn
-  if (person.photoUrl !== undefined) dto.photoUrl = person.photoUrl
-  if (person.publicEmail !== undefined) dto.publicEmail = person.publicEmail
-  if (person.coffeeTalkOpen !== undefined) dto.coffeeTalkOpen = person.coffeeTalkOpen
   return dto
 }
 
@@ -107,18 +109,21 @@ function addPublicRelations(
   dto: PublicInstituteResearch | PublicInstituteUpdate,
   relations: InstituteContentRelationSources,
 ): void {
-  dto.people = (relations.people ?? []).map((person) => toPublicInstitutePerson(person))
+  dto.people = (relations.people ?? []).map((person) => toPublicInstitutePersonReference(person))
   dto.researchGroups = (relations.researchGroups ?? [])
     .map((group) => toPublicInstituteResearchGroupReference(group))
 }
 
 function toPublicInstituteResearch(
   record: InstitutePublicationRecord,
+  content: { id: string; audiences: readonly PublicContentAudience[] },
   relations: InstituteContentRelationSources,
 ): PublicInstituteResearch {
   const dto: PublicInstituteResearch = {
+    id: content.id,
+    audiences: [...content.audiences],
     title: record.title,
-    authors: copyStringList(record.authors),
+    authors: record.authors.map((author) => publicationAuthorDisplayName(author)),
     venue: record.venue,
     year: record.year,
     abstract: record.abstract,
@@ -133,9 +138,12 @@ function toPublicInstituteResearch(
 
 function toPublicInstituteUpdate(
   news: InstituteNewsRecord,
+  content: { id: string; audiences: readonly PublicContentAudience[] },
   relations: InstituteContentRelationSources,
 ): PublicInstituteUpdate {
   const dto: PublicInstituteUpdate = {
+    id: content.id,
+    audiences: [...content.audiences],
     title: news.title,
     content: news.content,
     category: news.category,
@@ -156,6 +164,77 @@ function normalizePublicLimit(value?: number): number {
   if (!Number.isFinite(value)) return DEFAULT_PUBLIC_LIMIT
   const wholeNumber = Math.floor(value as number)
   return Math.max(1, Math.min(wholeNumber, MAX_PUBLIC_LIMIT))
+}
+
+function dedupeContentRecords<T extends { _id: string }>(records: readonly T[]): T[] {
+  const unique = new Map<string, T>()
+  for (const record of records) {
+    const id = String(record._id)
+    if (!unique.has(id)) unique.set(id, record)
+  }
+  return [...unique.values()]
+}
+
+async function readPublicationBucket(
+  ctx: any,
+  siteScope: StoredPublication["siteScope"],
+  visibility: StoredPublication["visibility"],
+  limit: number,
+): Promise<StoredPublication[]> {
+  return ctx.db
+    .query("publications")
+    .withIndex("by_siteScope_visibility_year", (index: any) => (
+      index.eq("siteScope", siteScope).eq("visibility", visibility)
+    ))
+    .order("desc")
+    .take(limit) as Promise<StoredPublication[]>
+}
+
+async function listPublicationCandidates(ctx: any, limit: number): Promise<StoredPublication[]> {
+  const buckets = await Promise.all([
+    readPublicationBucket(ctx, undefined, undefined, limit),
+    readPublicationBucket(ctx, undefined, "public", limit),
+    readPublicationBucket(ctx, "tong_class", undefined, limit),
+    readPublicationBucket(ctx, "tong_class", "public", limit),
+    readPublicationBucket(ctx, "institute", undefined, limit),
+    readPublicationBucket(ctx, "institute", "public", limit),
+  ])
+
+  return dedupeContentRecords(buckets.flat())
+    .filter((record) => record.visibility !== "hidden")
+    .sort((left, right) => {
+      if (left.year !== right.year) return right.year - left.year
+      return right._creationTime - left._creationTime
+    })
+}
+
+async function readNewsBucket(
+  ctx: any,
+  siteScope: StoredNews["siteScope"],
+  limit: number,
+): Promise<StoredNews[]> {
+  return ctx.db
+    .query("news")
+    .withIndex("by_siteScope_isPublished_publishedAt", (index: any) => (
+      index.eq("siteScope", siteScope).eq("isPublished", true)
+    ))
+    .order("desc")
+    .take(limit) as Promise<StoredNews[]>
+}
+
+async function listNewsCandidates(ctx: any, limit: number): Promise<StoredNews[]> {
+  const buckets = await Promise.all([
+    readNewsBucket(ctx, undefined, limit),
+    readNewsBucket(ctx, "tong_class", limit),
+    readNewsBucket(ctx, "institute", limit),
+  ])
+
+  return dedupeContentRecords(buckets.flat())
+    .filter((record) => record.isPublished === true)
+    .sort((left, right) => {
+      if (left.publishedAt !== right.publishedAt) return right.publishedAt - left.publishedAt
+      return right._creationTime - left._creationTime
+    })
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -240,6 +319,66 @@ export function normalizeDoi(value?: string): string | undefined {
 
 function contentKey(contentType: InstituteContentType, contentId: string): string {
   return `${contentType}:${contentId}`
+}
+
+function matchingContentIds(
+  matchingKeys: ReadonlySet<string>,
+  contentType: InstituteContentType,
+): string[] {
+  const prefix = `${contentType}:`
+  return [...matchingKeys]
+    .filter((key) => key.startsWith(prefix))
+    .map((key) => key.slice(prefix.length))
+}
+
+async function loadMatchingPublicationRecords(
+  ctx: any,
+  matchingKeys: ReadonlySet<string>,
+): Promise<StoredPublication[]> {
+  const records = await Promise.all(
+    matchingContentIds(matchingKeys, "publication").map(async (contentId) => {
+      try {
+        const id = ctx.db.normalizeId("publications", contentId)
+        return id === null ? null : await ctx.db.get(id)
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  return dedupeContentRecords(
+    records.flatMap((record) => record === null ? [] : [record as StoredPublication]),
+  )
+    .filter((record) => record.visibility !== "hidden")
+    .sort((left, right) => {
+      if (left.year !== right.year) return right.year - left.year
+      return right._creationTime - left._creationTime
+    })
+}
+
+async function loadMatchingNewsRecords(
+  ctx: any,
+  matchingKeys: ReadonlySet<string>,
+): Promise<StoredNews[]> {
+  const records = await Promise.all(
+    matchingContentIds(matchingKeys, "news").map(async (contentId) => {
+      try {
+        const id = ctx.db.normalizeId("news", contentId)
+        return id === null ? null : await ctx.db.get(id)
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  return dedupeContentRecords(
+    records.flatMap((record) => record === null ? [] : [record as StoredNews]),
+  )
+    .filter((record) => record.isPublished === true)
+    .sort((left, right) => {
+      if (left.publishedAt !== right.publishedAt) return right.publishedAt - left.publishedAt
+      return right._creationTime - left._creationTime
+    })
 }
 
 function intersectContentKeys(
@@ -346,6 +485,7 @@ async function getPublicContentRelations(
   ctx: any,
   contentType: InstituteContentType,
   contentId: string,
+  publicationAuthorSources?: PublicationAuthorSources,
 ): Promise<InstituteContentRelationSources> {
   const mentions = await ctx.db
     .query("contentMentions")
@@ -354,10 +494,7 @@ async function getPublicContentRelations(
     ))
     .collect() as StoredContentMention[]
   const authorships = contentType === "publication"
-    ? await ctx.db
-      .query("publicationAuthorships")
-      .withIndex("by_publication_order", (index: any) => index.eq("publicationId", contentId))
-      .collect()
+    ? publicationAuthorSources?.authorships ?? []
     : []
   const people: InstitutePersonRecord[] = []
   const researchGroups: ResearchGroupRecord[] = []
@@ -367,8 +504,8 @@ async function getPublicContentRelations(
   for (const authorship of authorships) {
     const personId = String(authorship.personId)
     if (seenPeople.has(personId)) continue
-    const person = await getPublicPerson(ctx, personId)
-    if (person !== undefined) {
+    const person = publicationAuthorSources?.peopleById.get(personId)
+    if (person?.visibility === "public") {
       people.push(person)
       seenPeople.add(personId)
     }
@@ -398,9 +535,66 @@ async function getPublicContentRelations(
   return { people, researchGroups }
 }
 
+async function loadPublicationAuthorSources(
+  ctx: any,
+  publicationId: string,
+): Promise<PublicationAuthorSources> {
+  const authorships = await ctx.db
+    .query("publicationAuthorships")
+    .withIndex("by_publication_order", (index: any) => index.eq("publicationId", publicationId))
+    .collect() as PublicationAuthorshipSource[]
+  const personIds = [...new Set(authorships.map((authorship) => String(authorship.personId)))]
+  const people = await Promise.all(personIds.map(async (personId) => (
+    [personId, await ctx.db.get(personId)] as const
+  )))
+  const peopleById = new Map<string, StoredInstitutePerson>()
+  for (const [personId, person] of people) {
+    if (person) peopleById.set(personId, person as StoredInstitutePerson)
+  }
+  return { authorships, peopleById }
+}
+
+async function resolveIdentityTypeForUserId(
+  ctx: any,
+  userId: string,
+): Promise<string | undefined> {
+  try {
+    const normalizedId = ctx.db.normalizeId("users", userId)
+    if (normalizedId === null) return undefined
+    const user = await ctx.db.get(normalizedId)
+    return user ? resolveUserIdentityType(user) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function getPublicationAudiences(
+  ctx: any,
+  record: StoredPublication,
+  authorSources: PublicationAuthorSources,
+): Promise<PublicContentAudience[]> {
+  const structuredAccountUserIds = [...authorSources.peopleById.values()].flatMap((person) => (
+    person?.accountUserId === undefined ? [] : [String(person.accountUserId)]
+  ))
+  return resolvePublicationAudiences({
+    authors: record.authors,
+    structuredAccountUserIds,
+    ownerUserId: String(record.userId),
+    resolveIdentityType: (userId) => resolveIdentityTypeForUserId(ctx, userId),
+  })
+}
+
+async function getNewsAudiences(
+  ctx: any,
+  news: StoredNews,
+): Promise<PublicContentAudience[]> {
+  const identity = await resolveIdentityTypeForUserId(ctx, String(news.authorId))
+  return toPublicAudiences(identity === undefined ? [] : [identity])
+}
+
 /**
- * Reads are public and scope-bound. This fast-pass intentionally has no write
- * endpoints until server-side session and authorization checks are available.
+ * Reads are public, visibility-bound projections over the shared content
+ * tables. This module intentionally exposes no content write endpoints.
  */
 export const listPublicInstituteResearch = queryGeneric({
   args: {
@@ -410,26 +604,24 @@ export const listPublicInstituteResearch = queryGeneric({
   },
   handler: async (ctx, args) => {
     const matchingKeys = await resolveContentFilter(ctx, args)
-    const records = await ctx.db
-      .query("publications")
-      .withIndex("by_siteScope_visibility_year", (index: any) => (
-        index.eq("siteScope", "institute").eq("visibility", "public")
-      ))
-      .order("desc")
-      .collect() as StoredPublication[]
     const limit = normalizePublicLimit(args.limit)
+    const records = matchingKeys === undefined
+      ? await listPublicationCandidates(ctx, limit)
+      : await loadMatchingPublicationRecords(ctx, matchingKeys)
     const publicRecords = records.filter((record) => (
-      record.siteScope === "institute"
-      && record.visibility === "public"
+      record.visibility !== "hidden"
       && (matchingKeys === undefined || matchingKeys.has(contentKey("publication", String(record._id))))
     )).slice(0, limit)
 
-    return Promise.all(publicRecords.map(async (record) => (
-      toPublicInstituteResearch(
-        record,
-        await getPublicContentRelations(ctx, "publication", String(record._id)),
-      )
-    )))
+    return Promise.all(publicRecords.map(async (record) => {
+      const id = String(record._id)
+      const authorSources = await loadPublicationAuthorSources(ctx, id)
+      const [audiences, relations] = await Promise.all([
+        getPublicationAudiences(ctx, record, authorSources),
+        getPublicContentRelations(ctx, "publication", id, authorSources),
+      ])
+      return toPublicInstituteResearch(record, { id, audiences }, relations)
+    }))
   },
 })
 
@@ -441,25 +633,69 @@ export const listPublicInstituteUpdates = queryGeneric({
   },
   handler: async (ctx, args) => {
     const matchingKeys = await resolveContentFilter(ctx, args)
-    const records = await ctx.db
-      .query("news")
-      .withIndex("by_siteScope_isPublished_publishedAt", (index: any) => (
-        index.eq("siteScope", "institute").eq("isPublished", true)
-      ))
-      .order("desc")
-      .collect() as StoredNews[]
     const limit = normalizePublicLimit(args.limit)
+    const records = matchingKeys === undefined
+      ? await listNewsCandidates(ctx, limit)
+      : await loadMatchingNewsRecords(ctx, matchingKeys)
     const publicRecords = records.filter((record) => (
-      record.siteScope === "institute"
-      && record.isPublished === true
+      record.isPublished === true
       && (matchingKeys === undefined || matchingKeys.has(contentKey("news", String(record._id))))
     )).slice(0, limit)
 
-    return Promise.all(publicRecords.map(async (record) => (
-      toPublicInstituteUpdate(
-        record,
-        await getPublicContentRelations(ctx, "news", String(record._id)),
-      )
-    )))
+    return Promise.all(publicRecords.map(async (record) => {
+      const id = String(record._id)
+      const [audiences, relations] = await Promise.all([
+        getNewsAudiences(ctx, record),
+        getPublicContentRelations(ctx, "news", id),
+      ])
+      return toPublicInstituteUpdate(record, { id, audiences }, relations)
+    }))
+  },
+})
+
+export const getPublicInstituteResearchById = queryGeneric({
+  args: { id: v.string() },
+  handler: async (ctx, args) => {
+    let publicationId
+    try {
+      publicationId = ctx.db.normalizeId("publications", args.id)
+    } catch {
+      return null
+    }
+    if (publicationId === null) return null
+
+    const record = await ctx.db.get(publicationId) as StoredPublication | null
+    if (record === null || record.visibility === "hidden") return null
+
+    const id = String(record._id)
+    const authorSources = await loadPublicationAuthorSources(ctx, id)
+    const [audiences, relations] = await Promise.all([
+      getPublicationAudiences(ctx, record, authorSources),
+      getPublicContentRelations(ctx, "publication", id, authorSources),
+    ])
+    return toPublicInstituteResearch(record, { id, audiences }, relations)
+  },
+})
+
+export const getPublicInstituteUpdateById = queryGeneric({
+  args: { id: v.string() },
+  handler: async (ctx, args) => {
+    let newsId
+    try {
+      newsId = ctx.db.normalizeId("news", args.id)
+    } catch {
+      return null
+    }
+    if (newsId === null) return null
+
+    const record = await ctx.db.get(newsId) as StoredNews | null
+    if (record === null || record.isPublished !== true) return null
+
+    const id = String(record._id)
+    const [audiences, relations] = await Promise.all([
+      getNewsAudiences(ctx, record),
+      getPublicContentRelations(ctx, "news", id),
+    ])
+    return toPublicInstituteUpdate(record, { id, audiences }, relations)
   },
 })

@@ -7,13 +7,15 @@ import { ArrowLeft, Calendar, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
-import { useNewsById } from "@/lib/api"
+import { usePublicInstituteUpdateById } from "@/lib/api"
+import { getSafeExternalUrl } from "@/lib/safe-external-url"
 
 export default function NewsDetailPage() {
   const params = useParams<{ id: string }>()
   const newsId = params.id
-  const news = useNewsById(newsId)
+  const news = usePublicInstituteUpdateById(newsId)
   const isLoading = news === undefined
+  const safeSourceUrl = getSafeExternalUrl(news?.sourceUrl)
 
   if (isLoading) {
     return (
@@ -61,9 +63,9 @@ export default function NewsDetailPage() {
 
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-slate-900 leading-tight">{news.title}</h1>
 
-          {news.sourceUrl && (
+          {safeSourceUrl && (
             <Button asChild variant="outline" size="sm" className="gap-2">
-              <a href={news.sourceUrl} target="_blank" rel="noopener noreferrer">
+              <a href={safeSourceUrl} target="_blank" rel="noopener noreferrer">
                 Open Original
                 <ExternalLink className="h-4 w-4" />
               </a>

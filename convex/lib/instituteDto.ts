@@ -3,6 +3,7 @@ import type {
   InstitutePublicLink,
   InstitutePublicLinkKind,
   InstituteResearchGroupLink,
+  PublicContentAudience,
   PublicInstitutePerson,
   PublicInstitutePersonReference,
   PublicInstitutePersonResearchGroupMembership,
@@ -13,6 +14,7 @@ import type {
   PublicResearchGroupMembershipRole,
   PublicResearchGroup,
 } from "../../src/types/institute"
+import { publicationAuthorDisplayName } from "./contentAudience"
 
 export type InstitutePersonRecord = {
   slug: string
@@ -249,18 +251,21 @@ function addPublicRelations(
 ): void {
   if (relations === undefined) return
 
-  dto.people = (relations.people ?? []).map((person) => toPublicInstitutePerson(person))
+  dto.people = (relations.people ?? []).map((person) => toPublicInstitutePersonReference(person))
   dto.researchGroups = (relations.researchGroups ?? [])
     .map((group) => toPublicResearchGroupReference(group))
 }
 
 export function toPublicInstituteResearch(
   publication: InstitutePublicationRecord,
+  content: { id: string; audiences: readonly PublicContentAudience[] },
   relations?: InstituteContentRelationSources,
 ): PublicInstituteResearch {
   const dto: PublicInstituteResearch = {
+    id: content.id,
+    audiences: [...content.audiences],
     title: publication.title,
-    authors: copyStringList(publication.authors),
+    authors: publication.authors.map((author) => publicationAuthorDisplayName(author)),
     venue: publication.venue,
     year: publication.year,
     abstract: publication.abstract,
@@ -277,9 +282,12 @@ export function toPublicInstituteResearch(
 
 export function toPublicInstituteUpdate(
   news: InstituteNewsRecord,
+  content: { id: string; audiences: readonly PublicContentAudience[] },
   relations?: InstituteContentRelationSources,
 ): PublicInstituteUpdate {
   const dto: PublicInstituteUpdate = {
+    id: content.id,
+    audiences: [...content.audiences],
     title: news.title,
     content: news.content,
     category: news.category,

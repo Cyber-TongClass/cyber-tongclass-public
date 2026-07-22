@@ -98,6 +98,8 @@ const listInstituteAccountBindingCandidatesRef = makeFunctionReference<"query">(
 const bindInstitutePersonAccountRef = makeFunctionReference<"mutation">("instituteDirectory:bindPersonAccount")
 const listPublicInstituteResearchRef = makeFunctionReference<"query">("instituteContent:listPublicInstituteResearch")
 const listPublicInstituteUpdatesRef = makeFunctionReference<"query">("instituteContent:listPublicInstituteUpdates")
+const getPublicInstituteResearchByIdRef = makeFunctionReference<"query">("instituteContent:getPublicInstituteResearchById")
+const getPublicInstituteUpdateByIdRef = makeFunctionReference<"query">("instituteContent:getPublicInstituteUpdateById")
 const submitCoffeeTalkApplicationRef = makeFunctionReference<"mutation">("coffeeTalk:submitApplication")
 const listMyCoffeeTalkApplicationsRef = makeFunctionReference<"query">("coffeeTalk:listMine")
 const listTeacherCoffeeTalkApplicationsRef = makeFunctionReference<"query">("coffeeTalk:listForTeacher")
@@ -465,6 +467,14 @@ export function usePublicInstituteUpdates(args?: {
     return groupSlug ? { ...rest, researchGroupSlug: groupSlug } : rest
   }, [args])
   return useQuery(listPublicInstituteUpdatesRef, queryArgs)
+}
+
+export function usePublicInstituteResearchById(id?: string | null) {
+  return useQuery(getPublicInstituteResearchByIdRef, id ? { id } : "skip")
+}
+
+export function usePublicInstituteUpdateById(id?: string | null) {
+  return useQuery(getPublicInstituteUpdateByIdRef, id ? { id } : "skip")
 }
 
 /** Super-admin-only metadata for explicit Institute person-to-account links. */

@@ -1,5 +1,7 @@
 export type InstitutePersonKind = "teacher" | "graduate"
 
+export type PublicContentAudience = "undergrad" | "graduate"
+
 export type PublicResearchGroupMembershipRole = "leader" | "faculty" | "graduate" | "member"
 
 export type InstitutePublicLinkKind =
@@ -88,6 +90,8 @@ export type PublicResearchGroup = {
 }
 
 export type PublicInstituteResearch = {
+  id: string
+  audiences: PublicContentAudience[]
   title: string
   authors: string[]
   venue: string
@@ -97,11 +101,13 @@ export type PublicInstituteResearch = {
   doi?: string
   category: string
   subCategory?: string
-  people?: PublicInstitutePerson[]
+  people?: PublicInstitutePersonReference[]
   researchGroups?: PublicInstituteResearchGroupReference[]
 }
 
 export type PublicInstituteUpdate = {
+  id: string
+  audiences: PublicContentAudience[]
   title: string
   content: string
   sourceUrl?: string
@@ -109,6 +115,6 @@ export type PublicInstituteUpdate = {
   homepageSubtitle?: string
   category: string
   publishedAt: number
-  people?: PublicInstitutePerson[]
+  people?: PublicInstitutePersonReference[]
   researchGroups?: PublicInstituteResearchGroupReference[]
 }

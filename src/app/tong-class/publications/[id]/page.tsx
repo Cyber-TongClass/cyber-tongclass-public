@@ -6,14 +6,16 @@ import { useParams } from "next/navigation"
 import { ArrowLeft, ExternalLink, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
-import { usePublicationById } from "@/lib/api"
+import { usePublicInstituteResearchById } from "@/lib/api"
+import { getSafeExternalUrl } from "@/lib/safe-external-url"
 
 export default function PublicationDetailPage() {
   const params = useParams<{ id: string }>()
   const publicationId = params.id
 
-  const publication = usePublicationById(publicationId)
+  const publication = usePublicInstituteResearchById(publicationId)
   const isLoading = publication === undefined
+  const safePublicationUrl = getSafeExternalUrl(publication?.url)
   const [showCopiedToast, setShowCopiedToast] = React.useState(false)
   const [toastOpacity, setToastOpacity] = React.useState(0)
   const lastCopyTime = React.useRef(0)
@@ -108,9 +110,9 @@ export default function PublicationDetailPage() {
           </header>
 
           <div className="flex flex-wrap gap-2 mb-10">
-            {publication.url && (
+            {safePublicationUrl && (
               <Button asChild size="sm">
-                <a href={publication.url} target="_blank" rel="noopener noreferrer">
+                <a href={safePublicationUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4 mr-1.5" />
                   查看原文
                 </a>
