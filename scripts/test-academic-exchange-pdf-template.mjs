@@ -140,6 +140,36 @@ async function assertContinuationOuterBordersAreBold(pdfPath) {
   assert.ok(getDarkRun(515.9) >= 6, "Continuation table right outer border must render at 1.5pt")
 }
 
+async function assertFirstPageOuterBordersAreBold(pdfPath) {
+  const imagePrefix = path.join(temporaryDirectory, "first-page-border")
+  execFileSync("pdftoppm", ["-png", "-r", "288", "-f", "1", "-singlefile", pdfPath, imagePrefix], {
+    stdio: "ignore",
+  })
+  const { data, info } = await sharp(`${imagePrefix}.png`).greyscale().raw().toBuffer({ resolveWithObject: true })
+  const scale = 4
+
+  const getDarkRun = (pointX, pointY) => {
+    const centerX = Math.round(pointX * scale)
+    const y = Math.round(pointY * scale)
+    let bestRun = 0
+    let currentRun = 0
+    for (let x = centerX - 8; x <= centerX + 8; x += 1) {
+      if (data[y * info.width + x] < 128) {
+        currentRun += 1
+        bestRun = Math.max(bestRun, currentRun)
+      } else {
+        currentRun = 0
+      }
+    }
+    return bestRun
+  }
+
+  for (const y of [360, 520]) {
+    assert.ok(getDarkRun(91.59, y) >= 6, `First-page left outer border at ${y}pt must render at 1.5pt`)
+    assert.ok(getDarkRun(515.9, y) >= 6, `First-page right outer border at ${y}pt must render at 1.5pt`)
+  }
+}
+
 function makeExpenseItems(count) {
   return Array.from({ length: count }, (_, index) => ({
     item: `费用项目 ${index + 1}`,
@@ -255,7 +285,7 @@ try {
     compactProjectPlanToExpenseGap < 80,
     `Paper, funding, and project-plan rows must compact to their wrapped content height (gap ${compactProjectPlanToExpenseGap})`
   )
-  await assertExpenseTableBottomBorderIsIntact(outboundInspection.pdfPath, 604.28)
+  await assertExpenseTableBottomBorderIsIntact(outboundInspection.pdfPath, 608.28)
   await assertContinuationOuterBordersAreBold(outboundInspection.pdfPath)
 
   const paperApplication = {
@@ -281,7 +311,8 @@ try {
   })
   const paperDocument = await PDFDocument.load(paperPdf)
   const paperText = extractPdfText(paperPdf, "paper-sample.pdf")
-  const paperRuns = parseTextRuns(inspectPdf(paperPdf, "paper-inspection.pdf").xml)[0]
+  const paperInspection = inspectPdf(paperPdf, "paper-inspection.pdf")
+  const paperRuns = parseTextRuns(paperInspection.xml)[0]
   assert.equal(paperDocument.getPageCount(), 2, "A paper-backed application must append the supplied paper PDF")
   assert.match(paperText, /论文题目：GeoRecon/)
   assert.match(paperText, /申请人所在单位：北京大学人工智能研究院/)
@@ -289,6 +320,13 @@ try {
   assert.match(paperText, /学术交流计划说明结束/)
   assert.doesNotMatch(paperText, /…/, "Dynamic project-information rows must not truncate content with an ellipsis")
   assert.match(paperText, /Attached paper page/)
+  const paperTitleRun = findTopmostRun(paperRuns, "论文题目：GeoRecon")
+  const paperTitleTopPadding = paperTitleRun.top - 336.63 * 1.5
+  assert.ok(
+    paperTitleTopPadding >= 6.25,
+    `Dynamic detail cells must keep 0.5em vertical padding (top padding ${paperTitleTopPadding.toFixed(2)}px)`
+  )
+  await assertFirstPageOuterBordersAreBold(paperInspection.pdfPath)
   const singleExpenseRun = findRun(paperRuns, "费用项目 1")
   const singleExpenseTotalRun = paperRuns
     .filter((run) => run.text.replace(/\s+/g, "") === "总计")

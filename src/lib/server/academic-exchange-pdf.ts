@@ -11,6 +11,10 @@ const BLACK = rgb(0, 0, 0)
 const WHITE = rgb(1, 1, 1)
 const FILL_FONT_SIZE = 8.5
 const NUMBER_FONT_SIZE = 10.2
+const DETAIL_LABEL_FONT_SIZE = 10
+const DETAIL_CONTENT_VERTICAL_PADDING = FILL_FONT_SIZE * 0.5
+const DETAIL_LABEL_VERTICAL_PADDING = DETAIL_LABEL_FONT_SIZE * 0.5
+const TABLE_OUTER_BORDER_WIDTH = 1.5
 const CONTINUATION_ROWS_PER_PAGE = 20
 const APPLICATION_NUMBER_RECT = { x: 185, top: 145, width: 225, height: 23 }
 // The application form explicitly supports direct arXiv PDF links. Keep this
@@ -386,7 +390,7 @@ function drawExpenseContinuationPages({
     })
 
     const sectionRect = { x: tableX, top: sectionTop, width: tableWidth, height: sectionHeight }
-    drawTemplateBorder(page, sectionRect, 1.5)
+    drawTemplateBorder(page, sectionRect, TABLE_OUTER_BORDER_WIDTH)
     drawTextInTemplateRect({
       page,
       text: "支出明细（续）",
@@ -455,7 +459,7 @@ function drawExpenseContinuationPages({
       top: sectionTop,
       width: tableWidth,
       height: tableBottom - sectionTop,
-    }, 1.5)
+    }, TABLE_OUTER_BORDER_WIDTH)
   })
 }
 
@@ -539,10 +543,10 @@ function drawApplicationTemplatePage({
       getWrappedTextRectHeight({
         text: row.label,
         font: fillFont,
-        fontSize: 10,
+        fontSize: DETAIL_LABEL_FONT_SIZE,
         width: labelWidth,
         paddingX: 4,
-        paddingY: 3,
+        paddingY: DETAIL_LABEL_VERTICAL_PADDING,
       }),
       getWrappedTextRectHeight({
         text: row.text,
@@ -550,14 +554,19 @@ function drawApplicationTemplatePage({
         fontSize: FILL_FONT_SIZE,
         width: contentWidth,
         paddingX: 5,
-        paddingY: 3,
+        paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
       })
     ),
   }))
 
   // Remove the template's fixed-height project rows and expense block, then
   // rebuild them from the wrapped content so no field needs an ellipsis.
-  clearTemplateRect(page, { x: 88, top: dynamicRowsTop - 1.5, width: 430, height: 476 })
+  clearTemplateRect(page, {
+    x: 88,
+    top: dynamicRowsTop - TABLE_OUTER_BORDER_WIDTH,
+    width: 430,
+    height: 476,
+  })
 
   let dynamicTop = dynamicRowsTop
   for (const row of dynamicRows) {
@@ -570,11 +579,11 @@ function drawApplicationTemplatePage({
       text: row.label,
       rect: labelRect,
       font: fillFont,
-      fontSize: 10,
+      fontSize: DETAIL_LABEL_FONT_SIZE,
       align: "center",
       vertical: "middle",
       paddingX: 4,
-      paddingY: 3,
+      paddingY: DETAIL_LABEL_VERTICAL_PADDING,
     })
     drawTextInTemplateRect({
       page,
@@ -583,7 +592,7 @@ function drawApplicationTemplatePage({
       font: fillFont,
       vertical: "top",
       paddingX: 5,
-      paddingY: 3,
+      paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
     })
     dynamicTop += row.height
   }
@@ -594,7 +603,7 @@ function drawApplicationTemplatePage({
     top: projectInfoSectionTop,
     width: tableWidth,
     height: dynamicTop - projectInfoSectionTop,
-  }, 1.5)
+  }, TABLE_OUTER_BORDER_WIDTH)
 
   const columnWidths = [149.52, 147.84, 126.95]
   const sectionTop = dynamicTop + 19.45
@@ -614,7 +623,7 @@ function drawApplicationTemplatePage({
   const firstPageItems = expenseItems.slice(0, firstPageExpenseItemCount)
 
   const sectionRect = { x: tableX, top: sectionTop, width: tableWidth, height: rowHeight }
-  drawTemplateBorder(page, sectionRect, 1.5)
+  drawTemplateBorder(page, sectionRect, TABLE_OUTER_BORDER_WIDTH)
   drawTextInTemplateRect({
     page,
     text: "支出明细",
@@ -670,7 +679,7 @@ function drawApplicationTemplatePage({
     top: sectionTop,
     width: tableWidth,
     height: tableBottom - sectionTop,
-  }, 1.5)
+  }, TABLE_OUTER_BORDER_WIDTH)
 
   drawTextInTemplateRect({
     page,
