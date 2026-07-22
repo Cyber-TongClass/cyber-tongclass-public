@@ -89,6 +89,44 @@ test("rejects missing required values", () => {
   )
 })
 
+test("requires exact public Convex endpoints", () => {
+  for (const [key, value] of [
+    [
+      "NEXT_PUBLIC_CONVEX_URL",
+      "https://other-deployment.convex.cloud/?target=bold-sandpiper-236",
+    ],
+    [
+      "NEXT_PUBLIC_CONVEX_SITE_URL",
+      "https://other-deployment.convex.site/?target=bold-sandpiper-236",
+    ],
+  ]) {
+    assertGateError(
+      () => validateTargetConfig({ ...validEnv, [key]: value }, validConfig),
+      "AIA_TARGET_GATE_ENV_MISMATCH",
+    )
+  }
+})
+
+test("allows read mode without a confirmation", () => {
+  assert.deepEqual(validateTargetConfig(validEnv, {
+    source: "clean-swordfish-983",
+    target: "bold-sandpiper-236",
+    mode: "read",
+  }), {
+    target: "bold-sandpiper-236",
+    mode: "read",
+  })
+})
+
+test("rejects unknown modes", () => {
+  for (const mode of ["write ", "mutate"]) {
+    assertGateError(
+      () => validateTargetConfig(validEnv, { ...validConfig, mode }),
+      "AIA_TARGET_GATE_MODE_INVALID",
+    )
+  }
+})
+
 test("parses quoted values and ignores blank or comment lines", () => {
   assert.deepEqual(
     parseDotEnv(`

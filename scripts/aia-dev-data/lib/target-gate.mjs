@@ -4,6 +4,9 @@ import { pathToFileURL } from "node:url"
 
 const SOURCE = "clean-swordfish-983"
 const TARGET = "bold-sandpiper-236"
+const CONVEX_URL = `https://${TARGET}.convex.cloud`
+const CONVEX_SITE_URL = `https://${TARGET}.convex.site`
+const VALID_MODES = new Set(["read", "write"])
 const REQUIRED_ENV_KEYS = [
   "CONVEX_DEPLOYMENT",
   "NEXT_PUBLIC_CONVEX_URL",
@@ -75,6 +78,10 @@ export function validateTargetConfig(env, options) {
     fail("AIA_TARGET_GATE_PRODUCTION_VALUE")
   }
 
+  if (!VALID_MODES.has(mode)) {
+    fail("AIA_TARGET_GATE_MODE_INVALID")
+  }
+
   if (source === target) {
     fail("AIA_TARGET_GATE_SOURCE_EQUALS_TARGET")
   }
@@ -91,13 +98,10 @@ export function validateTargetConfig(env, options) {
     fail("AIA_TARGET_GATE_CONFIRMATION_MISMATCH")
   }
 
-  const targetValues = [
-    values.CONVEX_DEPLOYMENT,
-    values.NEXT_PUBLIC_CONVEX_URL,
-    values.NEXT_PUBLIC_CONVEX_SITE_URL,
-  ]
-
-  if (targetValues.some((value) => !value.includes(TARGET))) {
+  if (
+    values.NEXT_PUBLIC_CONVEX_URL !== CONVEX_URL
+    || values.NEXT_PUBLIC_CONVEX_SITE_URL !== CONVEX_SITE_URL
+  ) {
     fail("AIA_TARGET_GATE_ENV_MISMATCH")
   }
 
