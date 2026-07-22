@@ -72,6 +72,7 @@ test("canonical discovery contains only public AIA and Tong Class routes", () =>
     "\"/tong-class/news\"",
     "\"/tong-class/publications\"",
     "\"/tong-class/resources\"",
+    "\"/tong-class/resources/links\"",
     "\"/institute\"",
     "\"/research\"",
     "\"/updates\"",

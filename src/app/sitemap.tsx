@@ -19,6 +19,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { pathname: "/tong-class/news", changeFrequency: "daily", priority: 0.8 },
     { pathname: "/tong-class/publications", changeFrequency: "weekly", priority: 0.8 },
     { pathname: "/tong-class/resources", changeFrequency: "weekly", priority: 0.7 },
+    { pathname: "/tong-class/resources/links", changeFrequency: "monthly", priority: 0.6 },
   ] as const
 
   return publicRoutes.map(({ pathname, changeFrequency, priority }) => ({
