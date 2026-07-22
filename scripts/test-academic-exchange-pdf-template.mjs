@@ -80,6 +80,15 @@ function findRun(runs, text) {
   return run
 }
 
+function findTopmostRun(runs, text) {
+  const needle = text.replace(/\s+/g, "")
+  const run = runs
+    .filter((candidate) => candidate.text.replace(/\s+/g, "").includes(needle))
+    .sort((left, right) => left.top - right.top)[0]
+  assert.ok(run, `Expected PDF text run containing: ${text}`)
+  return run
+}
+
 async function assertExpenseTableBottomBorderIsIntact(pdfPath, expectedBottomTop) {
   const imagePrefix = path.join(temporaryDirectory, "outbound-border")
   execFileSync("pdftoppm", ["-png", "-r", "144", "-f", "1", "-singlefile", pdfPath, imagePrefix], {
@@ -239,7 +248,14 @@ try {
   assert.ok(Math.abs(pageOneTitle.top - pageTwoTitle.top) <= 2, "Continuation-page title must keep the first-page vertical layout")
   assert.ok(Math.abs(pageOneTitle.left - pageTwoTitle.left) <= 2, "Continuation-page title must keep the first-page horizontal layout")
   assert.equal(pageTwoTitle.family, pageOneTitle.family, "Continuation-page title must keep the first-page font")
-  await assertExpenseTableBottomBorderIsIntact(outboundInspection.pdfPath, 708.39)
+  const compactProjectPlanLabelRun = findTopmostRun(pageOneRuns, "项目计划")
+  const compactExpenseHeadingRun = findTopmostRun(pageOneRuns, "支出明细")
+  const compactProjectPlanToExpenseGap = compactExpenseHeadingRun.top - compactProjectPlanLabelRun.top
+  assert.ok(
+    compactProjectPlanToExpenseGap < 80,
+    `Paper, funding, and project-plan rows must compact to their wrapped content height (gap ${compactProjectPlanToExpenseGap})`
+  )
+  await assertExpenseTableBottomBorderIsIntact(outboundInspection.pdfPath, 604.28)
   await assertContinuationOuterBordersAreBold(outboundInspection.pdfPath)
 
   const paperApplication = {
@@ -249,14 +265,16 @@ try {
     projectName: "国际人工智能学术会议",
     expenseItems: makeExpenseItems(1),
     totalAmount: 100,
-    paperTitle: "A Test Paper",
+    paperTitle: "GeoRecon: Graph-Level Representation Learning for 3D Molecules via Reconstruction-Based Pretraining",
     paperAuthors: ["张三", "李四"],
     applicantAuthorName: "张三",
     applicantAuthorIndexLabel: "第一作者",
-    applicantAffiliation: "北京大学",
+    applicantAffiliation: "北京大学人工智能研究院",
     totalPages: 12,
     bodyPages: 9,
     paperPdfUrl: "https://example.com/paper.pdf",
+    otherFunding: "学院国际交流专项已提供部分注册费支持，申请人仍需自行承担国际旅费、住宿费及会议期间必要支出；本申请所列金额未与其他渠道重复申报。资助来源说明结束。",
+    projectPlan: "2026年7月5日乘飞机抵达韩国首尔，完成会议注册并参加大会报告、专题研讨和学术交流；会议期间展示研究成果并与同行讨论后续合作，7月12日乘飞机返回北京。行程安排和学术交流计划说明结束。",
   }
   const paperPdf = await buildAcademicExchangePdf(paperApplication, {
     paperPdfBytes: await makeAttachmentPdf(),
@@ -265,8 +283,11 @@ try {
   const paperText = extractPdfText(paperPdf, "paper-sample.pdf")
   const paperRuns = parseTextRuns(inspectPdf(paperPdf, "paper-inspection.pdf").xml)[0]
   assert.equal(paperDocument.getPageCount(), 2, "A paper-backed application must append the supplied paper PDF")
-  assert.match(paperText, /论文题目：A Test Paper/)
-  assert.match(paperText, /申请人所在单位：北京大学/)
+  assert.match(paperText, /论文题目：GeoRecon/)
+  assert.match(paperText, /申请人所在单位：北京大学人工智能研究院/)
+  assert.match(paperText, /资助来源说明结束/)
+  assert.match(paperText, /学术交流计划说明结束/)
+  assert.doesNotMatch(paperText, /…/, "Dynamic project-information rows must not truncate content with an ellipsis")
   assert.match(paperText, /Attached paper page/)
   const singleExpenseRun = findRun(paperRuns, "费用项目 1")
   const singleExpenseTotalRun = paperRuns

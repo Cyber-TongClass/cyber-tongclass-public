@@ -82,6 +82,27 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number) {
   return lines
 }
 
+function getWrappedTextRectHeight({
+  text,
+  font,
+  fontSize,
+  width,
+  paddingX,
+  paddingY,
+}: {
+  text: unknown
+  font: any
+  fontSize: number
+  width: number
+  paddingX: number
+  paddingY: number
+}) {
+  const content = normalizeText(text) || " "
+  const lineHeight = Math.max(fontSize + 1.3, fontSize * 1.15)
+  const lineCount = wrapText(content, font, fontSize, Math.max(1, width - paddingX * 2)).length
+  return Math.ceil((lineCount * lineHeight + paddingY * 2 + 0.01) * 100) / 100
+}
+
 function getFixedTextLayout({
   text,
   font,
@@ -448,7 +469,6 @@ function drawApplicationTemplatePage({
   expenseItems,
   totalAmount,
   hasPaperAttachment,
-  hasExpenseContinuation,
 }: {
   page: any
   fillFont: any
@@ -459,7 +479,6 @@ function drawApplicationTemplatePage({
   expenseItems: any[]
   totalAmount: number
   hasPaperAttachment: boolean
-  hasExpenseContinuation: boolean
 }) {
   const fields = {
     number: APPLICATION_NUMBER_RECT,
@@ -472,9 +491,6 @@ function drawApplicationTemplatePage({
     projectCategory: { x: 388.95, top: 295.83, width: 126.95, height: 19.91 },
     projectTime: { x: 171.99, top: 316.23, width: 145.43, height: 19.91 },
     exchangeLocation: { x: 388.95, top: 316.23, width: 126.95, height: 19.91 },
-    paperDetails: { x: 171.99, top: 336.63, width: 343.91, height: 59.51 },
-    otherFunding: { x: 171.99, top: 396.63, width: 343.91, height: 64.07 },
-    projectPlan: { x: 171.99, top: 461.19, width: 343.91, height: 64.55 },
   }
 
   clearTemplateRect(page, fields.number)
@@ -502,39 +518,100 @@ function drawApplicationTemplatePage({
     drawTextInTemplateRect({ page, text, rect, font: fillFont, align: "center", paddingX: 3, paddingY: 2 })
   }
 
-  drawTextInTemplateRect({
-    page,
-    text: getPaperDetailText(application, hasPaperAttachment),
-    rect: fields.paperDetails,
-    font: fillFont,
-    vertical: "top",
-  })
-  drawTextInTemplateRect({
-    page,
-    text: application.otherFunding,
-    rect: fields.otherFunding,
-    font: fillFont,
-    vertical: "top",
-  })
-  drawTextInTemplateRect({
-    page,
-    text: application.projectPlan,
-    rect: fields.projectPlan,
-    font: fillFont,
-    vertical: "top",
-  })
-
   const tableX = 91.59
   const tableWidth = 424.31
+  const labelWidth = 80.4
+  const contentX = tableX + labelWidth
+  const contentWidth = tableWidth - labelWidth
+  const projectInfoSectionTop = 275.43
+  const dynamicRowsTop = 336.63
+  const dynamicRows = [
+    {
+      label: "关联接受论文及\n其作者单位",
+      text: getPaperDetailText(application, hasPaperAttachment),
+    },
+    { label: "其他资助来源", text: application.otherFunding },
+    { label: "项目计划", text: application.projectPlan },
+  ].map((row) => ({
+    ...row,
+    height: Math.max(
+      28,
+      getWrappedTextRectHeight({
+        text: row.label,
+        font: fillFont,
+        fontSize: 10,
+        width: labelWidth,
+        paddingX: 4,
+        paddingY: 3,
+      }),
+      getWrappedTextRectHeight({
+        text: row.text,
+        font: fillFont,
+        fontSize: FILL_FONT_SIZE,
+        width: contentWidth,
+        paddingX: 5,
+        paddingY: 3,
+      })
+    ),
+  }))
+
+  // Remove the template's fixed-height project rows and expense block, then
+  // rebuild them from the wrapped content so no field needs an ellipsis.
+  clearTemplateRect(page, { x: 88, top: dynamicRowsTop - 1.5, width: 430, height: 476 })
+
+  let dynamicTop = dynamicRowsTop
+  for (const row of dynamicRows) {
+    const labelRect = { x: tableX, top: dynamicTop, width: labelWidth, height: row.height }
+    const contentRect = { x: contentX, top: dynamicTop, width: contentWidth, height: row.height }
+    drawTemplateBorder(page, labelRect, 0.55)
+    drawTemplateBorder(page, contentRect, 0.55)
+    drawTextInTemplateRect({
+      page,
+      text: row.label,
+      rect: labelRect,
+      font: fillFont,
+      fontSize: 10,
+      align: "center",
+      vertical: "middle",
+      paddingX: 4,
+      paddingY: 3,
+    })
+    drawTextInTemplateRect({
+      page,
+      text: row.text,
+      rect: contentRect,
+      font: fillFont,
+      vertical: "top",
+      paddingX: 5,
+      paddingY: 3,
+    })
+    dynamicTop += row.height
+  }
+
+  // Restore the original 1.5pt outer frame around the complete project table.
+  drawTemplateBorder(page, {
+    x: tableX,
+    top: projectInfoSectionTop,
+    width: tableWidth,
+    height: dynamicTop - projectInfoSectionTop,
+  }, 1.5)
+
   const columnWidths = [149.52, 147.84, 126.95]
-  const sectionTop = 545.19
+  const sectionTop = dynamicTop + 19.45
   const rowHeight = 20.4
   const headerTop = sectionTop + rowHeight
-  const firstPageItems = expenseItems.slice(0, 6)
-
-  // The source template contains six fixed empty rows and a fixed total row.
-  // Replace that whole block so the visible row count follows the web form.
-  clearTemplateRect(page, { x: 88, top: 542, width: 430, height: 208 })
+  const maxFirstPageTableBottom = 790
+  const maxItemsWithoutTotal = Math.max(
+    0,
+    Math.min(6, Math.floor((maxFirstPageTableBottom - sectionTop) / rowHeight) - 2)
+  )
+  const allItemsFitWithTotal = expenseItems.length <= 6
+    && sectionTop + (expenseItems.length + 3) * rowHeight <= maxFirstPageTableBottom
+  const firstPageExpenseItemCount = allItemsFitWithTotal
+    ? expenseItems.length
+    : Math.min(expenseItems.length, Math.max(1, maxItemsWithoutTotal))
+  const hasExpenseContinuation = expenseItems.length > firstPageExpenseItemCount
+  const firstPageItems = expenseItems.slice(0, firstPageExpenseItemCount)
 
   const sectionRect = { x: tableX, top: sectionTop, width: tableWidth, height: rowHeight }
   drawTemplateBorder(page, sectionRect, 1.5)
@@ -604,6 +681,8 @@ function drawApplicationTemplatePage({
     paddingX: 0.5,
     paddingY: 0.5,
   })
+
+  return { firstPageExpenseItemCount, hasExpenseContinuation }
 }
 
 export async function buildAcademicExchangePdf(
@@ -635,9 +714,7 @@ export async function buildAcademicExchangePdf(
     .filter((item: any) => item && (normalizeText(item.item) || Number.isFinite(Number(item.amount)) || normalizeText(item.note)))
   const totalAmount = getTotalAmount(application)
   const hasPaperAttachment = hasAcademicExchangePaperPdfAttachment(application)
-  const hasExpenseContinuation = expenseItems.length > 6
-
-  drawApplicationTemplatePage({
+  const firstPageLayout = drawApplicationTemplatePage({
     page: pdfDoc.getPage(0),
     fillFont,
     headingFont,
@@ -647,11 +724,10 @@ export async function buildAcademicExchangePdf(
     expenseItems,
     totalAmount,
     hasPaperAttachment,
-    hasExpenseContinuation,
   })
 
-  if (hasExpenseContinuation) {
-    const continuationItems = expenseItems.slice(6)
+  if (firstPageLayout.hasExpenseContinuation) {
+    const continuationItems = expenseItems.slice(firstPageLayout.firstPageExpenseItemCount)
     const continuationPageCount = Math.ceil(continuationItems.length / CONTINUATION_ROWS_PER_PAGE)
     const continuationTemplateDoc = await PDFDocument.load(templateBytes)
     const continuationPages = await pdfDoc.copyPages(
