@@ -54,6 +54,12 @@ const oaResultField = v.object({
   options: v.optional(v.array(oaOption)),
 })
 
+const audienceValidator = v.union(
+  v.literal("undergraduate"),
+  v.literal("graduate"),
+  v.literal("teacher"),
+)
+
 export default defineSchema({
   // Users table
   users: defineTable({
@@ -182,6 +188,8 @@ export default defineSchema({
     authorId: v.id("users"),
     authorName: v.optional(v.string()),
     category: v.string(),
+    audiences: v.optional(v.array(audienceValidator)),
+    tags: v.optional(v.array(v.string())),
     publishedAt: v.number(),
     isPublished: v.boolean(),
     createdAt: v.number(),
@@ -203,6 +211,8 @@ export default defineSchema({
     description: v.optional(v.string()),
     url: v.optional(v.string()),
     color: v.string(),
+    audiences: v.optional(v.array(audienceValidator)),
+    tags: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

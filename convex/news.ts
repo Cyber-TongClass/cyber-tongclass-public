@@ -1,6 +1,16 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
+const audienceValidator = v.union(
+  v.literal("undergraduate"),
+  v.literal("graduate"),
+  v.literal("teacher"),
+)
+
+function normalizeTags(tags: string[]) {
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
+}
+
 // Get all published news with pagination
 export const list = query({
   args: {
@@ -59,6 +69,8 @@ export const create = mutation({
     homepageSubtitle: v.optional(v.string()),
     authorId: v.optional(v.id("users")),
     category: v.string(),
+    audiences: v.optional(v.array(audienceValidator)),
+    tags: v.optional(v.array(v.string())),
     publishedAt: v.optional(v.number()),
     isPublished: v.optional(v.boolean()),
   },
@@ -83,6 +95,8 @@ export const create = mutation({
       homepageSubtitle: args.homepageSubtitle?.trim() || undefined,
       authorId,
       category,
+      audiences: args.audiences,
+      tags: args.tags ? normalizeTags(args.tags) : undefined,
       publishedAt: args.publishedAt || Date.now(),
       isPublished: args.isPublished || false,
       createdAt: Date.now(),
@@ -103,6 +117,8 @@ export const update = mutation({
     showOnHomepage: v.optional(v.boolean()),
     homepageSubtitle: v.optional(v.string()),
     category: v.optional(v.string()),
+    audiences: v.optional(v.array(audienceValidator)),
+    tags: v.optional(v.array(v.string())),
     publishedAt: v.optional(v.number()),
     isPublished: v.optional(v.boolean()),
   },
@@ -117,6 +133,7 @@ export const update = mutation({
       ...(updates.sourceUrl !== undefined ? { sourceUrl: updates.sourceUrl.trim() || undefined } : {}),
       ...(updates.coverImageUrl !== undefined ? { coverImageUrl: updates.coverImageUrl.trim() || undefined } : {}),
       ...(updates.homepageSubtitle !== undefined ? { homepageSubtitle: updates.homepageSubtitle.trim() || undefined } : {}),
+      ...(updates.tags !== undefined ? { tags: normalizeTags(updates.tags) } : {}),
       updatedAt: Date.now(),
     })
     return id

@@ -311,6 +311,8 @@ export interface News {
   authorId: string
   authorName?: string // Custom author name
   category: string
+  audiences?: import("@/lib/updates").Audience[]
+  tags?: string[]
   publishedAt: number
   isPublished: boolean
   createdAt: number
@@ -329,6 +331,8 @@ export interface Event {
   description?: string // Markdown
   url?: string
   color: string // For calendar display
+  audiences?: import("@/lib/updates").Audience[]
+  tags?: string[]
   createdAt: number
   updatedAt: number
 }

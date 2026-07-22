@@ -89,3 +89,18 @@ test("lists every available custom tag once in display order", () => {
 test("defines the all-visible audience default", () => {
   assert.deepEqual(plain(DEFAULT_AUDIENCES), ["undergraduate", "graduate", "teacher"])
 })
+
+test("persists optional audiences and tags for both shared content collections", () => {
+  const schema = fs.readFileSync(path.join(projectRoot, "convex/schema.ts"), "utf8")
+  const newsSource = fs.readFileSync(path.join(projectRoot, "convex/news.ts"), "utf8")
+  const eventsSource = fs.readFileSync(path.join(projectRoot, "convex/events.ts"), "utf8")
+
+  assert.match(schema, /news: defineTable\([\s\S]*?audiences: v\.optional\(v\.array\(audienceValidator\)\)[\s\S]*?tags: v\.optional\(v\.array\(v\.string\(\)\)\)/)
+  assert.match(schema, /events: defineTable\([\s\S]*?audiences: v\.optional\(v\.array\(audienceValidator\)\)[\s\S]*?tags: v\.optional\(v\.array\(v\.string\(\)\)\)/)
+
+  for (const source of [newsSource, eventsSource]) {
+    assert.match(source, /audiences: v\.optional\(v\.array\(audienceValidator\)\)/)
+    assert.match(source, /tags: v\.optional\(v\.array\(v\.string\(\)\)\)/)
+    assert.match(source, /normalizeTags\(args\.tags\)/)
+  }
+})

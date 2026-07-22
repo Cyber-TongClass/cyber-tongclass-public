@@ -1,6 +1,16 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
+const audienceValidator = v.union(
+  v.literal("undergraduate"),
+  v.literal("graduate"),
+  v.literal("teacher"),
+)
+
+function normalizeTags(tags: string[]) {
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
+}
+
 // Get all events
 export const list = query({
   args: {
@@ -45,6 +55,8 @@ export const create = mutation({
     description: v.optional(v.string()),
     url: v.optional(v.string()),
     color: v.optional(v.string()),
+    audiences: v.optional(v.array(audienceValidator)),
+    tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const eventId = await ctx.db.insert("events", {
@@ -57,6 +69,8 @@ export const create = mutation({
       description: args.description,
       url: args.url,
       color: args.color || "#0F4C81",
+      audiences: args.audiences,
+      tags: args.tags ? normalizeTags(args.tags) : undefined,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
@@ -77,6 +91,8 @@ export const update = mutation({
     description: v.optional(v.string()),
     url: v.optional(v.string()),
     color: v.optional(v.string()),
+    audiences: v.optional(v.array(audienceValidator)),
+    tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args
@@ -84,7 +100,11 @@ export const update = mutation({
     if (!event) {
       throw new Error("Event not found")
     }
-    await ctx.db.patch(id, { ...updates, updatedAt: Date.now() })
+    await ctx.db.patch(id, {
+      ...updates,
+      ...(updates.tags !== undefined ? { tags: normalizeTags(updates.tags) } : {}),
+      updatedAt: Date.now(),
+    })
     return id
   },
 })
