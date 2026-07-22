@@ -190,6 +190,27 @@ async function assertFirstPageOuterBordersAreBold(pdfPath) {
     return { ...run, center: (run.start + run.end) / 2 }
   }
 
+  const getVerticalDarkRun = (pointX, pointY) => {
+    const x = Math.round(pointX * scale)
+    const centerY = Math.round(pointY * scale)
+    let bestRun = 0
+    let currentRun = 0
+    for (let y = centerY - 8; y <= centerY + 8; y += 1) {
+      if (data[y * info.width + x] < 128) {
+        currentRun += 1
+        bestRun = Math.max(bestRun, currentRun)
+      } else {
+        currentRun = 0
+      }
+    }
+    return bestRun
+  }
+
+  for (const y of [215.14, 295.2]) {
+    const run = getVerticalDarkRun(120, y)
+    assert.ok(run >= 3 && run <= 5, `Section-title bottom rule at ${y}pt must render at 1pt (dark run ${run}px)`)
+  }
+
   for (const y of [360, 520]) {
     assert.ok(getDarkRun(alignedTableLeft, y) >= 3 && getDarkRun(alignedTableLeft, y) <= 5, `First-page left outer border at ${y}pt must render at 1pt`)
     assert.ok(getDarkRun(alignedTableRight, y) >= 3 && getDarkRun(alignedTableRight, y) <= 5, `First-page right outer border at ${y}pt must render at 1pt`)

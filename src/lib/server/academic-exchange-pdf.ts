@@ -415,10 +415,21 @@ function redrawFixedTemplateTableFrames(page: any, projectBottom: number) {
   // drawing a thinner rule on top would leave the old thickness visible.
   drawAlignedTableFrame(page, PERSONAL_TABLE_TOP, PERSONAL_TABLE_BOTTOM, 2.5, WHITE)
   drawAlignedTableFrame(page, PROJECT_TABLE_TOP, PROJECT_DYNAMIC_TOP, 2.5, WHITE)
+  for (const position of [PERSONAL_HEADER_BOTTOM, PROJECT_HEADER_BOTTOM]) {
+    drawTemplateRule({
+      page,
+      orientation: "horizontal",
+      position,
+      start: TEMPLATE_TABLE_LEFT,
+      end: TEMPLATE_TABLE_RIGHT,
+      width: 2.5,
+      color: WHITE,
+    })
+  }
 
   drawAlignedTableFrame(page, PERSONAL_TABLE_TOP, PERSONAL_TABLE_BOTTOM)
   for (const [position, width] of [
-    [PERSONAL_HEADER_BOTTOM, 1.5],
+    [PERSONAL_HEADER_BOTTOM, TABLE_OUTER_BORDER_WIDTH],
     [PERSONAL_ROW_DIVIDER, TABLE_INNER_BORDER_WIDTH],
   ] as const) {
     drawTemplateRule({
@@ -453,7 +464,7 @@ function redrawFixedTemplateTableFrames(page: any, projectBottom: number) {
 
   drawAlignedTableFrame(page, PROJECT_TABLE_TOP, projectBottom)
   for (const [position, width] of [
-    [PROJECT_HEADER_BOTTOM, 1.5],
+    [PROJECT_HEADER_BOTTOM, TABLE_OUTER_BORDER_WIDTH],
     [PROJECT_FIXED_ROW_DIVIDER, TABLE_INNER_BORDER_WIDTH],
     [PROJECT_DYNAMIC_TOP, TABLE_INNER_BORDER_WIDTH],
   ] as const) {
