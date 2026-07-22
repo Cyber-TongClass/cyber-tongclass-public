@@ -8,6 +8,7 @@ import {
   copyFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -501,6 +502,35 @@ test("clone refuses an existing backup directory that is broader than owner-priv
         },
       }),
       (error) => assertSnapshotError(error, "AIA_SNAPSHOT_BACKUP_DIRECTORY_INSECURE"),
+    )
+    assert.equal(spawnCalls, 0)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("clone rejects a trailing-slash symlink backup path before spawning", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "aia-symlink-backup-"))
+  const envFile = join(directory, ".env.aia-dev.local")
+  const actualBackupDir = join(directory, "actual-backup")
+  const symlinkBackupDir = join(directory, "backup-link")
+  let spawnCalls = 0
+
+  try {
+    writeFileSync(envFile, validEnv)
+    mkdirSync(actualBackupDir, { mode: 0o700 })
+    chmodSync(actualBackupDir, 0o700)
+    symlinkSync(actualBackupDir, symlinkBackupDir)
+
+    await assert.rejects(
+      runClone(cloneArgs(envFile, `${symlinkBackupDir}/`), {
+        stateDirectory: join(directory, "state"),
+        spawnCommand() {
+          spawnCalls += 1
+          return { status: 0 }
+        },
+      }),
+      (error) => assertSnapshotError(error, "AIA_SNAPSHOT_BACKUP_DIRECTORY_INVALID"),
     )
     assert.equal(spawnCalls, 0)
   } finally {

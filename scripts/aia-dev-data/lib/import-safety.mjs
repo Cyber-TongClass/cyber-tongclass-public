@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { homedir, tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, parse } from "node:path"
 import {
   AIA_TARGET_DEPLOYMENT,
   makeSnapshotManifest,
@@ -52,6 +52,10 @@ function lstatOrNull(path) {
   }
 }
 
+function hasTerminalPathSeparator(path) {
+  return path !== parse(path).root && /[\\/]$/.test(path)
+}
+
 function assertPrivateDirectory(path, code) {
   let details
   try {
@@ -78,6 +82,10 @@ function ensurePrivateDirectory(path, code) {
 }
 
 export function ensureEmptyPrivateBackupDirectory(path) {
+  if (hasTerminalPathSeparator(path)) {
+    fail("AIA_SNAPSHOT_BACKUP_DIRECTORY_INVALID")
+  }
+
   const existing = (() => {
     try {
       return lstatOrNull(path)
