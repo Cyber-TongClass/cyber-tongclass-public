@@ -127,7 +127,16 @@ async function getAvailableTeacherBySlug(ctx: any, teacherSlug: string) {
     || teacher.kind !== "teacher"
     || teacher.visibility !== "public"
     || teacher.coffeeTalkOpen !== true
+    || teacher.accountUserId === undefined
   ) {
+    throw new Error(COFFEE_TALK_TEACHER_UNAVAILABLE)
+  }
+
+  // Do not accept personal information for a stale directory binding. A
+  // profile is not eligible until its explicitly linked institute account is
+  // still present and able to receive/manage the application.
+  const recipient = await ctx.db.get(teacher.accountUserId)
+  if (!recipient) {
     throw new Error(COFFEE_TALK_TEACHER_UNAVAILABLE)
   }
 

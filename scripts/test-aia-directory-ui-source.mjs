@@ -50,7 +50,13 @@ test("person profile gates Coffee Talk by public teacher flag without an id-bear
 
 test("demo fixture is explicitly labeled and contains no contact or account-identifying fields", () => {
   const demo = source("src/components/institute/demo-directory-data.ts")
+  const alphaStart = demo.indexOf('slug: "demo-professor-alpha"')
+  const alphaEnd = demo.indexOf("  },", alphaStart)
+  const alpha = demo.slice(alphaStart, alphaEnd)
 
   assert.match(demo, /isDemo:\s*true/)
+  assert.notEqual(alphaStart, -1)
+  assert.notEqual(alphaEnd, -1)
+  assert.match(alpha, /coffeeTalkOpen:\s*false/)
   assert.doesNotMatch(demo, /\b(?:studentId|email|phone|mobile|accountUserId|password|session)\b/i)
 })

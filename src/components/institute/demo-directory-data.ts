@@ -67,7 +67,7 @@ export const demoPeople: readonly PublicDirectoryPerson[] = [
     bio: "这是用于首期目录展示的虚构教师档案，用来说明公开人物页、研究方向与 Coffee Talk 入口的呈现方式。",
     researchAreas: ["可信人工智能", "人机协作"],
     groupSlugs: ["demo-intelligent-systems-lab"],
-    coffeeTalkOpen: true,
+    coffeeTalkOpen: false,
     isDemo: true,
     visibility: "public",
   },

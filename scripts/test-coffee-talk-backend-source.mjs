@@ -31,6 +31,7 @@ test("Coffee Talk backend derives authority from sessions and explicit institute
   assert.match(source, /resolveCoffeeTalkActorKind/)
   assert.match(source, /\.withIndex\("by_accountUserId"/)
   assert.match(source, /teacherSlug:\s*v\.string\(\)/)
+  assert.match(source, /teacher\.accountUserId\s*===\s*undefined/)
   assert.doesNotMatch(source, /teacherUserId:\s*v\.id\("users"\)/)
   assert.match(source, /expectedVersion:\s*v\.number\(\)/)
   assert.match(source, /COFFEE_TALK_VERSION_CONFLICT/)

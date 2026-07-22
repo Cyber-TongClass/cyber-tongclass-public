@@ -32,6 +32,11 @@ export type InstitutePersonRecord = {
   }[]
   publicEmail?: string
   coffeeTalkOpen?: boolean
+  /**
+   * Deliberately private. Its presence gates the public Coffee Talk affordance
+   * without ever serialising the account identifier to a public DTO.
+   */
+  accountUserId?: string
   isDemo: boolean
 }
 
@@ -183,7 +188,16 @@ export function toPublicInstitutePerson(
   if (person.bioEn !== undefined) dto.bioEn = person.bioEn
   if (person.photoUrl !== undefined) dto.photoUrl = person.photoUrl
   if (person.publicEmail !== undefined) dto.publicEmail = person.publicEmail
-  if (person.coffeeTalkOpen !== undefined) dto.coffeeTalkOpen = person.coffeeTalkOpen
+  // A public Coffee Talk CTA is only meaningful when there is an explicitly
+  // bound institute account that can receive and manage the application. This
+  // keeps unbound directory/demo entries from becoming an unattended PII sink.
+  if (
+    person.kind === "teacher"
+    && person.coffeeTalkOpen === true
+    && person.accountUserId !== undefined
+  ) {
+    dto.coffeeTalkOpen = true
+  }
   if (researchGroupMemberships !== undefined) {
     dto.researchGroupMemberships = researchGroupMemberships
       .map((membership) => toPublicPersonResearchGroupMembership(membership))

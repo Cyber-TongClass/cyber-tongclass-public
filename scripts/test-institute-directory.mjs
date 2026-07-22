@@ -97,6 +97,29 @@ test("public institute person DTO allow-lists profile fields and redacts account
   assert.equal(Object.hasOwn(publicPerson.publicLinks[0], "privateLinkToken"), false)
 })
 
+test("Coffee Talk availability is public only for an explicitly account-bound teacher", () => {
+  const basePerson = {
+    slug: "bound-teacher",
+    kind: "teacher",
+    nameZh: "绑定教师",
+    nameEn: "Bound Teacher",
+    researchAreas: [],
+    publicLinks: [],
+    coffeeTalkOpen: true,
+    isDemo: false,
+  }
+
+  assert.equal(
+    dto.toPublicInstitutePerson(basePerson).coffeeTalkOpen,
+    undefined,
+    "an unbound directory teacher must not collect Coffee Talk applications",
+  )
+  assert.equal(
+    dto.toPublicInstitutePerson({ ...basePerson, accountUserId: "users:teacher" }).coffeeTalkOpen,
+    true,
+  )
+})
+
 test("public research group DTO nests only a public leader profile", () => {
   const group = {
     _id: "researchGroups:logic",
