@@ -12,6 +12,7 @@ test("Coffee Talk live UI uses canonical API hooks rather than preview-only form
   const applyClient = source("src/components/coffee-talk/coffee-talk-apply-client.tsx")
   const myClient = source("src/components/coffee-talk/coffee-talk-my-client.tsx")
   const applicationList = source("src/components/coffee-talk/coffee-talk-application-list.tsx")
+  const overviewPage = source("src/app/services/coffee-talk/page.tsx")
   const applyPage = source("src/app/services/coffee-talk/apply/page.tsx")
   const myPage = source("src/app/services/coffee-talk/my/page.tsx")
 
@@ -48,4 +49,5 @@ test("Coffee Talk live UI uses canonical API hooks rather than preview-only form
   assert.doesNotMatch(applyPage, /demoTeachers/)
   assert.match(myPage, /CoffeeTalkMyClient/)
   assert.doesNotMatch(myPage, /CoffeeTalkBackendUnavailableState/)
+  assert.match(overviewPage, /href="\/services\/coffee-talk\/manage"/)
 })

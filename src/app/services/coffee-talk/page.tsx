@@ -25,6 +25,12 @@ export default function CoffeeTalkPage() {
             >
               查看申请状态
             </Link>
+            <Link
+              href="/services/coffee-talk/manage"
+              className="inline-flex min-h-11 items-center rounded-md border border-white/30 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(211,54%,24%)]"
+            >
+              教师处理台
+            </Link>
           </div>
         </section>
 
