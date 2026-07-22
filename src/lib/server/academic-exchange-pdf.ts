@@ -13,6 +13,9 @@ const FILL_FONT_SIZE = 8.5
 const NUMBER_FONT_SIZE = 10.2
 const CONTINUATION_ROWS_PER_PAGE = 20
 const APPLICATION_NUMBER_RECT = { x: 185, top: 145, width: 225, height: 23 }
+// The application form explicitly supports direct arXiv PDF links. Keep this
+// list deliberately narrow rather than allowing arbitrary external hosts.
+const TRUSTED_EXTERNAL_PAPER_PDF_HOSTS = new Set(["arxiv.org"])
 
 type TemplateRect = {
   x: number
@@ -283,7 +286,11 @@ function isSafePaperPdfUrl(url: string) {
   if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|127\.)/.test(host)) return false
   if (/^(fc|fd)[0-9a-f]{2}:/i.test(host)) return false
 
-  const allowlist = new Set([...getR2HostAllowlist(), ...getExtraHostAllowlist()])
+  const allowlist = new Set([
+    ...TRUSTED_EXTERNAL_PAPER_PDF_HOSTS,
+    ...getR2HostAllowlist(),
+    ...getExtraHostAllowlist(),
+  ])
   return allowlist.has(host)
 }
 
