@@ -21,7 +21,6 @@ import {
 
 const teacherManageActions = [
   "start_review",
-  "request_information",
   "accept",
   "decline",
   "complete",
