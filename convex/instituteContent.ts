@@ -6,7 +6,7 @@ import type {
   InstitutePersonRecord,
   InstitutePublicationRecord,
   ResearchGroupRecord,
-} from "./lib/institute-dto"
+} from "./lib/instituteDto"
 import type {
   InstitutePublicLink,
   PublicInstitutePerson,

@@ -1,19 +1,11 @@
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
-import {
-  CoffeeTalkApplicationForm,
-  type CoffeeTalkTeacherOption,
-} from "@/components/coffee-talk/coffee-talk-application-form"
-
-const demoTeachers: readonly CoffeeTalkTeacherOption[] = [
-  { id: "demo-teacher-li", name: "李明", title: "教授", isDemo: true },
-  { id: "demo-teacher-zhang", name: "张岚", title: "副教授", isDemo: true },
-]
+import { CoffeeTalkApplyClient } from "@/components/coffee-talk/coffee-talk-apply-client"
 
 export default function CoffeeTalkApplyPage() {
   return (
-    <main className="min-h-screen bg-slate-50 py-12 sm:py-16">
+    <div className="min-h-screen bg-slate-50 py-12 sm:py-16">
       <div className="container-custom max-w-3xl">
         <Link
           href="/services/coffee-talk"
@@ -26,12 +18,12 @@ export default function CoffeeTalkApplyPage() {
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8" aria-labelledby="coffee-talk-apply-heading">
           <p className="text-sm font-semibold text-primary">Coffee Talk</p>
           <h1 id="coffee-talk-apply-heading" className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">填写申请意向</h1>
-          <p className="mt-3 leading-7 text-slate-600">请完整填写基本信息与希望交流的主题。教师选项均标注为演示数据。</p>
+          <p className="mt-3 leading-7 text-slate-600">请完整填写基本信息与希望交流的主题。可选教师来自公开且已开放 Coffee Talk 的目录。</p>
           <div className="mt-7">
-            <CoffeeTalkApplicationForm teachers={demoTeachers} backendAvailable={false} />
+            <CoffeeTalkApplyClient />
           </div>
         </section>
       </div>
-    </main>
+    </div>
   )
 }

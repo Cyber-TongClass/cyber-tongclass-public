@@ -5,7 +5,7 @@ import test from "node:test"
 import { pathToFileURL } from "node:url"
 
 const contentModuleUrl = pathToFileURL(path.resolve("convex/instituteContent.ts")).href
-const dtoModuleUrl = pathToFileURL(path.resolve("convex/lib/institute-dto.ts")).href
+const dtoModuleUrl = pathToFileURL(path.resolve("convex/lib/instituteDto.ts")).href
 const content = await import(contentModuleUrl)
 const dto = await import(dtoModuleUrl)
 

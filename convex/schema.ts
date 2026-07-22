@@ -54,6 +54,34 @@ const oaResultField = v.object({
   options: v.optional(v.array(oaOption)),
 })
 
+// Coffee Talk is intentionally a lightweight application workflow, not a
+// reservation or calendar system. These validators are kept at schema level
+// so application rows and their append-only history share one fixed contract.
+const coffeeTalkStatus = v.union(
+  v.literal("submitted"),
+  v.literal("under_review"),
+  v.literal("needs_information"),
+  v.literal("accepted"),
+  v.literal("declined"),
+  v.literal("withdrawn"),
+  v.literal("cancelled"),
+  v.literal("completed"),
+)
+
+const coffeeTalkEventAction = v.union(
+  v.literal("submitted"),
+  v.literal("start_review"),
+  v.literal("request_information"),
+  v.literal("supplement"),
+  v.literal("accept"),
+  v.literal("decline"),
+  v.literal("withdraw"),
+  v.literal("cancel"),
+  v.literal("complete"),
+  v.literal("reassign"),
+  v.literal("correct"),
+)
+
 export default defineSchema({
   // Users table
   users: defineTable({
@@ -321,6 +349,68 @@ export default defineSchema({
     .index("by_naturalKey", ["naturalKey"])
     .index("by_content", ["contentType", "contentId", "sortOrder"])
     .index("by_target", ["targetType", "targetId", "sortOrder"]),
+
+  // A request is tied to the authenticated applicant and an explicitly
+  // selected public institute teacher record. The record never stores a
+  // client-supplied teacher user ID, so account bindings stay server-derived.
+  coffeeTalkApplications: defineTable({
+    applicantUserId: v.id("users"),
+    assignedTeacherPersonId: v.id("institutePeople"),
+    applicantName: v.string(),
+    applicantAffiliation: v.string(),
+    applicantIdentity: v.union(
+      v.literal("undergraduate"),
+      v.literal("graduate"),
+      v.literal("other"),
+    ),
+    applicantEmail: v.string(),
+    topic: v.string(),
+    availability: v.string(),
+    notes: v.optional(v.string()),
+    status: coffeeTalkStatus,
+    contentFingerprint: v.string(),
+    version: v.number(),
+    submittedAt: v.number(),
+    statusChangedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_applicant_fingerprint", ["applicantUserId", "contentFingerprint"])
+    .index("by_applicant_updatedAt", ["applicantUserId", "updatedAt"])
+    .index("by_teacher_updatedAt", ["assignedTeacherPersonId", "updatedAt"]),
+
+  // Events are append-only by contract. No Coffee Talk endpoint updates or
+  // deletes this table; mutations only add the next sequence number.
+  coffeeTalkEvents: defineTable({
+    applicationId: v.id("coffeeTalkApplications"),
+    sequenceNo: v.number(),
+    actorUserId: v.optional(v.id("users")),
+    actorKind: v.union(
+      v.literal("applicant"),
+      v.literal("teacher"),
+      v.literal("coordinator"),
+      v.literal("system"),
+    ),
+    action: coffeeTalkEventAction,
+    fromStatus: v.optional(coffeeTalkStatus),
+    toStatus: coffeeTalkStatus,
+    createdAt: v.number(),
+  })
+    .index("by_application_sequence", ["applicationId", "sequenceNo"]),
+
+  // Notifications deliberately contain no request topic, availability, or
+  // contact data. The authorized recipient can load a role-specific DTO.
+  notifications: defineTable({
+    userId: v.id("users"),
+    kind: v.literal("coffee_talk"),
+    title: v.string(),
+    body: v.string(),
+    resourceType: v.literal("coffee_talk"),
+    resourceId: v.id("coffeeTalkApplications"),
+    readAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user_createdAt", ["userId", "createdAt"]),
 
   // Events table
   events: defineTable({

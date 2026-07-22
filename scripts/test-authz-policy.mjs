@@ -3,7 +3,7 @@ import path from "node:path"
 import test from "node:test"
 import { pathToFileURL } from "node:url"
 
-const moduleUrl = pathToFileURL(path.resolve("convex/lib/authz-policy.ts")).href
+const moduleUrl = pathToFileURL(path.resolve("convex/lib/authzPolicy.ts")).href
 const policy = await import(moduleUrl)
 
 test("decideAuthorization denies when no candidates match", () => {

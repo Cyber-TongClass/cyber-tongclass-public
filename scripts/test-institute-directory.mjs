@@ -4,7 +4,7 @@ import path from "node:path"
 import test from "node:test"
 import { pathToFileURL } from "node:url"
 
-const dtoModuleUrl = pathToFileURL(path.resolve("convex/lib/institute-dto.ts")).href
+const dtoModuleUrl = pathToFileURL(path.resolve("convex/lib/instituteDto.ts")).href
 const dto = await import(dtoModuleUrl)
 
 function assertFieldsAreAbsent(value, fields) {

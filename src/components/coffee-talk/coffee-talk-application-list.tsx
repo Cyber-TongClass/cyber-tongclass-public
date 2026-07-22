@@ -19,6 +19,7 @@ export interface CoffeeTalkApplicationListItem {
   title: string
   participantLabel?: string
   status: CoffeeTalkStatus
+  expectedVersion?: number
   updatedAtLabel: string
   href?: CoffeeTalkApplicationInternalHref
   allowedActions: readonly CoffeeTalkAllowedAction[]

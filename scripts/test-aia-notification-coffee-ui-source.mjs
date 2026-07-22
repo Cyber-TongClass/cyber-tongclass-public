@@ -96,6 +96,6 @@ test("AIA notification and Coffee Talk presentation components keep their safety
     assert.doesNotMatch(source, /from\s+["'][^"']*convex[^"']*["']/i, `${path} must not import Convex directly`)
   }
   assert.match(routes["src/app/services/coffee-talk/page.tsx"], /href=["']\/services\/coffee-talk\/apply["']/)
-  assert.match(routes["src/app/services/coffee-talk/apply/page.tsx"], /CoffeeTalkApplicationForm/)
-  assert.match(routes["src/app/services/coffee-talk/my/page.tsx"], /CoffeeTalkBackendUnavailableState/)
+  assert.match(routes["src/app/services/coffee-talk/apply/page.tsx"], /CoffeeTalkApplyClient/)
+  assert.match(routes["src/app/services/coffee-talk/my/page.tsx"], /CoffeeTalkMyClient/)
 })

@@ -1,12 +1,11 @@
-import { ArrowRight, BrainCircuit, FolderKanban, Newspaper, UsersRound } from "lucide-react"
+import { ArrowRight, BrainCircuit, FolderKanban, Newspaper, type LucideIcon, UsersRound } from "lucide-react"
 import Link from "next/link"
-import type { ComponentType } from "react"
 
 type DirectoryEntryProps = {
   href: string
   title: string
   description: string
-  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>
+  icon: LucideIcon
 }
 
 function DirectoryEntry({ href, title, description, icon: Icon }: DirectoryEntryProps) {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
-import { CircleAlert, Info } from "lucide-react"
+import { AlertCircle, Info } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -75,7 +75,7 @@ export function CoffeeTalkApplicationForm({
       {!backendAvailable ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4" role="status">
           <div className="flex gap-3">
-            <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
             <div>
               <p className="font-medium text-amber-950">申请提交服务尚未开放</p>
               <p className="mt-1 text-sm leading-6 text-amber-900">表单内容仅供填写预览，当前不会发送或保存任何信息。</p>

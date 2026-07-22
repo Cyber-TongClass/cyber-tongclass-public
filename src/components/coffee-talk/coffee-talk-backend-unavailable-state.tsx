@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { CircleAlert } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 
 export interface CoffeeTalkBackendUnavailableStateProps {
   title?: string
@@ -18,7 +18,7 @@ export function CoffeeTalkBackendUnavailableState({
       role="status"
       aria-labelledby="coffee-talk-unavailable-title"
     >
-      <CircleAlert className="mx-auto h-9 w-9 text-amber-700" aria-hidden="true" />
+      <AlertCircle className="mx-auto h-9 w-9 text-amber-700" aria-hidden="true" />
       <h1 id="coffee-talk-unavailable-title" className="mt-4 text-2xl font-semibold text-slate-950">{title}</h1>
       <p className="mt-3 leading-7 text-slate-700">{message}</p>
       <Link

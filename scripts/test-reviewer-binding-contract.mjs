@@ -3,7 +3,7 @@ import path from "node:path"
 import test from "node:test"
 import { pathToFileURL } from "node:url"
 
-const moduleUrl = pathToFileURL(path.resolve("convex/lib/reviewer-binding.ts")).href
+const moduleUrl = pathToFileURL(path.resolve("convex/lib/reviewerBinding.ts")).href
 const binding = await import(moduleUrl)
 
 const validRequest = {

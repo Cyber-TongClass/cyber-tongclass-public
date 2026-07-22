@@ -78,6 +78,17 @@ const listReviewerAccountsRef = makeFunctionReference<"query">("reviewerAuth:lis
 const createReviewerAccountRef = makeFunctionReference<"mutation">("reviewerAuth:createAccount")
 const updateReviewerAccountRef = makeFunctionReference<"mutation">("reviewerAuth:updateAccount")
 const resetReviewerPasswordRef = makeFunctionReference<"mutation">("reviewerAuth:resetPassword")
+const listPublicInstitutePeopleRef = makeFunctionReference<"query">("instituteDirectory:listPublicPeople")
+const getPublicInstitutePersonRef = makeFunctionReference<"query">("instituteDirectory:getPublicPerson")
+const listPublicResearchGroupsRef = makeFunctionReference<"query">("instituteDirectory:listPublicResearchGroups")
+const getPublicResearchGroupRef = makeFunctionReference<"query">("instituteDirectory:getPublicResearchGroup")
+const listPublicInstituteResearchRef = makeFunctionReference<"query">("instituteContent:listPublicInstituteResearch")
+const listPublicInstituteUpdatesRef = makeFunctionReference<"query">("instituteContent:listPublicInstituteUpdates")
+const submitCoffeeTalkApplicationRef = makeFunctionReference<"mutation">("coffeeTalk:submitApplication")
+const listMyCoffeeTalkApplicationsRef = makeFunctionReference<"query">("coffeeTalk:listMine")
+const listTeacherCoffeeTalkApplicationsRef = makeFunctionReference<"query">("coffeeTalk:listForTeacher")
+const actOnCoffeeTalkApplicationRef = makeFunctionReference<"mutation">("coffeeTalk:actOnApplication")
+const listCoffeeTalkNotificationsRef = makeFunctionReference<"query">("coffeeTalk:listNotifications")
 const TECHDAY_AUTH_STORAGE_EVENT = "techday-auth-storage"
 const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
 
@@ -304,6 +315,108 @@ export function useSimpleLogin() {
 
 export function useUsersCount(args?: { organization?: "pku" | "thu"; classMembersOnly?: boolean }) {
   return useQuery(api.users.count, args || {})
+}
+
+// ==================== AIA 公开目录与 Coffee Talk ====================
+
+/** Public institute directory hooks deliberately never accept account IDs or visibility bypasses. */
+export function usePublicInstitutePeople(args?: {
+  kind?: "teacher" | "graduate"
+  researchArea?: string
+  query?: string
+  limit?: number
+}) {
+  return useQuery(listPublicInstitutePeopleRef, args || {})
+}
+
+export function usePublicInstitutePerson(slug?: string | null) {
+  return useQuery(getPublicInstitutePersonRef, slug ? { slug } : "skip")
+}
+
+export function usePublicResearchGroups(args?: {
+  researchArea?: string
+  query?: string
+  limit?: number
+}) {
+  return useQuery(listPublicResearchGroupsRef, args || {})
+}
+
+export function usePublicResearchGroup(slug?: string | null) {
+  return useQuery(getPublicResearchGroupRef, slug ? { slug } : "skip")
+}
+
+export function usePublicInstituteResearch(args?: {
+  groupSlug?: string
+  personSlug?: string
+  limit?: number
+}) {
+  return useQuery(listPublicInstituteResearchRef, args || {})
+}
+
+export function usePublicInstituteUpdates(args?: {
+  groupSlug?: string
+  personSlug?: string
+  limit?: number
+}) {
+  return useQuery(listPublicInstituteUpdatesRef, args || {})
+}
+
+export type CoffeeTalkApplicationInput = {
+  applicantName: string
+  affiliation: string
+  identity: "undergraduate" | "graduate" | "other"
+  email: string
+  teacherSlug: string
+  topic: string
+  availability: string
+  notes?: string
+}
+
+export function useSubmitCoffeeTalkApplication() {
+  const submit = useMutation(submitCoffeeTalkApplicationRef)
+  return useCallback((args: CoffeeTalkApplicationInput) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return submit({ ...args, sessionToken } as any)
+  }, [submit])
+}
+
+export function useMyCoffeeTalkApplications() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listMyCoffeeTalkApplicationsRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  )
+}
+
+export function useTeacherCoffeeTalkApplications() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listTeacherCoffeeTalkApplicationsRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  )
+}
+
+export function useActOnCoffeeTalkApplication() {
+  const act = useMutation(actOnCoffeeTalkApplicationRef)
+  return useCallback((args: {
+    applicationId: string
+    expectedVersion: number
+    action: "start_review" | "request_information" | "supplement" | "accept" | "decline" | "withdraw" | "cancel" | "complete" | "reassign" | "correct"
+    teacherSlug?: string
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return act({ ...args, applicationId: args.applicationId as any, sessionToken } as any)
+  }, [act])
+}
+
+export function useCoffeeTalkNotifications() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listCoffeeTalkNotificationsRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  )
 }
 
 // ==================== 新闻相关 ====================

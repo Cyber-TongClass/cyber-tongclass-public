@@ -5,7 +5,7 @@ import {
   toPublicResearchGroup,
   type InstitutePersonRecord,
   type ResearchGroupRecord,
-} from "./lib/institute-dto"
+} from "./lib/instituteDto"
 import type { InstitutePersonKind } from "../src/types/institute"
 
 const DEFAULT_PUBLIC_LIMIT = 48

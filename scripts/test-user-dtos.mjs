@@ -3,7 +3,7 @@ import path from "node:path"
 import test from "node:test"
 import { pathToFileURL } from "node:url"
 
-const moduleUrl = pathToFileURL(path.resolve("convex/lib/user-dto.ts")).href
+const moduleUrl = pathToFileURL(path.resolve("convex/lib/userDto.ts")).href
 const dto = await import(moduleUrl)
 
 const userDocument = {
