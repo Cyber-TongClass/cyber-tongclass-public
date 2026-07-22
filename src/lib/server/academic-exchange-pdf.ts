@@ -15,7 +15,7 @@ const DETAIL_LABEL_FONT_SIZE = 10
 const DETAIL_CONTENT_VERTICAL_PADDING = FILL_FONT_SIZE * 0.5
 const DETAIL_LABEL_VERTICAL_PADDING = DETAIL_LABEL_FONT_SIZE * 0.5
 const DETAIL_LINE_HEIGHT_MULTIPLIER = 1.3
-const TABLE_OUTER_BORDER_WIDTH = 1.5
+const TABLE_OUTER_BORDER_WIDTH = 1
 // The source template's Quartz content is fractionally wider than pdf-lib's
 // overlay coordinate space. Calibrate extracted template coordinates against
 // the rendered fixed rows so every regenerated rule lands on the same pixels.
@@ -32,6 +32,20 @@ const EXPENSE_COLUMN_WIDTHS = [
   EXPENSE_COLUMN_DIVIDERS[1] - EXPENSE_COLUMN_DIVIDERS[0],
   TEMPLATE_TABLE_RIGHT - EXPENSE_COLUMN_DIVIDERS[1],
 ]
+const PERSONAL_TABLE_TOP = 193.806641
+const PERSONAL_HEADER_BOTTOM = 215.140625
+const PERSONAL_ROW_DIVIDER = 235.994141
+const PERSONAL_TABLE_BOTTOM = 256.851562
+const PERSONAL_FIRST_ROW_DIVIDERS = [171.537109, 240.572266, 317.279297, 387.994141, 447.201172]
+  .map(alignTemplateCoordinate)
+const PERSONAL_SECOND_ROW_DIVIDERS = [171.537109, 240.572266, 317.279297]
+  .map(alignTemplateCoordinate)
+const PROJECT_TABLE_TOP = 273.869141
+const PROJECT_HEADER_BOTTOM = 295.203125
+const PROJECT_FIXED_ROW_DIVIDER = 316.056641
+const PROJECT_DYNAMIC_TOP = 336.433594
+const PROJECT_FIXED_DIVIDERS = [171.537109, 317.279297, 388.232422]
+  .map(alignTemplateCoordinate)
 const CONTINUATION_ROWS_PER_PAGE = 20
 const APPLICATION_NUMBER_RECT = { x: 185, top: 145, width: 225, height: 23 }
 // The application form explicitly supports direct arXiv PDF links. Keep this
@@ -101,6 +115,94 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number) {
   }
 
   return lines
+}
+
+type StyledTextSegment = {
+  text: string
+  font: any
+}
+
+function wrapStyledTextLines(
+  logicalLines: StyledTextSegment[][],
+  fontSize: number,
+  maxWidth: number
+) {
+  const wrappedLines: StyledTextSegment[][] = []
+
+  for (const logicalLine of logicalLines) {
+    let line: StyledTextSegment[] = []
+    let lineWidth = 0
+    for (const segment of logicalLine) {
+      for (const char of segment.text) {
+        const charWidth = segment.font.widthOfTextAtSize(char, fontSize)
+        if (line.length > 0 && lineWidth + charWidth > maxWidth) {
+          wrappedLines.push(line)
+          line = []
+          lineWidth = 0
+        }
+        const previous = line[line.length - 1]
+        if (previous?.font === segment.font) {
+          previous.text += char
+        } else {
+          line.push({ text: char, font: segment.font })
+        }
+        lineWidth += charWidth
+      }
+    }
+    wrappedLines.push(line.length > 0 ? line : [{ text: " ", font: logicalLine[0]?.font }])
+  }
+
+  return wrappedLines
+}
+
+function getStyledTextRectHeight({
+  logicalLines,
+  fontSize,
+  width,
+  paddingX,
+  paddingY,
+  lineHeightMultiplier,
+}: {
+  logicalLines: StyledTextSegment[][]
+  fontSize: number
+  width: number
+  paddingX: number
+  paddingY: number
+  lineHeightMultiplier: number
+}) {
+  const lines = wrapStyledTextLines(logicalLines, fontSize, Math.max(1, width - paddingX * 2))
+  return Math.ceil((lines.length * fontSize * lineHeightMultiplier + paddingY * 2 + 0.01) * 100) / 100
+}
+
+function drawStyledTextInTemplateRect({
+  page,
+  logicalLines,
+  rect,
+  fontSize,
+  paddingX,
+  paddingY,
+  lineHeightMultiplier,
+}: {
+  page: any
+  logicalLines: StyledTextSegment[][]
+  rect: TemplateRect
+  fontSize: number
+  paddingX: number
+  paddingY: number
+  lineHeightMultiplier: number
+}) {
+  const lines = wrapStyledTextLines(logicalLines, fontSize, Math.max(1, rect.width - paddingX * 2))
+  const lineHeight = fontSize * lineHeightMultiplier
+  const pageHeight = page.getHeight()
+
+  lines.forEach((line, lineIndex) => {
+    let x = rect.x + paddingX
+    const y = pageHeight - rect.top - paddingY - fontSize - lineIndex * lineHeight
+    for (const segment of line) {
+      page.drawText(segment.text, { x, y, size: fontSize, font: segment.font, color: BLACK })
+      x += segment.font.widthOfTextAtSize(segment.text, fontSize)
+    }
+  })
 }
 
 function getWrappedTextRectHeight({
@@ -239,6 +341,7 @@ function drawTemplateRule({
   start,
   end,
   width,
+  color = BLACK,
 }: {
   page: any
   orientation: "horizontal" | "vertical"
@@ -246,6 +349,7 @@ function drawTemplateRule({
   start: number
   end: number
   width: number
+  color?: any
 }) {
   const pageHeight = page.getHeight()
   if (orientation === "horizontal") {
@@ -254,7 +358,7 @@ function drawTemplateRule({
       y: pageHeight - position - width / 2,
       width: end - start,
       height: width,
-      color: BLACK,
+      color,
     })
     return
   }
@@ -264,18 +368,25 @@ function drawTemplateRule({
     y: pageHeight - end,
     width,
     height: end - start,
-    color: BLACK,
+    color,
   })
 }
 
-function drawAlignedTableFrame(page: any, top: number, bottom: number) {
+function drawAlignedTableFrame(
+  page: any,
+  top: number,
+  bottom: number,
+  width = TABLE_OUTER_BORDER_WIDTH,
+  color = BLACK
+) {
   drawTemplateRule({
     page,
     orientation: "vertical",
     position: TEMPLATE_TABLE_LEFT,
     start: top,
     end: bottom,
-    width: TABLE_OUTER_BORDER_WIDTH,
+    width,
+    color,
   })
   drawTemplateRule({
     page,
@@ -283,7 +394,8 @@ function drawAlignedTableFrame(page: any, top: number, bottom: number) {
     position: TEMPLATE_TABLE_RIGHT,
     start: top,
     end: bottom,
-    width: TABLE_OUTER_BORDER_WIDTH,
+    width,
+    color,
   })
   for (const position of [top, bottom]) {
     drawTemplateRule({
@@ -292,7 +404,76 @@ function drawAlignedTableFrame(page: any, top: number, bottom: number) {
       position,
       start: TEMPLATE_TABLE_LEFT,
       end: TEMPLATE_TABLE_RIGHT,
-      width: TABLE_OUTER_BORDER_WIDTH,
+      width,
+      color,
+    })
+  }
+}
+
+function redrawFixedTemplateTableFrames(page: any, projectBottom: number) {
+  // Remove the template's original 1.5pt outer rules before replacing them;
+  // drawing a thinner rule on top would leave the old thickness visible.
+  drawAlignedTableFrame(page, PERSONAL_TABLE_TOP, PERSONAL_TABLE_BOTTOM, 2.5, WHITE)
+  drawAlignedTableFrame(page, PROJECT_TABLE_TOP, PROJECT_DYNAMIC_TOP, 2.5, WHITE)
+
+  drawAlignedTableFrame(page, PERSONAL_TABLE_TOP, PERSONAL_TABLE_BOTTOM)
+  for (const [position, width] of [
+    [PERSONAL_HEADER_BOTTOM, 1.5],
+    [PERSONAL_ROW_DIVIDER, TABLE_INNER_BORDER_WIDTH],
+  ] as const) {
+    drawTemplateRule({
+      page,
+      orientation: "horizontal",
+      position,
+      start: TEMPLATE_TABLE_LEFT,
+      end: TEMPLATE_TABLE_RIGHT,
+      width,
+    })
+  }
+  for (const position of PERSONAL_FIRST_ROW_DIVIDERS) {
+    drawTemplateRule({
+      page,
+      orientation: "vertical",
+      position,
+      start: PERSONAL_HEADER_BOTTOM,
+      end: PERSONAL_ROW_DIVIDER,
+      width: TABLE_INNER_BORDER_WIDTH,
+    })
+  }
+  for (const position of PERSONAL_SECOND_ROW_DIVIDERS) {
+    drawTemplateRule({
+      page,
+      orientation: "vertical",
+      position,
+      start: PERSONAL_ROW_DIVIDER,
+      end: PERSONAL_TABLE_BOTTOM,
+      width: TABLE_INNER_BORDER_WIDTH,
+    })
+  }
+
+  drawAlignedTableFrame(page, PROJECT_TABLE_TOP, projectBottom)
+  for (const [position, width] of [
+    [PROJECT_HEADER_BOTTOM, 1.5],
+    [PROJECT_FIXED_ROW_DIVIDER, TABLE_INNER_BORDER_WIDTH],
+    [PROJECT_DYNAMIC_TOP, TABLE_INNER_BORDER_WIDTH],
+  ] as const) {
+    drawTemplateRule({
+      page,
+      orientation: "horizontal",
+      position,
+      start: TEMPLATE_TABLE_LEFT,
+      end: TEMPLATE_TABLE_RIGHT,
+      width,
+    })
+  }
+  for (const position of PROJECT_FIXED_DIVIDERS) {
+    drawTemplateRule({
+      page,
+      orientation: "vertical",
+      position,
+      start: PROJECT_HEADER_BOTTOM,
+      end: PROJECT_DYNAMIC_TOP,
+      width: TABLE_INNER_BORDER_WIDTH,
     })
   }
 }
@@ -342,6 +523,39 @@ function getPaperDetailText(application: any, hasPaperAttachment: boolean) {
     `申请人所在单位：${application.applicantAffiliation || ""}`,
     `总页数：${application.totalPages || ""}；正文页数：${application.bodyPages || ""}`,
   ].join("\n")
+}
+
+function getPaperDetailStyledLines(
+  application: any,
+  hasPaperAttachment: boolean,
+  headingFont: any,
+  fillFont: any
+): StyledTextSegment[][] | null {
+  if (application.projectCategory === "出境访学" || !hasPaperAttachment) {
+    return null
+  }
+
+  const paperAuthors = (application.paperAuthors || [])
+    .map((author: string) => getPublicationAuthorName(author))
+    .join("，")
+  const label = (text: string): StyledTextSegment => ({ text, font: headingFont })
+  const content = (text: unknown): StyledTextSegment => ({ text: normalizeText(text), font: fillFont })
+
+  return [
+    [label("论文题目："), content(application.paperTitle)],
+    [label("作者："), content(paperAuthors)],
+    [
+      label("申请人位次："),
+      content(`${application.applicantAuthorName || ""}，${application.applicantAuthorIndexLabel || ""}`),
+    ],
+    [label("申请人所在单位："), content(application.applicantAffiliation)],
+    [
+      label("总页数："),
+      content(application.totalPages),
+      label("；正文页数："),
+      content(application.bodyPages),
+    ],
+  ]
 }
 
 function getR2HostAllowlist() {
@@ -627,14 +841,21 @@ function drawApplicationTemplatePage({
   const labelWidth = PROJECT_LABEL_WIDTH
   const contentX = tableX + labelWidth
   const contentWidth = tableWidth - labelWidth
-  const dynamicRowsTop = 336.63
+  const dynamicRowsTop = PROJECT_DYNAMIC_TOP
+  const paperDetailStyledLines = getPaperDetailStyledLines(
+    application,
+    hasPaperAttachment,
+    headingFont,
+    fillFont
+  )
   const dynamicRows = [
     {
       label: "关联接受论文及\n其作者单位",
       text: getPaperDetailText(application, hasPaperAttachment),
+      styledLines: paperDetailStyledLines,
     },
-    { label: "其他资助来源", text: application.otherFunding },
-    { label: "项目计划", text: application.projectPlan },
+    { label: "其他资助来源", text: application.otherFunding, styledLines: null },
+    { label: "项目计划", text: application.projectPlan, styledLines: null },
   ].map((row) => ({
     ...row,
     height: Math.max(
@@ -648,15 +869,24 @@ function drawApplicationTemplatePage({
         paddingY: DETAIL_LABEL_VERTICAL_PADDING,
         lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
       }),
-      getWrappedTextRectHeight({
-        text: row.text,
-        font: fillFont,
-        fontSize: FILL_FONT_SIZE,
-        width: contentWidth,
-        paddingX: 5,
-        paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
-        lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
-      })
+      row.styledLines
+        ? getStyledTextRectHeight({
+            logicalLines: row.styledLines,
+            fontSize: FILL_FONT_SIZE,
+            width: contentWidth,
+            paddingX: 5,
+            paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
+            lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
+          })
+        : getWrappedTextRectHeight({
+            text: row.text,
+            font: fillFont,
+            fontSize: FILL_FONT_SIZE,
+            width: contentWidth,
+            paddingX: 5,
+            paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
+            lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
+          })
     ),
   }))
 
@@ -685,16 +915,28 @@ function drawApplicationTemplatePage({
       paddingY: DETAIL_LABEL_VERTICAL_PADDING,
       lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
     })
-    drawTextInTemplateRect({
-      page,
-      text: row.text,
-      rect: contentRect,
-      font: fillFont,
-      vertical: "top",
-      paddingX: 5,
-      paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
-      lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
-    })
+    if (row.styledLines) {
+      drawStyledTextInTemplateRect({
+        page,
+        logicalLines: row.styledLines,
+        rect: contentRect,
+        fontSize: FILL_FONT_SIZE,
+        paddingX: 5,
+        paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
+        lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
+      })
+    } else {
+      drawTextInTemplateRect({
+        page,
+        text: row.text,
+        rect: contentRect,
+        font: fillFont,
+        vertical: "top",
+        paddingX: 5,
+        paddingY: DETAIL_CONTENT_VERTICAL_PADDING,
+        lineHeightMultiplier: DETAIL_LINE_HEIGHT_MULTIPLIER,
+      })
+    }
     dynamicTop += row.height
     if (rowIndex < dynamicRows.length - 1) {
       drawTemplateRule({
@@ -708,25 +950,6 @@ function drawApplicationTemplatePage({
     }
   })
 
-  // Preserve the template's upper frame exactly as-is. Only the cleared,
-  // dynamic lower portion needs new 1.5pt left, right, and bottom edges;
-  // redrawing the complete frame would visibly thicken the original lines.
-  drawTemplateRule({
-    page,
-    orientation: "vertical",
-    position: tableX,
-    start: dynamicRowsTop,
-    end: dynamicTop,
-    width: TABLE_OUTER_BORDER_WIDTH,
-  })
-  drawTemplateRule({
-    page,
-    orientation: "vertical",
-    position: tableX + tableWidth,
-    start: dynamicRowsTop,
-    end: dynamicTop,
-    width: TABLE_OUTER_BORDER_WIDTH,
-  })
   drawTemplateRule({
     page,
     orientation: "vertical",
@@ -735,14 +958,7 @@ function drawApplicationTemplatePage({
     end: dynamicTop,
     width: TABLE_INNER_BORDER_WIDTH,
   })
-  drawTemplateRule({
-    page,
-    orientation: "horizontal",
-    position: dynamicTop,
-    start: tableX,
-    end: tableX + tableWidth,
-    width: TABLE_OUTER_BORDER_WIDTH,
-  })
+  redrawFixedTemplateTableFrames(page, dynamicTop)
 
   const columnWidths = EXPENSE_COLUMN_WIDTHS
   const sectionTop = dynamicTop + 19.45

@@ -138,8 +138,8 @@ async function assertContinuationOuterBordersAreBold(pdfPath) {
     return bestRun
   }
 
-  assert.ok(getDarkRun(alignedTableLeft) >= 6, "Continuation table left outer border must render at 1.5pt")
-  assert.ok(getDarkRun(alignedTableRight) >= 6, "Continuation table right outer border must render at 1.5pt")
+  assert.ok(getDarkRun(alignedTableLeft) >= 3 && getDarkRun(alignedTableLeft) <= 5, "Continuation table left outer border must render at 1pt")
+  assert.ok(getDarkRun(alignedTableRight) >= 3 && getDarkRun(alignedTableRight) <= 5, "Continuation table right outer border must render at 1pt")
 }
 
 async function assertFirstPageOuterBordersAreBold(pdfPath) {
@@ -191,15 +191,15 @@ async function assertFirstPageOuterBordersAreBold(pdfPath) {
   }
 
   for (const y of [360, 520]) {
-    assert.ok(getDarkRun(alignedTableLeft, y) >= 6, `First-page left outer border at ${y}pt must render at 1.5pt`)
-    assert.ok(getDarkRun(alignedTableRight, y) >= 6, `First-page right outer border at ${y}pt must render at 1.5pt`)
+    assert.ok(getDarkRun(alignedTableLeft, y) >= 3 && getDarkRun(alignedTableLeft, y) <= 5, `First-page left outer border at ${y}pt must render at 1pt`)
+    assert.ok(getDarkRun(alignedTableRight, y) >= 3 && getDarkRun(alignedTableRight, y) <= 5, `First-page right outer border at ${y}pt must render at 1pt`)
   }
 
   for (const x of [alignedTableLeft, alignedTableRight]) {
     const upperProjectBorderRun = getDarkRun(x, 300)
     assert.ok(
-      upperProjectBorderRun <= 6,
-      `Template project-info upper border at ${x}pt must not be overdrawn (dark run ${upperProjectBorderRun}px)`
+      upperProjectBorderRun >= 3 && upperProjectBorderRun <= 5,
+      `Template project-info upper border at ${x}pt must render at 1pt (dark run ${upperProjectBorderRun}px)`
     )
 
     const centerX = Math.round(x * scale)
@@ -392,19 +392,24 @@ try {
   assert.match(paperText, /学术交流计划说明结束/)
   assert.doesNotMatch(paperText, /…/, "Dynamic project-information rows must not truncate content with an ellipsis")
   assert.match(paperText, /Attached paper page/)
-  const paperTitleRun = findTopmostRun(paperRuns, "论文题目：GeoRecon")
+  const paperTitleRun = findTopmostRun(paperRuns, "论文题目：")
   const paperTitleTopPadding = paperTitleRun.top - 336.63 * 1.5
   assert.ok(
     paperTitleTopPadding >= 6.25,
     `Dynamic detail cells must keep 0.5em vertical padding (top padding ${paperTitleTopPadding.toFixed(2)}px)`
   )
-  const paperAuthorRun = findTopmostRun(paperRuns, "作者：张三")
-  const applicantRankRun = findTopmostRun(paperRuns, "申请人位次：张三")
+  const paperAuthorRun = findTopmostRun(paperRuns, "作者：")
+  const applicantRankRun = findTopmostRun(paperRuns, "申请人位次：")
   const detailLineSpacing = applicantRankRun.top - paperAuthorRun.top
   assert.ok(
     detailLineSpacing >= 16 && detailLineSpacing <= 18,
     `Dynamic detail content must use 1.3 line spacing (line advance ${detailLineSpacing}px)`
   )
+  for (const label of ["论文题目：", "作者：", "申请人位次：", "申请人所在单位：", "总页数：", "正文页数："]) {
+    assert.match(findTopmostRun(paperRuns, label).family, /FZHTK/, `${label} must use FZ HeiTi`)
+  }
+  assert.match(findTopmostRun(paperRuns, "GeoRecon").family, /FZSSK/, "Paper title content must keep FZ ShuSong")
+  assert.match(findTopmostRun(paperRuns, "张三，李四").family, /FZSSK/, "Paper author content must keep FZ ShuSong")
   await assertFirstPageOuterBordersAreBold(paperInspection.pdfPath)
   const singleExpenseRun = findRun(paperRuns, "费用项目 1")
   const singleExpenseTotalRun = paperRuns
