@@ -350,6 +350,16 @@ function getSubmissionSnapshot(submission: any) {
     : undefined
 }
 
+function buildFormSnapshot(form: any) {
+  return {
+    title: form.title,
+    ...(form.description === undefined ? {} : { description: form.description }),
+    fields: form.fields,
+    ...(form.resultFields === undefined ? {} : { resultFields: form.resultFields }),
+    ...(form.resultsVisible === undefined ? {} : { resultsVisible: form.resultsVisible }),
+  }
+}
+
 function serializeOwnerSubmission(submission: any, fallbackForm?: any) {
   const snapshot = getSubmissionSnapshot(submission)
   const form = snapshot || fallbackForm
@@ -541,13 +551,7 @@ export const submit = mutation({
       studentId: user.studentId,
       submitterEmail: user.email,
       answers: normalizedAnswers,
-      formSnapshot: {
-        title: form.title,
-        ...(form.description === undefined ? {} : { description: form.description }),
-        fields: form.fields,
-        ...(form.resultFields === undefined ? {} : { resultFields: form.resultFields }),
-        ...(form.resultsVisible === undefined ? {} : { resultsVisible: form.resultsVisible }),
-      },
+      formSnapshot: buildFormSnapshot(form),
       reviewStatus: "pending",
       submittedAt: now,
       createdAt: now,
@@ -571,6 +575,7 @@ export const updateSubmission = mutation({
     const now = Date.now()
     await ctx.db.patch(args.id, {
       answers: normalizedAnswers,
+      formSnapshot: buildFormSnapshot(form),
       reviewStatus: "pending",
       updatedAt: now,
     })
@@ -647,11 +652,12 @@ export const getAttachmentUrl = query({
     const user = requireMember(await getUserBySession(ctx, args.sessionToken))
     const submission = await ctx.db.get(args.submissionId)
     if (!submission) return null
-    const form = await ctx.db.get(submission.formId)
-    if (!form) return null
+    const currentForm = await ctx.db.get(submission.formId)
+    const attachmentForm = getSubmissionSnapshot(submission) ?? currentForm
+    if (!attachmentForm) return null
     const isAdmin = user.role === "admin" || user.role === "super_admin"
     if (!isAdmin && String(submission.submitterId) !== String(user._id)) throw new Error("无权访问该附件")
-    if (!collectAttachmentStorageIds(form, submission.answers).has(args.storageId)) throw new Error("附件不属于该提交")
+    if (!collectAttachmentStorageIds(attachmentForm, submission.answers).has(args.storageId)) throw new Error("附件不属于该提交")
     const r2Url = await getR2DownloadUrl(args.storageId)
     if (r2Url) return r2Url
     return await ctx.storage.getUrl(args.storageId as any)
