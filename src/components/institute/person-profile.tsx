@@ -18,7 +18,11 @@ type PersonProfileProps = {
 export function PersonProfile({ person, groups = [], outputs = [], updates = [] }: PersonProfileProps) {
   const Icon = person.kind === "teacher" ? UserRound : GraduationCap
   const publicGroups = groups.filter(
-    (group) => group.visibility === "public" && (group.memberSlugs.includes(person.slug) || person.groupSlugs.includes(group.slug)),
+    (group) => group.visibility === "public" && (
+      group.memberSlugs.includes(person.slug)
+      || person.groupSlugs.includes(group.slug)
+      || group.leaderSlug === person.slug
+    ),
   )
   const relatedOutputs = outputs.filter((output) => output.contributorSlugs.includes(person.slug))
   const relatedUpdates = updates.filter((update) => update.relatedPersonSlugs.includes(person.slug))
