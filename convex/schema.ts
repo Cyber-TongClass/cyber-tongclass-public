@@ -54,6 +54,61 @@ const oaResultField = v.object({
   options: v.optional(v.array(oaOption)),
 })
 
+// These OA workflow validators are additive. A form without targetScope or
+// approvalSteps remains a legacy Tong Class form and keeps its current manual
+// review behavior.
+const oaUserIdentityType = v.union(
+  v.literal("undergrad"),
+  v.literal("graduate"),
+  v.literal("teacher"),
+  v.literal("other"),
+)
+
+const oaUserRole = v.union(
+  v.literal("member"),
+  v.literal("admin"),
+  v.literal("super_admin"),
+)
+
+/** A scope is the union of its configured account identities, roles, and IDs. */
+const oaUserScope = v.object({
+  identityTypes: v.optional(v.array(oaUserIdentityType)),
+  roles: v.optional(v.array(oaUserRole)),
+  userIds: v.optional(v.array(v.id("users"))),
+})
+
+const oaApprovalStep = v.object({
+  id: v.string(),
+  title: v.string(),
+  scope: oaUserScope,
+  // "any" lets one recipient complete the step; "all" requires every
+  // recipient in the immutable submission snapshot to approve.
+  completion: v.optional(v.union(v.literal("any"), v.literal("all"))),
+})
+
+const oaWorkflowStatus = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("rejected"),
+)
+
+const oaApprovalTaskStatus = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("rejected"),
+  v.literal("skipped"),
+)
+
+const oaApprovalEventAction = v.union(
+  v.literal("workflow_started"),
+  v.literal("step_started"),
+  v.literal("approved"),
+  v.literal("rejected"),
+  v.literal("step_completed"),
+  v.literal("workflow_approved"),
+  v.literal("workflow_rejected"),
+)
+
 // Coffee Talk is intentionally a lightweight application workflow, not a
 // reservation or calendar system. These validators are kept at schema level
 // so application rows and their append-only history share one fixed contract.
@@ -408,11 +463,13 @@ export default defineSchema({
   // contact data. The authorized recipient can load a role-specific DTO.
   notifications: defineTable({
     userId: v.id("users"),
-    kind: v.literal("coffee_talk"),
+    // Keep the existing Coffee Talk rows valid while making the inbox usable
+    // for staged OA approvals. Resource IDs stay typed by resourceType.
+    kind: v.union(v.literal("coffee_talk"), v.literal("oa_workflow")),
     title: v.string(),
     body: v.string(),
-    resourceType: v.literal("coffee_talk"),
-    resourceId: v.id("coffeeTalkApplications"),
+    resourceType: v.union(v.literal("coffee_talk"), v.literal("oa_workflow")),
+    resourceId: v.union(v.id("coffeeTalkApplications"), v.id("oaFormSubmissions")),
     readAt: v.optional(v.number()),
     createdAt: v.number(),
   })
@@ -585,6 +642,10 @@ export default defineSchema({
     fields: v.array(oaFormField),
     resultFields: v.optional(v.array(oaResultField)),
     resultsVisible: v.optional(v.boolean()),
+    // Optional AIA audience and workflow configuration. Their absence is the
+    // compatibility contract for all legacy Tong Class forms.
+    targetScope: v.optional(oaUserScope),
+    approvalSteps: v.optional(v.array(oaApprovalStep)),
     createdBy: v.id("users"),
     updatedBy: v.optional(v.id("users")),
     publishedAt: v.optional(v.number()),
@@ -610,6 +671,12 @@ export default defineSchema({
     reviewerName: v.optional(v.string()),
     reviewedAt: v.optional(v.number()),
     resultValues: v.optional(v.any()),
+    // Workflow fields are optional so pre-existing submissions remain valid.
+    workflowStatus: v.optional(oaWorkflowStatus),
+    currentApprovalStep: v.optional(v.number()),
+    approvalStepsSnapshot: v.optional(v.array(oaApprovalStep)),
+    workflowStartedAt: v.optional(v.number()),
+    workflowCompletedAt: v.optional(v.number()),
     submittedAt: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -619,6 +686,39 @@ export default defineSchema({
     .index("by_submitter_createdAt", ["submitterId", "createdAt"])
     .index("by_form_submitter_createdAt", ["formId", "submitterId", "createdAt"])
     .index("by_form_studentId", ["formId", "studentId"]),
+
+  // A task is the authorization snapshot for one recipient at one ordered
+  // workflow step. A scope change on the form cannot retarget submissions
+  // that have already started.
+  oaApprovalTasks: defineTable({
+    submissionId: v.id("oaFormSubmissions"),
+    formId: v.id("oaForms"),
+    stepIndex: v.number(),
+    stepId: v.string(),
+    userId: v.id("users"),
+    status: oaApprovalTaskStatus,
+    actedAt: v.optional(v.number()),
+    comment: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_submission_step", ["submissionId", "stepIndex"])
+    .index("by_submission_user", ["submissionId", "userId"])
+    .index("by_user_status_createdAt", ["userId", "status", "createdAt"]),
+
+  // Workflow history is append-only. It intentionally stores no form answer
+  // data, allowing task timelines without widening access to sensitive fields.
+  oaApprovalEvents: defineTable({
+    submissionId: v.id("oaFormSubmissions"),
+    formId: v.id("oaForms"),
+    stepIndex: v.optional(v.number()),
+    stepId: v.optional(v.string()),
+    actorUserId: v.optional(v.id("users")),
+    action: oaApprovalEventAction,
+    comment: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_submission_createdAt", ["submissionId", "createdAt"]),
 
   reviewerAccounts: defineTable({
     username: v.string(),

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useCreateUser } from "@/lib/api"
 import { cohortToSelectValue, getCohortLabel, getCohortOptions, parseCohortValue, type CohortValue } from "@/lib/cohort"
+import { useAuth } from "@/lib/hooks/use-auth"
 
 const roleOptions = [
   { value: "member", label: "成员" },
@@ -19,6 +20,15 @@ const organizationOptions = [
   { value: "pku", label: "北大通班" },
   { value: "thu", label: "清华通班" },
 ] as const
+
+const instituteIdentityOptions = [
+  { value: "undergrad", label: "本科生" },
+  { value: "graduate", label: "研究生" },
+  { value: "teacher", label: "教师" },
+  { value: "other", label: "其他研究院成员" },
+] as const
+
+type InstituteIdentityType = typeof instituteIdentityOptions[number]["value"]
 
 const INITIAL_PASSWORD_LENGTH = 14
 const INITIAL_PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
@@ -32,6 +42,7 @@ function generateInitialPassword() {
 
 export default function AdminUserCreatePage() {
   const router = useRouter()
+  const { isSuperAdmin } = useAuth()
   const createUser = useCreateUser()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
@@ -45,6 +56,8 @@ export default function AdminUserCreatePage() {
   const [cohort, setCohort] = useState<CohortValue>(new Date().getFullYear())
   const [studentId, setStudentId] = useState("")
   const [role, setRole] = useState<"member" | "admin" | "super_admin">("member")
+  const [identityType, setIdentityType] = useState<InstituteIdentityType>("undergrad")
+  const [isClassMember, setIsClassMember] = useState(true)
   const [emailDomain, setEmailDomain] = useState("stu.pku.edu.cn")
   const cohortOptions = getCohortOptions()
 
@@ -81,6 +94,7 @@ export default function AdminUserCreatePage() {
         cohort,
         studentId,
         role,
+        ...(isSuperAdmin ? { identityType, isClassMember } : {}),
         isEmailVerified: true,
       } as any)
 
@@ -96,7 +110,7 @@ export default function AdminUserCreatePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-gray-900">新建用户</h1>
-        <p className="text-gray-500 mt-1">填写基础信息后，系统会自动生成随机初始密码。请在创建后及时告知用户，并提醒其首次登录后修改密码。</p>
+        <p className="text-gray-500 mt-1">填写基础信息后，系统会自动生成随机初始密码。超级管理员可同时创建研究生、教师等研究院账号。</p>
       </div>
 
       <Card>
@@ -107,13 +121,13 @@ export default function AdminUserCreatePage() {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>学号</Label>
+                <Label>账号 ID（学号 / 工号）</Label>
                 <Input value={studentId} onChange={(e) => setStudentId(e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label>邮箱用户名</Label>
                 <div className="flex items-center gap-2">
-                  <Input value={studentId} readOnly placeholder="自动使用学号" />
+                  <Input value={studentId} readOnly placeholder="自动使用账号 ID" />
                   <span className="text-sm text-slate-600">@</span>
                   <select
                     className="h-10 rounded-md border border-input bg-white px-3"
@@ -125,7 +139,7 @@ export default function AdminUserCreatePage() {
                     <option value="alumni.pku.edu.cn">alumni.pku.edu.cn</option>
                   </select>
                 </div>
-                <p className="text-xs text-slate-600">邮箱会自动生成（不需输入 @ 域名）。</p>
+                <p className="text-xs text-slate-600">邮箱会按账号 ID 自动生成（不需输入 @ 域名）。</p>
               </div>
             </div>
 
@@ -202,6 +216,41 @@ export default function AdminUserCreatePage() {
                 ))}
               </select>
             </div>
+
+            {isSuperAdmin ? (
+              <div className="rounded-md border border-slate-200 p-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="identityType">研究院身份组</Label>
+                  <select
+                    id="identityType"
+                    className="h-10 w-full rounded-md border border-input bg-white px-3"
+                    value={identityType}
+                    onChange={(event) => {
+                      const nextIdentityType = event.target.value as InstituteIdentityType
+                      setIdentityType(nextIdentityType)
+                      setIsClassMember(nextIdentityType === "undergrad")
+                    }}
+                  >
+                    {instituteIdentityOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-600">身份组仅用于研究院服务范围和目录筛选，不会替代系统角色权限。</p>
+                </div>
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={isClassMember}
+                    onChange={(event) => setIsClassMember(event.target.checked)}
+                    className="mt-1 rounded"
+                  />
+                  <span>
+                    <span className="font-medium">通班成员目录</span>
+                    <span className="block text-xs text-slate-600">启用后，该账号会出现在通班成员目录中；研究生、教师和其他研究院成员默认不启用。</span>
+                  </span>
+                </label>
+              </div>
+            ) : null}
 
             {error && <p className="text-sm text-red-600">{error}</p>}
             {success && <p className="text-sm text-green-600">{success}</p>}

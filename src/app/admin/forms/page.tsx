@@ -6,8 +6,9 @@ import { ClipboardList, FilePlus2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { createDefaultOAFormDraft, normalizeFormSlug, oaFormStatusLabels } from "@/lib/oa-forms"
+import { createDefaultOAFormDraft, getOAWorkflowDraftConfig, normalizeFormSlug, oaFormStatusLabels } from "@/lib/oa-forms"
 import { useAdminOAForms, useAdminRemoveOAForm, useAdminSetOAFormStatus, useAdminUpsertOAForm } from "@/lib/api"
+import { useAuth } from "@/lib/hooks/use-auth"
 import type { OAForm, OAFormStatus } from "@/types"
 import { useState } from "react"
 import type { ReactNode } from "react"
@@ -129,6 +130,7 @@ function FormsTableSection({
 
 export default function AdminFormsPage() {
   const router = useRouter()
+  const { isSuperAdmin } = useAuth()
   const forms = useAdminOAForms({ kind: "form" }) as OAForm[] | undefined
   const upsert = useAdminUpsertOAForm()
   const setStatus = useAdminSetOAFormStatus()
@@ -152,6 +154,7 @@ export default function AdminFormsPage() {
     setMessage("")
     try {
       const suffix = uniqueSuffix()
+      const workflow = isSuperAdmin ? getOAWorkflowDraftConfig(form as unknown as Record<string, unknown>) : {}
       const id = await upsert({
         title: `${form.title} 副本`,
         slug: `${normalizeFormSlug(form.slug)}-${suffix}`,
@@ -164,6 +167,7 @@ export default function AdminFormsPage() {
         fields: form.fields,
         resultFields: form.resultFields || [],
         resultsVisible: form.resultsVisible,
+        ...workflow,
       })
       router.push(`/admin/forms/${id}`)
     } catch (error) {

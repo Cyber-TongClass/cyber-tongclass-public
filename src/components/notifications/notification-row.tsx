@@ -15,7 +15,9 @@ export interface NotificationRowItem {
   title: string
   body?: string
   createdAtLabel?: string
-  href?: InternalNotificationHref
+  href?: string
+  category?: string
+  type?: string
   state: NotificationVisualState
 }
 
@@ -33,6 +35,22 @@ const stateLabels: Record<NotificationVisualState, string> = {
   archived: "已归档",
 }
 
+const categoryLabels: Record<string, string> = {
+  "coffee-talk": "Coffee Talk",
+  approval: "审批",
+  oa: "OA",
+  service: "服务",
+  system: "系统",
+  general: "站内信",
+}
+
+function notificationMetaLabel(value: string | undefined, labels?: Record<string, string>) {
+  const normalized = value?.trim()
+  if (!normalized) return undefined
+  const label = labels?.[normalized] ?? normalized.replace(/[-_]+/g, " ")
+  return label.slice(0, 48)
+}
+
 export function isRelativeInternalHref(href: string | undefined): href is InternalNotificationHref {
   return Boolean(href && href.startsWith("/") && !href.startsWith("//") && !href.startsWith("/\\"))
 }
@@ -47,6 +65,8 @@ export function NotificationRow({
   const isUnread = notification.state === "unread"
   const isArchived = notification.state === "archived"
   const safeHref = isRelativeInternalHref(notification.href) ? notification.href : undefined
+  const categoryLabel = notificationMetaLabel(notification.category, categoryLabels)
+  const typeLabel = notificationMetaLabel(notification.type)
   const rowContent = (
     <>
       <span className="mt-1.5 shrink-0" aria-hidden="true">
@@ -55,6 +75,8 @@ export function NotificationRow({
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-medium text-slate-950">{notification.title}</span>
+          {categoryLabel ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{categoryLabel}</span> : null}
+          {typeLabel ? <span className="text-xs text-slate-500">{typeLabel}</span> : null}
           <span className="text-xs text-slate-500">{stateLabels[notification.state]}</span>
         </span>
         {notification.body ? <span className="mt-1 block text-sm leading-6 text-slate-600">{notification.body}</span> : null}

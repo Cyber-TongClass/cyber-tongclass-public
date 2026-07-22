@@ -1,6 +1,11 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { createR2UploadTarget, getR2DownloadUrl, getR2ObjectKeyFromStorageId, r2StorageIdMatches } from "./lib/r2"
+import {
+  advanceOAWorkflow,
+  startOAWorkflow,
+  userMatchesOAUserScope,
+} from "./lib/oaWorkflow"
 
 const MAX_DEFAULT_FILE_BYTES = 20 * 1024 * 1024
 
@@ -58,6 +63,40 @@ const resultFieldValidator = v.object({
   options: v.optional(v.array(optionValidator)),
 })
 
+const userIdentityTypeValidator = v.union(
+  v.literal("undergrad"),
+  v.literal("graduate"),
+  v.literal("teacher"),
+  v.literal("other"),
+)
+
+const userRoleValidator = v.union(
+  v.literal("member"),
+  v.literal("admin"),
+  v.literal("super_admin"),
+)
+
+const userScopeValidator = v.object({
+  identityTypes: v.optional(v.array(userIdentityTypeValidator)),
+  roles: v.optional(v.array(userRoleValidator)),
+  userIds: v.optional(v.array(v.id("users"))),
+})
+
+const approvalStepValidator = v.object({
+  id: v.string(),
+  title: v.string(),
+  scope: userScopeValidator,
+  completion: v.optional(v.union(v.literal("any"), v.literal("all"))),
+})
+
+const approvalActionValidator = v.union(v.literal("approve"), v.literal("reject"))
+const approvalTaskStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("rejected"),
+  v.literal("skipped"),
+)
+
 const formInputValidator = {
   id: v.optional(v.id("oaForms")),
   slug: v.string(),
@@ -75,6 +114,10 @@ const formInputValidator = {
   fields: v.array(fieldValidator),
   resultFields: v.optional(v.array(resultFieldValidator)),
   resultsVisible: v.optional(v.boolean()),
+  // `null` is the explicit, auditable clear operation; omission preserves an
+  // existing scope so legacy callers do not accidentally retarget a form.
+  targetScope: v.optional(v.union(userScopeValidator, v.null())),
+  approvalSteps: v.optional(v.array(approvalStepValidator)),
 }
 
 const sha256Hex = async (input: string) => {
@@ -140,6 +183,75 @@ function uniqueIds(items: Array<{ id: string }>, label: string) {
     if (!id) throw new Error(`${label} ID 不能为空`)
     if (seen.has(id)) throw new Error(`${label} ID 不能重复：${id}`)
     seen.add(id)
+  }
+}
+
+function normalizeUniqueStrings(values: readonly unknown[] | undefined) {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values || []) {
+    const normalized = String(value || "").trim()
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    result.push(normalized)
+  }
+  return result
+}
+
+/**
+ * `undefined` means legacy Tong Class audience; an explicit `{}` means all
+ * authenticated AIA accounts. Approval-step scopes intentionally do not allow
+ * `{}` so a malformed workflow can never assign every account by accident.
+ */
+function normalizeUserScope(scope: any, label: string, allowAll = false): any {
+  const identityTypes = normalizeUniqueStrings(scope?.identityTypes)
+  const roles = normalizeUniqueStrings(scope?.roles)
+  const userIdEntries = new Map<string, any>()
+  for (const userId of scope?.userIds || []) {
+    const normalized = String(userId || "")
+    if (normalized) userIdEntries.set(normalized, userId)
+  }
+  const hasCriteria = identityTypes.length > 0 || roles.length > 0 || userIdEntries.size > 0
+  if (!hasCriteria && !allowAll) throw new Error(`${label}至少需要选择一个用户组、角色或账户`)
+  return {
+    ...(identityTypes.length > 0 ? { identityTypes } : {}),
+    ...(roles.length > 0 ? { roles } : {}),
+    ...(userIdEntries.size > 0 ? { userIds: [...userIdEntries.values()] } : {}),
+  } as any
+}
+
+function normalizeApprovalSteps(steps?: any[]): any {
+  if (steps === undefined) return undefined
+  const normalized = steps.map((step: any, index: number) => {
+    const id = normalizeText(step.id)
+    const title = normalizeText(step.title)
+    if (!id || !title) throw new Error(`第 ${index + 1} 个审批步骤的 ID 和名称不能为空`)
+    return {
+      id,
+      title,
+      scope: normalizeUserScope(step.scope, `审批步骤“${title}”的审批人范围`),
+      completion: step.completion === "all" ? "all" as const : "any" as const,
+    }
+  })
+  uniqueIds(normalized, "审批步骤")
+  return normalized
+}
+
+async function assertScopedUsersExist(ctx: any, scopes: Array<any | undefined>) {
+  const checked = new Set<string>()
+  for (const scope of scopes) {
+    for (const userId of scope?.userIds || []) {
+      const id = String(userId)
+      if (checked.has(id)) continue
+      checked.add(id)
+      if (!await ctx.db.get(userId)) throw new Error("审批范围包含不存在的账户")
+    }
+  }
+}
+
+function assertCanConfigureAIAWorkflow(admin: any, changesWorkflowConfiguration: boolean) {
+  if (changesWorkflowConfiguration && admin.role !== "super_admin") {
+    throw new Error("只有超级管理员可以配置研究院 OA 作用域和审批流程")
   }
 }
 
@@ -317,6 +429,45 @@ function assertFormOpen(form: any) {
   if (form.closeAt && form.closeAt < now) throw new Error("表单已截止")
 }
 
+function assertUserCanAccessOAForm(user: any, form: any) {
+  if (!form.targetScope) {
+    requireMember(user)
+    if (form.visibility !== "members") throw new Error("该表单不面向成员开放")
+    return
+  }
+  if (form.visibility !== "members") throw new Error("该表单不面向成员开放")
+  if (!userMatchesOAUserScope(user, form.targetScope)) throw new Error("无权访问该研究院 OA 表单")
+}
+
+function canUserAccessOAForm(user: any, form: any) {
+  try {
+    assertUserCanAccessOAForm(user, form)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isAIAWorkflowForm(form: any) {
+  return form?.targetScope !== undefined || (Array.isArray(form?.approvalSteps) && form.approvalSteps.length > 0)
+}
+
+function assertCanManageAIAWorkflowForm(admin: any, form: any) {
+  if (isAIAWorkflowForm(form) && admin.role !== "super_admin") {
+    throw new Error("只有超级管理员可以查看或管理研究院 OA 流程")
+  }
+}
+
+/** Removes all audience and approver routing rules from submitter-facing DTOs. */
+function toPublishedOAForm(form: any) {
+  const {
+    targetScope: _targetScope,
+    approvalSteps: _approvalSteps,
+    ...publicForm
+  } = form
+  return publicForm
+}
+
 function collectAttachmentStorageIds(form: any, answers: any) {
   const ids = new Set<string>()
   if (!answers || typeof answers !== "object") return ids
@@ -341,7 +492,12 @@ function serializeSubmission(form: any, submission: any, viewer: "owner" | "admi
       resultValues = Object.fromEntries(Object.entries(submission.resultValues || {}).filter(([key]) => visibleIds.has(key)))
     }
   }
-  return { ...submission, resultValues }
+  // Approval snapshots contain assignee scopes, including explicit account
+  // IDs. Submitters only need progress state, never internal routing data.
+  const { approvalStepsSnapshot: _approvalStepsSnapshot, ...safeSubmission } = submission
+  return viewer === "admin"
+    ? { ...submission, resultValues }
+    : { ...safeSubmission, resultValues }
 }
 
 export const listPublished = query({
@@ -352,48 +508,54 @@ export const listPublished = query({
     includePast: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    requireMember(await getUserBySession(ctx, args.sessionToken))
+    const user = await getUserBySession(ctx, args.sessionToken)
     const rows = args.includePast
       ? await ctx.db.query("oaForms").withIndex("by_updatedAt").order("desc").collect()
       : await ctx.db.query("oaForms").withIndex("by_status_category", (q) => q.eq("status", "published")).order("desc").collect()
     const now = Date.now()
     return rows
       .filter((form) => form.visibility === "members")
+      .filter((form) => canUserAccessOAForm(user, form))
       .filter((form) => args.includePast ? (form.status === "published" || form.status === "archived") : form.status === "published")
       .filter((form) => !args.kind || formKind(form) === args.kind)
       .filter((form) => !args.category || form.category === args.category)
       .filter((form) => !form.openAt || form.openAt <= now)
       .filter((form) => args.includePast || !form.closeAt || form.closeAt >= now)
+      .map(toPublishedOAForm)
   },
 })
 
 export const getPublishedBySlug = query({
   args: { sessionToken: v.optional(v.string()), slug: v.string() },
   handler: async (ctx, args) => {
-    requireMember(await getUserBySession(ctx, args.sessionToken))
+    const user = await getUserBySession(ctx, args.sessionToken)
     const form = await ctx.db.query("oaForms").withIndex("by_slug", (q) => q.eq("slug", normalizeSlug(args.slug))).first()
     if (!form || (form.status !== "published" && form.status !== "archived")) return null
-    if (form.visibility !== "members") return null
+    if (!canUserAccessOAForm(user, form)) return null
     const now = Date.now()
     if (form.openAt && form.openAt > now) return null
-    return form
+    return toPublishedOAForm(form)
   },
 })
 
 export const adminList = query({
   args: { sessionToken: v.optional(v.string()), kind: v.optional(v.union(v.literal("form"), v.literal("reimbursement"))) },
   handler: async (ctx, args) => {
-    requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
     const rows = await ctx.db.query("oaForms").withIndex("by_updatedAt").order("desc").collect()
-    return args.kind ? rows.filter((form) => formKind(form) === args.kind) : rows
+    const visibleRows = admin.role === "super_admin" ? rows : rows.filter((form) => !isAIAWorkflowForm(form))
+    return args.kind ? visibleRows.filter((form) => formKind(form) === args.kind) : visibleRows
   },
 })
 
 export const adminGet = query({
   args: { sessionToken: v.optional(v.string()), id: v.id("oaForms") },
   handler: async (ctx, args) => {
-    requireAdmin(await getUserBySession(ctx, args.sessionToken))
-    return await ctx.db.get(args.id)
+    const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const form = await ctx.db.get(args.id)
+    if (!form) return null
+    assertCanManageAIAWorkflowForm(admin, form)
+    return form
   },
 })
 
@@ -414,10 +576,23 @@ export const adminUpsert = mutation({
     const resultFields = (args.resultFields || []).map(sanitizeResultField)
     uniqueIds(resultFields, "结果字段")
     const existingById = args.id ? await ctx.db.get(args.id) : null
+    if (existingById) assertCanManageAIAWorkflowForm(admin, existingById)
     const existingBySlug = await ctx.db.query("oaForms").withIndex("by_slug", (q) => q.eq("slug", slug)).first()
     if (existingBySlug && (!args.id || String(existingBySlug._id) !== String(args.id))) {
       throw new Error("该 slug 已被其他表单使用")
     }
+    const hasTargetScopeChange = args.targetScope !== undefined
+    const hasWorkflowConfigurationChange = hasTargetScopeChange || args.approvalSteps !== undefined
+    assertCanConfigureAIAWorkflow(admin, hasWorkflowConfigurationChange)
+    const shouldClearTargetScope = args.targetScope === null
+    const requestedTargetScope = args.targetScope === undefined || args.targetScope === null
+      ? undefined
+      : normalizeUserScope(args.targetScope, "申请对象范围", true)
+    const requestedApprovalSteps = normalizeApprovalSteps(args.approvalSteps)
+    await assertScopedUsersExist(ctx, [
+      requestedTargetScope,
+      ...(requestedApprovalSteps || []).map((step: any) => step.scope),
+    ])
     const patch = {
       slug,
       title: normalizeText(args.title, "未命名表单"),
@@ -434,6 +609,14 @@ export const adminUpsert = mutation({
       fields,
       resultFields,
       resultsVisible: Boolean(args.resultsVisible),
+      ...(shouldClearTargetScope
+        ? { targetScope: undefined }
+        : requestedTargetScope !== undefined
+          ? { targetScope: requestedTargetScope }
+        : existingById?.targetScope !== undefined ? { targetScope: existingById.targetScope } : {}),
+      ...(requestedApprovalSteps !== undefined
+        ? { approvalSteps: requestedApprovalSteps }
+        : existingById?.approvalSteps !== undefined ? { approvalSteps: existingById.approvalSteps } : {}),
       updatedBy: admin._id,
       publishedAt: args.status === "published" ? (existingById?.publishedAt || now) : existingById?.publishedAt,
       updatedAt: now,
@@ -454,6 +637,9 @@ export const adminSetStatus = mutation({
   args: { sessionToken: v.optional(v.string()), id: v.id("oaForms"), status: formStatusValidator },
   handler: async (ctx, args) => {
     const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const form = await ctx.db.get(args.id)
+    if (!form) throw new Error("表单不存在")
+    assertCanManageAIAWorkflowForm(admin, form)
     const now = Date.now()
     await ctx.db.patch(args.id, {
       status: args.status,
@@ -468,7 +654,10 @@ export const adminSetStatus = mutation({
 export const adminRemove = mutation({
   args: { sessionToken: v.optional(v.string()), id: v.id("oaForms") },
   handler: async (ctx, args) => {
-    requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const form = await ctx.db.get(args.id)
+    if (!form) throw new Error("表单不存在")
+    assertCanManageAIAWorkflowForm(admin, form)
     const existingSubmission = await ctx.db
       .query("oaFormSubmissions")
       .withIndex("by_form_createdAt", (q) => q.eq("formId", args.id))
@@ -486,7 +675,9 @@ export const generateUploadUrl = mutation({
     mimeType: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = requireMember(await getUserBySession(ctx, args.sessionToken))
+    // Upload URLs are ownership-bound. A target-scope AIA user may need one
+    // before the browser sends a form ID, so membership is checked at submit.
+    const user = await getUserBySession(ctx, args.sessionToken)
     const r2Target = await createR2UploadTarget({
       purpose: "oa-form-attachment",
       ownerId: String(user._id),
@@ -501,9 +692,10 @@ export const generateUploadUrl = mutation({
 export const submit = mutation({
   args: { sessionToken: v.optional(v.string()), formId: v.id("oaForms"), answers: v.any() },
   handler: async (ctx, args) => {
-    const user = requireMember(await getUserBySession(ctx, args.sessionToken))
+    const user = await getUserBySession(ctx, args.sessionToken)
     const form = await ctx.db.get(args.formId)
     if (!form) throw new Error("表单不存在")
+    assertUserCanAccessOAForm(user, form)
     assertFormOpen(form)
     const answers = args.answers && typeof args.answers === "object" ? args.answers as Record<string, unknown> : {}
     const normalizedAnswers = await normalizeAnswers(ctx, form, answers, String(user._id))
@@ -519,7 +711,7 @@ export const submit = mutation({
       if (existing.length >= submissionLimit) throw new Error(`该表单每人最多提交 ${submissionLimit} 次`)
     }
     const now = Date.now()
-    return await ctx.db.insert("oaFormSubmissions", {
+    const submissionId = await ctx.db.insert("oaFormSubmissions", {
       formId: form._id,
       formSlug: form.slug,
       submitterId: user._id,
@@ -532,18 +724,26 @@ export const submit = mutation({
       createdAt: now,
       updatedAt: now,
     })
+    const submission = await ctx.db.get(submissionId)
+    if (!submission) throw new Error("提交创建失败")
+    await startOAWorkflow(ctx, { form, submission, now })
+    return submissionId
   },
 })
 
 export const updateSubmission = mutation({
   args: { sessionToken: v.optional(v.string()), id: v.id("oaFormSubmissions"), answers: v.any() },
   handler: async (ctx, args) => {
-    const user = requireMember(await getUserBySession(ctx, args.sessionToken))
+    const user = await getUserBySession(ctx, args.sessionToken)
     const submission = await ctx.db.get(args.id)
     if (!submission || String(submission.submitterId) !== String(user._id)) throw new Error("无权修改该提交")
     const form = await ctx.db.get(submission.formId)
     if (!form) throw new Error("表单不存在")
+    assertUserCanAccessOAForm(user, form)
     if (!form.allowSubmissionEdits) throw new Error("该表单不允许修改提交内容")
+    if (submission.workflowStatus !== undefined || Array.isArray(submission.approvalStepsSnapshot)) {
+      throw new Error("已进入审批流程的提交不可修改，请联系审批人处理")
+    }
     assertFormOpen(form)
     const answers = args.answers && typeof args.answers === "object" ? args.answers as Record<string, unknown> : {}
     const normalizedAnswers = await normalizeAnswers(ctx, form, answers, String(user._id))
@@ -560,7 +760,7 @@ export const updateSubmission = mutation({
 export const listMine = query({
   args: { sessionToken: v.optional(v.string()), formId: v.optional(v.id("oaForms")) },
   handler: async (ctx, args) => {
-    const user = requireMember(await getUserBySession(ctx, args.sessionToken))
+    const user = await getUserBySession(ctx, args.sessionToken)
     const rows = args.formId
       ? await ctx.db.query("oaFormSubmissions").withIndex("by_form_submitter_createdAt", (q) => q.eq("formId", args.formId!).eq("submitterId", user._id)).order("desc").collect()
       : await ctx.db.query("oaFormSubmissions").withIndex("by_submitter_createdAt", (q) => q.eq("submitterId", user._id)).order("desc").collect()
@@ -571,10 +771,231 @@ export const listMine = query({
   },
 })
 
+function workflowStepForTask(form: any, submission: any, task: any) {
+  const steps = Array.isArray(submission.approvalStepsSnapshot)
+    ? submission.approvalStepsSnapshot
+    : form.approvalSteps || []
+  const step = steps[task.stepIndex]
+  return step && step.id === task.stepId ? step : null
+}
+
+function toApprovalInboxRow(form: any, submission: any, task: any) {
+  const step = workflowStepForTask(form, submission, task)
+  return {
+    // This deliberately mirrors the minimal submission fields the AIA
+    // approval UI needs, without exposing submitter name, ID, or email.
+    _id: submission._id,
+    formId: submission.formId,
+    formSlug: submission.formSlug,
+    formTitle: form.title,
+    submittedAt: submission.submittedAt,
+    answers: submission.answers,
+    reviewStatus: submission.reviewStatus,
+    ...(submission.adminNote ? { adminNote: submission.adminNote } : {}),
+    ...(submission.workflowStatus ? { workflowStatus: submission.workflowStatus } : {}),
+    ...(submission.currentApprovalStep !== undefined ? { currentApprovalStep: submission.currentApprovalStep } : {}),
+    taskId: task._id,
+    taskStatus: task.status,
+    ...(task.actedAt !== undefined ? { taskActedAt: task.actedAt } : {}),
+    ...(task.comment ? { taskComment: task.comment } : {}),
+    approvalStep: step ? {
+      id: step.id,
+      title: step.title,
+      index: task.stepIndex,
+      completion: step.completion === "all" ? "all" : "any",
+    } : undefined,
+  }
+}
+
+async function listApprovalTasksForUser(ctx: any, user: any, status?: "pending" | "approved" | "rejected" | "skipped") {
+  const rows = status
+    ? await ctx.db
+      .query("oaApprovalTasks")
+      .withIndex("by_user_status_createdAt", (index: any) => index.eq("userId", user._id).eq("status", status))
+      .order("desc")
+      .collect()
+    : await ctx.db
+      .query("oaApprovalTasks")
+      .withIndex("by_user_status_createdAt", (index: any) => index.eq("userId", user._id))
+      .order("desc")
+      .collect()
+  return Promise.all(rows.map(async (task: any) => {
+    const submission = await ctx.db.get(task.submissionId)
+    const form = submission ? await ctx.db.get(submission.formId) : null
+    if (!submission || !form) return null
+    return { task, submission, form }
+  }))
+}
+
+/** Lists task records for the current account without submitter identity data. */
+export const listMyApprovalTasks = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+    status: v.optional(approvalTaskStatusValidator),
+  },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const records = (await listApprovalTasksForUser(ctx, user, args.status)).filter(Boolean) as Array<any>
+    return records.map(({ task, submission, form }) => ({
+      taskId: task._id,
+      status: task.status,
+      createdAt: task.createdAt,
+      ...(task.actedAt !== undefined ? { actedAt: task.actedAt } : {}),
+      ...(task.comment ? { comment: task.comment } : {}),
+      submission: toApprovalInboxRow(form, submission, task),
+    }))
+  },
+})
+
+/** A convenient submission-shaped pending queue for the AIA approval console. */
+export const listMyApprovalInbox = query({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const records = (await listApprovalTasksForUser(ctx, user, "pending")).filter(Boolean) as Array<any>
+    return records
+      .filter(({ task, submission }) => submission.workflowStatus === "pending" && submission.currentApprovalStep === task.stepIndex)
+      .map(({ task, submission, form }) => toApprovalInboxRow(form, submission, task))
+  },
+})
+
+/** Returns one task and only the application fields that its assignee may review. */
+export const getMyApprovalTask = query({
+  args: { sessionToken: v.optional(v.string()), taskId: v.id("oaApprovalTasks") },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const task = await ctx.db.get(args.taskId)
+    if (!task || String(task.userId) !== String(user._id)) return null
+    const submission = await ctx.db.get(task.submissionId)
+    const form = submission ? await ctx.db.get(submission.formId) : null
+    if (!submission || !form) return null
+    return toApprovalInboxRow(form, submission, task)
+  },
+})
+
+export const actOnApprovalTask = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    taskId: v.id("oaApprovalTasks"),
+    action: approvalActionValidator,
+    comment: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const task = await ctx.db.get(args.taskId)
+    if (!task || String(task.userId) !== String(actor._id)) throw new Error("无权处理该审批任务")
+    if (task.status !== "pending") return { updated: false, reason: "task_not_pending" }
+    const submission = await ctx.db.get(task.submissionId)
+    const form = submission ? await ctx.db.get(submission.formId) : null
+    if (!submission || !form || (submission.workflowStatus === undefined && !Array.isArray(submission.approvalStepsSnapshot))) {
+      throw new Error("审批任务关联的流程不存在")
+    }
+    return await advanceOAWorkflow(ctx, {
+      form,
+      submission,
+      task,
+      actor,
+      action: args.action,
+      comment: args.comment,
+      now: Date.now(),
+    })
+  },
+})
+
+async function genericNotificationHref(ctx: any, recipient: any, notification: any) {
+  if (notification.kind === "oa_workflow") {
+    const submission = await ctx.db.get(notification.resourceId)
+    if (!submission) return "/services/oa/my"
+    if (String(submission.submitterId) === String(recipient._id)) return "/services/oa/my"
+    const task = await ctx.db
+      .query("oaApprovalTasks")
+      .withIndex("by_submission_user", (index: any) => index.eq("submissionId", submission._id).eq("userId", recipient._id))
+      .first()
+    return task ? "/services/oa/approvals" : "/services/oa/my"
+  }
+
+  const application = await ctx.db.get(notification.resourceId)
+  if (!application || String(application.applicantUserId) === String(recipient._id)) {
+    return "/services/coffee-talk/my"
+  }
+  const teacher = await ctx.db.get(application.assignedTeacherPersonId)
+  if (
+    teacher?.kind === "teacher"
+    && teacher.accountUserId !== undefined
+    && String(teacher.accountUserId) === String(recipient._id)
+  ) {
+    return "/services/coffee-talk/manage"
+  }
+  return "/services/coffee-talk/my"
+}
+
+/** Unified, recipient-authorized AIA inbox for Coffee Talk and OA workflow notices. */
+export const listMyNotifications = query({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    // The global AIA shell can render before a stale browser token is cleared.
+    // Match Coffee Talk's signed-out behavior instead of failing navigation.
+    let user: any
+    try {
+      user = await getUserBySession(ctx, args.sessionToken)
+    } catch {
+      return []
+    }
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_createdAt", (index: any) => index.eq("userId", user._id))
+      .order("desc")
+      .collect()
+    return Promise.all(notifications.map(async (notification: any) => ({
+      id: String(notification._id),
+      kind: notification.kind,
+      category: notification.kind === "oa_workflow" ? "approval" : "coffee-talk",
+      type: notification.kind === "oa_workflow" ? "approval_task" : "coffee_talk",
+      title: notification.title,
+      body: notification.body,
+      ...(notification.readAt !== undefined ? { readAt: notification.readAt } : {}),
+      createdAt: notification.createdAt,
+      href: await genericNotificationHref(ctx, user, notification),
+    })))
+  },
+})
+
+export const markMyNotificationRead = mutation({
+  args: { sessionToken: v.optional(v.string()), notificationId: v.id("notifications") },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const notification = await ctx.db.get(args.notificationId)
+    if (!notification || String(notification.userId) !== String(user._id) || notification.readAt !== undefined) {
+      return { updated: false }
+    }
+    await ctx.db.patch(args.notificationId, { readAt: Date.now() })
+    return { updated: true }
+  },
+})
+
+export const markAllMyNotificationsRead = mutation({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_createdAt", (index: any) => index.eq("userId", user._id))
+      .collect()
+    const unread = notifications.filter((notification: any) => notification.readAt === undefined)
+    if (unread.length === 0) return { updatedCount: 0 }
+    const now = Date.now()
+    await Promise.all(unread.map((notification: any) => ctx.db.patch(notification._id, { readAt: now })))
+    return { updatedCount: unread.length }
+  },
+})
+
 export const adminListSubmissions = query({
   args: { sessionToken: v.optional(v.string()), formId: v.id("oaForms"), status: v.optional(reviewStatusValidator), search: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const form = await ctx.db.get(args.formId)
+    if (!form) throw new Error("表单不存在")
+    assertCanManageAIAWorkflowForm(admin, form)
     const rows = args.status
       ? await ctx.db.query("oaFormSubmissions").withIndex("by_form_status_createdAt", (q) => q.eq("formId", args.formId).eq("reviewStatus", args.status!)).order("desc").collect()
       : await ctx.db.query("oaFormSubmissions").withIndex("by_form_createdAt", (q) => q.eq("formId", args.formId)).order("desc").collect()
@@ -593,8 +1014,41 @@ export const adminReviewSubmission = mutation({
     resultValues: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const submission = await ctx.db.get(args.id)
+    if (!submission) throw new Error("提交不存在")
+    const form = await ctx.db.get(submission.formId)
+    if (!form) throw new Error("表单不存在")
     const now = Date.now()
+    // A configured workflow is never mutable through the legacy admin status
+    // control. The actor must own a current stored task, even if they are an
+    // administrator, so ordered approval cannot be bypassed.
+    if (submission.workflowStatus !== undefined || Array.isArray(submission.approvalStepsSnapshot)) {
+      if (args.reviewStatus === "needs_changes") {
+        throw new Error("研究院 OA 流程当前仅支持同意或驳回，请勿使用“需补材料”")
+      }
+      if (args.reviewStatus !== "approved" && args.reviewStatus !== "rejected") {
+        throw new Error("审批流程只能执行同意或驳回")
+      }
+      const tasks = await ctx.db
+        .query("oaApprovalTasks")
+        .withIndex("by_submission_user", (index: any) => index.eq("submissionId", submission._id).eq("userId", actor._id))
+        .collect()
+      const task = tasks.find((item: any) => item.status === "pending" && item.stepIndex === submission.currentApprovalStep)
+      if (!task) throw new Error("当前账号没有可处理的审批任务")
+      return await advanceOAWorkflow(ctx, {
+        form,
+        submission,
+        task,
+        actor,
+        action: args.reviewStatus === "approved" ? "approve" : "reject",
+        comment: args.adminNote,
+        now,
+      })
+    }
+
+    const admin = requireAdmin(actor)
+    assertCanManageAIAWorkflowForm(admin, form)
     await ctx.db.patch(args.id, {
       reviewStatus: args.reviewStatus,
       adminNote: normalizeOptionalText(args.adminNote),
@@ -611,13 +1065,25 @@ export const adminReviewSubmission = mutation({
 export const getAttachmentUrl = query({
   args: { sessionToken: v.optional(v.string()), submissionId: v.id("oaFormSubmissions"), storageId: v.string() },
   handler: async (ctx, args) => {
-    const user = requireMember(await getUserBySession(ctx, args.sessionToken))
+    const user = await getUserBySession(ctx, args.sessionToken)
     const submission = await ctx.db.get(args.submissionId)
     if (!submission) return null
     const form = await ctx.db.get(submission.formId)
     if (!form) return null
     const isAdmin = user.role === "admin" || user.role === "super_admin"
-    if (!isAdmin && String(submission.submitterId) !== String(user._id)) throw new Error("无权访问该附件")
+    const isSubmitter = String(submission.submitterId) === String(user._id)
+    const approvalTasks = !isSubmitter
+      ? await ctx.db
+        .query("oaApprovalTasks")
+        .withIndex("by_submission_user", (index: any) => index.eq("submissionId", submission._id).eq("userId", user._id))
+        .collect()
+      : []
+    const isCurrentAssignee = approvalTasks.some((task: any) => (
+      task.status === "pending" && task.stepIndex === submission.currentApprovalStep
+    ))
+    const hasWorkflow = submission.workflowStatus !== undefined || Array.isArray(submission.approvalStepsSnapshot)
+    const isLegacyAdmin = isAdmin && !hasWorkflow && (!isAIAWorkflowForm(form) || user.role === "super_admin")
+    if (!isSubmitter && !isCurrentAssignee && !isLegacyAdmin) throw new Error("无权访问该附件")
     if (!collectAttachmentStorageIds(form, submission.answers).has(args.storageId)) throw new Error("附件不属于该提交")
     const r2Url = await getR2DownloadUrl(args.storageId)
     if (r2Url) return r2Url
@@ -628,9 +1094,10 @@ export const getAttachmentUrl = query({
 export const adminExportSubmissions = query({
   args: { sessionToken: v.optional(v.string()), formId: v.id("oaForms") },
   handler: async (ctx, args) => {
-    requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
     const form = await ctx.db.get(args.formId)
     if (!form) throw new Error("表单不存在")
+    assertCanManageAIAWorkflowForm(admin, form)
     const rows = await ctx.db.query("oaFormSubmissions").withIndex("by_form_createdAt", (q) => q.eq("formId", args.formId)).order("desc").collect()
     return { form, rows }
   },
@@ -645,6 +1112,9 @@ export const adminUpdateResultConfig = mutation({
   },
   handler: async (ctx, args) => {
     const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const form = await ctx.db.get(args.formId)
+    if (!form) throw new Error("表单不存在")
+    assertCanManageAIAWorkflowForm(admin, form)
     const resultFields = args.resultFields.map(sanitizeResultField)
     uniqueIds(resultFields, "结果字段")
     await ctx.db.patch(args.formId, {
@@ -669,15 +1139,23 @@ export const adminBatchUpdateResults = mutation({
     })),
   },
   handler: async (ctx, args) => {
-    requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
+    const form = await ctx.db.get(args.formId)
+    if (!form) throw new Error("表单不存在")
+    assertCanManageAIAWorkflowForm(admin, form)
     const now = Date.now()
     let updated = 0
+    let skippedWorkflow = 0
     for (const row of args.rows) {
       let submission = row.submissionId ? await ctx.db.get(row.submissionId) : null
       if (!submission && row.studentId) {
         submission = await ctx.db.query("oaFormSubmissions").withIndex("by_form_studentId", (q) => q.eq("formId", args.formId).eq("studentId", row.studentId!)).first()
       }
       if (!submission || String(submission.formId) !== String(args.formId)) continue
+      if (submission.workflowStatus !== undefined || Array.isArray(submission.approvalStepsSnapshot)) {
+        skippedWorkflow += 1
+        continue
+      }
       await ctx.db.patch(submission._id, {
         reviewStatus: row.reviewStatus || submission.reviewStatus,
         resultValues: row.resultValues,
@@ -685,6 +1163,6 @@ export const adminBatchUpdateResults = mutation({
       })
       updated += 1
     }
-    return { updated }
+    return { updated, skippedWorkflow }
   },
 })

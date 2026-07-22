@@ -42,14 +42,14 @@ function LoginForm() {
     try {
       const result = await login(identifier, password)
       if (!result.ok) {
-        setError(result.error || "学号或密码错误，请重试")
+        setError(result.error || "账号或密码错误，请重试")
         return
       }
       
       const nextPath = searchParams.get("next")
       window.location.href = nextPath?.startsWith("/") ? nextPath : "/"
     } catch {
-      setError("学号或密码错误，请重试")
+      setError("账号或密码错误，请重试")
     } finally {
       setIsLoading(false)
     }
@@ -69,7 +69,7 @@ function LoginForm() {
           <CardHeader>
             <CardTitle>登录</CardTitle>
             <CardDescription>
-              使用您的学号和密码登录
+              使用您的账号和密码登录
             </CardDescription>
           </CardHeader>
           
@@ -83,12 +83,12 @@ function LoginForm() {
               
               <div className="space-y-2">
                 <label htmlFor="identifier" className="text-sm font-medium">
-                  学号
+                  账号（学号 / 用户名 / 工号）
                 </label>
                 <Input
                   id="identifier"
                   type="text"
-                  placeholder="请输入学号"
+                  placeholder="请输入学号、用户名或工号"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   required

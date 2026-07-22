@@ -9,6 +9,7 @@ import {
 } from "./lib/userAccountPolicy"
 import {
     assertCanAssignUserIdentityType,
+    assertCanSetTongClassVisibility,
     getDefaultStoredIdentityType,
 } from "./lib/userIdentity"
 import {
@@ -375,6 +376,9 @@ export const create = mutation({
         if (args.identityType !== undefined) {
             assertCanAssignUserIdentityType(actor.role)
         }
+        if (args.isClassMember !== undefined) {
+            assertCanSetTongClassVisibility(actor.role)
+        }
 
         const email = normalizeEmail(args.email)
         const username = normalizeUsername(args.username)
@@ -407,6 +411,11 @@ export const create = mutation({
             throw new Error("Student ID already exists")
         }
 
+        const storedIdentityType = args.identityType ?? getDefaultStoredIdentityType(requestedRole)
+        // Institute-only identities should not accidentally appear in the
+        // undergraduate Tong Class directory. A super administrator can still
+        // opt an account in explicitly through `isClassMember`.
+        const defaultIsClassMember = ["graduate", "teacher", "other"].includes(storedIdentityType ?? "") ? false : true
         const now = Date.now()
 
         const userId = await ctx.db.insert("users", {
@@ -415,7 +424,7 @@ export const create = mutation({
             englishName: args.englishName.trim(),
             chineseName: normalizeOptionalString(args.chineseName),
             role: requestedRole,
-            identityType: args.identityType ?? getDefaultStoredIdentityType(requestedRole),
+            identityType: storedIdentityType,
             organization: args.organization,
             cohort: args.cohort,
             studentId,
@@ -431,7 +440,7 @@ export const create = mutation({
             orcidUrl: args.orcidUrl,
             avatar: args.avatar,
             realPhoto: args.realPhoto,
-            isClassMember: args.isClassMember ?? true,
+            isClassMember: args.isClassMember ?? defaultIsClassMember,
             isEmailVerified: args.isEmailVerified ?? false,
             createdAt: now,
             updatedAt: now,
@@ -511,6 +520,12 @@ export const update = mutation({
         if (requestedIdentityType !== undefined) {
             assertCanAssignUserIdentityType(actor.role)
         }
+        if (updates.isClassMember !== undefined) {
+            assertCanSetTongClassVisibility(actor.role)
+        }
+        // A newly selected institute identity is hidden from Tong Class by
+        // default, unless the super administrator explicitly passes a value.
+        const defaultIsClassMember = ["graduate", "teacher", "other"].includes(requestedIdentityType ?? "") ? false : undefined
         if (isSelf) {
             if (requestedRole !== undefined && requestedRole !== user.role) {
                 throw new Error("不能修改自己的角色")
@@ -567,6 +582,7 @@ export const update = mutation({
             ...updates,
             role: isSelf ? undefined : requestedRole,
             identityType: requestedIdentityType,
+            isClassMember: updates.isClassMember ?? defaultIsClassMember,
             englishName: updates.englishName?.trim(),
             chineseName: normalizeOptionalString(updates.chineseName),
             personalEmails: normalizeStringList(updates.personalEmails),
@@ -902,19 +918,32 @@ export const getByProfileSlug = query({
 // Simple login for local development
 export const simpleLogin = mutation({
     args: {
-        studentId: v.string(),
+        // `studentId` remains optional for legacy callers while new AIA clients
+        // submit a generic account identifier (student ID, username, or work ID).
+        identifier: v.optional(v.string()),
+        studentId: v.optional(v.string()),
         password: v.string(),
     },
     handler: async (ctx, args) => {
-        const studentId = normalizeStudentId(args.studentId)
+        const identifier = normalizeStudentId(args.identifier ?? args.studentId ?? "")
+        const username = normalizeUsername(identifier)
 
-        const user = await ctx.db
+        const userByStudentId = await ctx.db
             .query("users")
-            .filter((q) => q.eq(q.field("studentId"), studentId))
+            .withIndex("by_studentId", (q) => q.eq("studentId", identifier))
             .first()
 
+        const userByUsername = userByStudentId
+            ? null
+            : await ctx.db
+                .query("users")
+                .filter((q) => q.eq(q.field("username"), username))
+                .first()
+
+        const user = userByStudentId || userByUsername
+
         if (!user) {
-            throw new Error("学号或密码错误")
+            throw new Error("账号或密码错误")
         }
 
         const credential = await ctx.db
@@ -923,12 +952,12 @@ export const simpleLogin = mutation({
             .first()
 
         if (!credential) {
-            throw new Error("密码未设置")
+            throw new Error("账号或密码错误")
         }
 
         const passwordMatches = await verifyPassword(args.password, credential)
         if (!passwordMatches) {
-            throw new Error("学号或密码错误")
+            throw new Error("账号或密码错误")
         }
 
         if (!credential.salt) {

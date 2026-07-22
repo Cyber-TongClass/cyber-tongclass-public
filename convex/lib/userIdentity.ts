@@ -43,3 +43,10 @@ export function assertCanAssignUserIdentityType(actorRole: UserAccessRole) {
     throw new Error("只有超级管理员可以设置用户身份组")
   }
 }
+
+/** Tong Class directory membership changes the audience of legacy services. */
+export function assertCanSetTongClassVisibility(actorRole: UserAccessRole) {
+  if (actorRole !== "super_admin") {
+    throw new Error("只有超级管理员可以设置通班成员目录可见性")
+  }
+}

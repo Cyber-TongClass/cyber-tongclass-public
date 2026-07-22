@@ -69,7 +69,7 @@ export function useAuth() {
   const login = useCallback(async (identifier: string, password: string) => {
     try {
       const result = await loginMutation({ 
-        studentId: identifier.trim(),
+        identifier: identifier.trim(),
         password: password 
       })
       

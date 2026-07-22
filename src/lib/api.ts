@@ -76,6 +76,11 @@ const generateOAFormUploadUrlRef = makeFunctionReference<"mutation">("oaForms:ge
 const submitOAFormRef = makeFunctionReference<"mutation">("oaForms:submit")
 const updateOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:updateSubmission")
 const listMyOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:listMine")
+const listMyOAApprovalInboxRef = makeFunctionReference<"query">("oaForms:listMyApprovalInbox")
+const actOnOAApprovalTaskRef = makeFunctionReference<"mutation">("oaForms:actOnApprovalTask")
+const listMyAiaNotificationsRef = makeFunctionReference<"query">("oaForms:listMyNotifications")
+const markMyAiaNotificationReadRef = makeFunctionReference<"mutation">("oaForms:markMyNotificationRead")
+const markAllMyAiaNotificationsReadRef = makeFunctionReference<"mutation">("oaForms:markAllMyNotificationsRead")
 const adminListOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:adminListSubmissions")
 const adminReviewOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:adminReviewSubmission")
 const getOAFormAttachmentUrlRef = makeFunctionReference<"query">("oaForms:getAttachmentUrl")
@@ -538,11 +543,13 @@ export function useActOnCoffeeTalkApplication() {
   }, [act])
 }
 
-export function useCoffeeTalkNotifications() {
+export function useCoffeeTalkNotifications(options?: { enabled?: boolean }) {
   const sessionToken = useTongClassSessionToken()
   return useQuery(
     listCoffeeTalkNotificationsRef,
-    sessionToken ? ({ sessionToken } as any) : "skip",
+    options?.enabled === false
+      ? "skip"
+      : sessionToken ? ({ sessionToken } as any) : "skip",
   )
 }
 
@@ -557,6 +564,35 @@ export function useMarkCoffeeTalkNotificationRead() {
 
 export function useMarkAllCoffeeTalkNotificationsRead() {
   const markAllRead = useMutation(markAllCoffeeTalkNotificationsReadRef)
+  return useCallback(() => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return markAllRead({ sessionToken } as any)
+  }, [markAllRead])
+}
+
+/** Unified recipient-authorized AIA inbox (Coffee Talk and OA workflow). */
+export function useAiaNotifications(options?: { enabled?: boolean }) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listMyAiaNotificationsRef,
+    options?.enabled === false
+      ? "skip"
+      : sessionToken ? ({ sessionToken } as any) : "skip",
+  )
+}
+
+export function useMarkAiaNotificationRead() {
+  const markRead = useMutation(markMyAiaNotificationReadRef)
+  return useCallback((notificationId: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return markRead({ sessionToken, notificationId: notificationId as any } as any)
+  }, [markRead])
+}
+
+export function useMarkAllAiaNotificationsRead() {
+  const markAllRead = useMutation(markAllMyAiaNotificationsReadRef)
   return useCallback(() => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
@@ -933,6 +969,11 @@ export function usePublishedOAFormBySlug(slug?: string | null) {
   )
 }
 
+/** AIA-facing alias: the server applies the configured institute target scope. */
+export function useOAForm(slug?: string | null) {
+  return usePublishedOAFormBySlug(slug)
+}
+
 export function useAdminOAForms(args?: { kind?: "form" | "reimbursement" }) {
   const sessionToken = useTongClassSessionToken()
   return useQuery(adminListOAFormsRef, sessionToken ? ({ sessionToken, ...(args || {}) } as any) : "skip")
@@ -1003,6 +1044,34 @@ export function useMyOAFormSubmissions(formId?: string | null) {
     listMyOAFormSubmissionsRef,
     sessionToken && formId !== null ? ({ sessionToken, formId: formId ? (formId as any) : undefined } as any) : "skip"
   )
+}
+
+/** Pending workflow tasks assigned to the current authenticated institute account. */
+export function useOAApprovalInbox() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listMyOAApprovalInboxRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  )
+}
+
+/** Acts on a persisted task ID; callers never submit a role, scope, or recipient. */
+export function useReviewOAFormSubmission() {
+  const act = useMutation(actOnOAApprovalTaskRef)
+  return useCallback((args: {
+    taskId: string
+    action: "approve" | "reject"
+    comment?: string
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return act({
+      sessionToken,
+      taskId: args.taskId as any,
+      action: args.action,
+      ...(args.comment ? { comment: args.comment } : {}),
+    } as any)
+  }, [act])
 }
 
 export function useAdminOAFormSubmissions(args?: { formId?: string | null; status?: "pending" | "approved" | "rejected" | "needs_changes"; search?: string }) {
@@ -1272,7 +1341,7 @@ export function useVoteCourseReview() {
 // ==================== 认证操作 ====================
 
 export function useGetUserByEmail(email: string) {
-  return useQuery(api.auth.getUserByEmail, email ? { email } : "skip")
+  return useUserByEmail(email)
 }
 
 // ==================== TechDay 相关 ====================

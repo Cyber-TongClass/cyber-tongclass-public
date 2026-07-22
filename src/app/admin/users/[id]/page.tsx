@@ -27,6 +27,15 @@ import { accountRoleOptions } from "@/lib/account-role"
 type Organization = "pku" | "thu"
 type Role = UserRole
 
+const instituteIdentityOptions = [
+  { value: "undergrad", label: "本科生" },
+  { value: "graduate", label: "研究生" },
+  { value: "teacher", label: "教师" },
+  { value: "other", label: "其他研究院成员" },
+] as const
+
+type InstituteIdentityType = typeof instituteIdentityOptions[number]["value"]
+
 const organizationOptions: { value: Organization; label: string }[] = [
   { value: "pku", label: "北大通班" },
   { value: "thu", label: "清华通班" },
@@ -43,6 +52,8 @@ type UserFormData = {
   organization: Organization
   cohort: CohortValue
   role: Role
+  identityType: InstituteIdentityType
+  isClassMember: boolean
   studentId: string
   password: string
   photoUrl: string
@@ -71,6 +82,8 @@ export default function UserFormPage() {
     organization: "pku",
     cohort: CURRENT_YEAR,
     role: "member",
+    identityType: "undergrad",
+    isClassMember: true,
     studentId: "",
     password: "",
     photoUrl: "",
@@ -107,6 +120,8 @@ export default function UserFormPage() {
         organization: userData.organization || "pku",
         cohort: userData.cohort || CURRENT_YEAR,
         role: userData.role || "member",
+        identityType: userData.identityType || (userData.role === "member" ? "undergrad" : "other"),
+        isClassMember: userData.isClassMember !== false,
         studentId: userData.studentId || "",
         password: "",
         photoUrl: userData.realPhoto || userData.avatar || "",
@@ -172,6 +187,7 @@ export default function UserFormPage() {
           organization: formData.organization,
           cohort: formData.cohort,
           role: formData.role,
+          ...(isSuperAdmin ? { identityType: formData.identityType, isClassMember: formData.isClassMember } : {}),
           studentId: formData.studentId.trim(),
           avatar: formData.photoUrl.trim() || undefined,
           realPhoto: formData.photoUrl.trim() || undefined,
@@ -199,6 +215,7 @@ export default function UserFormPage() {
         organization: formData.organization,
         cohort: formData.cohort,
         role: formData.role,
+        ...(isSuperAdmin ? { identityType: formData.identityType, isClassMember: formData.isClassMember } : {}),
         studentId: formData.studentId.trim(),
         avatar: formData.photoUrl.trim() || undefined,
         realPhoto: formData.photoUrl.trim() || undefined,
@@ -256,7 +273,7 @@ export default function UserFormPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900">{isCreateMode ? "新建用户" : "编辑用户"}</h1>
-          <p className="text-gray-500 mt-1">{isCreateMode ? "创建本科生、管理员或超级管理员账号" : "修改用户信息与角色权限"}</p>
+          <p className="text-gray-500 mt-1">{isCreateMode ? "创建本科生、研究生、教师或管理账号" : "修改用户信息与角色权限"}</p>
         </div>
       </div>
 
@@ -366,7 +383,7 @@ export default function UserFormPage() {
                 </Select>
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="studentId">学号</Label>
+                <Label htmlFor="studentId">账号 ID（学号 / 工号）</Label>
                 <Input
                   id="studentId"
                   value={formData.studentId}
@@ -374,6 +391,50 @@ export default function UserFormPage() {
                   required
                 />
               </div>
+              {isSuperAdmin ? (
+                <div className="space-y-4 md:col-span-2 rounded-md border border-slate-200 p-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="identityType">研究院身份组</Label>
+                    <Select
+                      value={formData.identityType}
+                      onValueChange={(value) => {
+                        const identityType = value as InstituteIdentityType
+                        setFormData((previous) => ({
+                          ...previous,
+                          identityType,
+                          isClassMember: identityType === "undergrad",
+                        }))
+                      }}
+                    >
+                      <SelectTrigger id="identityType">
+                        <SelectValue placeholder="选择研究院身份组" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {instituteIdentityOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-600">仅超级管理员可调整研究院身份组；该身份不等同于系统角色。</p>
+                  </div>
+                  <label className="flex items-start gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={formData.isClassMember}
+                      onChange={(event) => setFormData((previous) => ({ ...previous, isClassMember: event.target.checked }))}
+                      className="mt-1 rounded"
+                    />
+                    <span>
+                      <span className="font-medium">通班成员目录</span>
+                      <span className="block text-xs text-slate-600">研究生、教师和其他研究院成员默认不出现在通班成员目录中。</span>
+                    </span>
+                  </label>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-600 md:col-span-2">
+                  研究院身份组：{instituteIdentityOptions.find((option) => option.value === formData.identityType)?.label ?? "其他研究院成员"}。仅超级管理员可修改。
+                </p>
+              )}
               {isCreateMode && (
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="password">初始密码</Label>

@@ -38,6 +38,35 @@ export type OAResultField = {
   options?: OAFormOption[]
 }
 
+// These scopes deliberately stay independent from the legacy Tong Class
+// `visibility` flag. When they are absent, the backend retains the original
+// Tong Class member gate; an explicitly empty target scope means that an AIA
+// administrator intentionally selected all authenticated institute accounts.
+export type OAIdentityType = "undergrad" | "graduate" | "teacher" | "other"
+export type OAWorkflowRole = "admin" | "super_admin"
+
+export type OAUserScope = {
+  identityTypes?: OAIdentityType[]
+  roles?: OAWorkflowRole[]
+  userIds?: string[]
+}
+
+export type OAApprovalCompletion = "any" | "all"
+
+export type OAApprovalStep = {
+  id: string
+  title: string
+  scope: OAUserScope
+  completion: OAApprovalCompletion
+}
+
+export type OAWorkflowDraftConfig = {
+  // `null` is an explicit deletion instruction for an existing AIA scope;
+  // `undefined` means the caller left the legacy configuration untouched.
+  targetScope?: OAUserScope | null
+  approvalSteps?: OAApprovalStep[]
+}
+
 export type OAFormLike = {
   title?: string
   slug?: string
@@ -65,6 +94,8 @@ export type OAFormUpsertPayload = {
   fields: OAFormField[]
   resultFields?: OAResultField[]
   resultsVisible?: boolean
+  targetScope?: OAUserScope | null
+  approvalSteps?: OAApprovalStep[]
 }
 
 export type OAFileMetadata = {
@@ -223,6 +254,105 @@ export function getOAFormKind(form?: { kind?: string } | null): OAFormKind {
   return form?.kind === "reimbursement" ? "reimbursement" : "form"
 }
 
+const oaIdentityTypes: OAIdentityType[] = ["undergrad", "graduate", "teacher", "other"]
+const oaWorkflowRoles: OAWorkflowRole[] = ["admin", "super_admin"]
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function uniqueStrings<T extends string>(values: T[]): T[] {
+  return [...new Set(values)]
+}
+
+function readAllowedStrings<T extends string>(value: unknown, allowed: readonly T[]) {
+  if (!Array.isArray(value)) return [] as T[]
+  const allowedValues = new Set<string>(allowed)
+  return uniqueStrings(value.filter((item): item is T => typeof item === "string" && allowedValues.has(item)))
+}
+
+function readUserIds(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return uniqueStrings(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))
+}
+
+/**
+ * Keeps an intentionally empty object intact: `{}` represents the explicit
+ * institute-wide submitter scope, while `undefined` keeps the legacy Tong
+ * Class member behavior.
+ */
+export function normalizeOAUserScope(value: unknown): OAUserScope | undefined {
+  if (!isRecord(value)) return undefined
+
+  const identityTypes = readAllowedStrings(value.identityTypes, oaIdentityTypes)
+  const roles = readAllowedStrings(value.roles, oaWorkflowRoles)
+  const userIds = readUserIds(value.userIds)
+  const scope: OAUserScope = {}
+  if (identityTypes.length > 0) scope.identityTypes = identityTypes
+  if (roles.length > 0) scope.roles = roles
+  if (userIds.length > 0) scope.userIds = userIds
+  return scope
+}
+
+export function hasOAUserScopeRecipients(scope?: OAUserScope) {
+  return Boolean(scope?.identityTypes?.length || scope?.roles?.length || scope?.userIds?.length)
+}
+
+export function normalizeOAApprovalSteps(value: unknown): OAApprovalStep[] | undefined {
+  if (!Array.isArray(value)) return undefined
+
+  return value.flatMap((candidate, index) => {
+    if (!isRecord(candidate)) return []
+    const id = typeof candidate.id === "string" ? candidate.id.trim() : ""
+    if (!id) return []
+    const title = typeof candidate.title === "string" && candidate.title.trim()
+      ? candidate.title.trim()
+      : `第 ${index + 1} 级审批`
+    return [{
+      id,
+      title,
+      scope: normalizeOAUserScope(candidate.scope) || {},
+      completion: candidate.completion === "all" ? "all" : "any",
+    }]
+  })
+}
+
+export function getOAWorkflowDraftConfig(draft: Record<string, unknown>): OAWorkflowDraftConfig {
+  const config: OAWorkflowDraftConfig = {}
+  if (Object.prototype.hasOwnProperty.call(draft, "targetScope")) {
+    if (draft.targetScope === null) {
+      config.targetScope = null
+    } else {
+      const targetScope = normalizeOAUserScope(draft.targetScope)
+      if (targetScope !== undefined) config.targetScope = targetScope
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(draft, "approvalSteps")) {
+    const approvalSteps = normalizeOAApprovalSteps(draft.approvalSteps)
+    if (approvalSteps !== undefined) config.approvalSteps = approvalSteps
+  }
+  return config
+}
+
+export function createOAApprovalStep(index: number): OAApprovalStep {
+  const uniquePart = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return {
+    id: `approval_step_${index + 1}_${uniquePart}`,
+    title: `第 ${index + 1} 级审批`,
+    scope: {},
+    completion: "any",
+  }
+}
+
+export function validateOAWorkflowDraftConfig(config: OAWorkflowDraftConfig) {
+  const errors: string[] = []
+  for (const [index, step] of (config.approvalSteps || []).entries()) {
+    if (!step.title.trim()) errors.push(`请填写第 ${index + 1} 个审批步骤名称`)
+    if (!hasOAUserScopeRecipients(step.scope)) errors.push(`请为第 ${index + 1} 个审批步骤选择审批对象`)
+  }
+  return errors
+}
+
 export function toOAFormUpsertPayload(draft: Record<string, unknown>): OAFormUpsertPayload {
   const id = typeof draft.id === "string" ? draft.id : typeof draft._id === "string" ? draft._id : undefined
   const title = typeof draft.title === "string" && draft.title.trim() ? draft.title : "未命名表单"
@@ -249,6 +379,9 @@ export function toOAFormUpsertPayload(draft: Record<string, unknown>): OAFormUps
   if (typeof draft.allowSubmissionEdits === "boolean") payload.allowSubmissionEdits = draft.allowSubmissionEdits
   if (typeof draft.openAt === "number" && Number.isFinite(draft.openAt)) payload.openAt = draft.openAt
   if (typeof draft.closeAt === "number" && Number.isFinite(draft.closeAt)) payload.closeAt = draft.closeAt
+  const workflow = getOAWorkflowDraftConfig(draft)
+  if (workflow.targetScope !== undefined) payload.targetScope = workflow.targetScope
+  if (workflow.approvalSteps !== undefined) payload.approvalSteps = workflow.approvalSteps
   return payload
 }
 

@@ -452,12 +452,13 @@ export const listNotifications = query({
     } catch {
       return []
     }
-    const notifications = await ctx.db
+    let notifications = await ctx.db
       .query("notifications")
       .withIndex("by_user_createdAt", (index: any) => index.eq("userId", actor._id))
       .order("desc")
       .collect()
 
+    notifications = notifications.filter((notification: any) => notification.kind === "coffee_talk")
     return Promise.all(notifications.map(async (notification: any) => ({
       id: String(notification._id),
       title: notification.title,
@@ -483,10 +484,11 @@ export const markNotificationRead = mutation({
     const actor = await getUserBySession(ctx, args.sessionToken)
     const notification = await ctx.db.get(args.notificationId) as {
       userId: any
+      kind?: "coffee_talk" | "oa_workflow"
       readAt?: number
     } | null
 
-    if (!notification || String(notification.userId) !== String(actor._id)) {
+    if (!notification || notification.kind !== "coffee_talk" || String(notification.userId) !== String(actor._id)) {
       return { updated: false }
     }
     if (notification.readAt !== undefined) {
@@ -507,8 +509,8 @@ export const markAllNotificationsRead = mutation({
     const notifications = await ctx.db
       .query("notifications")
       .withIndex("by_user_createdAt", (index: any) => index.eq("userId", actor._id))
-      .collect() as { _id: any; readAt?: number }[]
-    const unreadNotifications = notifications.filter((notification) => notification.readAt === undefined)
+      .collect() as { _id: any; kind?: "coffee_talk" | "oa_workflow"; readAt?: number }[]
+    const unreadNotifications = notifications.filter((notification) => notification.kind === "coffee_talk" && notification.readAt === undefined)
 
     if (unreadNotifications.length === 0) {
       return { updatedCount: 0 }

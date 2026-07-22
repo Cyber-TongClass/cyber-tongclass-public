@@ -1,4 +1,5 @@
 export type TongClassUserRole = "member" | "admin" | "super_admin"
+export type UserIdentityType = "undergrad" | "graduate" | "teacher" | "other"
 export type TongClassOrganization = "pku" | "thu"
 export type TongClassCohort = number | "mascot"
 export type TongClassLinkType =
@@ -28,6 +29,7 @@ export type TongClassUserRecord = {
   englishName: string
   chineseName?: string
   role: TongClassUserRole
+  identityType?: UserIdentityType
   organization: TongClassOrganization
   cohort: TongClassCohort
   studentId: string
@@ -77,6 +79,7 @@ export type CurrentUserDto = {
   englishName: string
   chineseName?: string
   role: TongClassUserRole
+  identityType?: UserIdentityType
   organization: TongClassOrganization
   cohort: TongClassCohort
   studentId: string
@@ -107,6 +110,15 @@ function copyLinks(links?: readonly TongClassProfileLink[]) {
     label: link.label,
     url: link.url,
   }))
+}
+
+function copyAssignedIdentityType(user: TongClassUserRecord) {
+  return user.identityType === "undergrad" ||
+    user.identityType === "graduate" ||
+    user.identityType === "teacher" ||
+    user.identityType === "other"
+    ? { identityType: user.identityType }
+    : {}
 }
 
 export function toPublicTongClassMemberDto(
@@ -145,6 +157,7 @@ export function toCurrentUserDto(user: TongClassUserRecord): CurrentUserDto {
     englishName: user.englishName,
     chineseName: user.chineseName,
     role: user.role,
+    ...copyAssignedIdentityType(user),
     organization: user.organization,
     cohort: user.cohort,
     studentId: user.studentId,
@@ -171,6 +184,7 @@ export function toAdminUserDto(user: TongClassUserRecord): AdminUserDto {
     englishName: user.englishName,
     chineseName: user.chineseName,
     role: user.role,
+    ...copyAssignedIdentityType(user),
     organization: user.organization,
     cohort: user.cohort,
     studentId: user.studentId,
