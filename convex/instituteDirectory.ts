@@ -1,5 +1,6 @@
-import { queryGeneric } from "convex/server"
+import { mutationGeneric, queryGeneric } from "convex/server"
 import { v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 import {
   toPublicInstitutePerson,
   toPublicResearchGroup,
@@ -12,12 +13,13 @@ import type {
   InstitutePersonKind,
   PublicResearchGroupMembershipRole,
 } from "../src/types/institute"
+import { requireSuperAdminBySession } from "./reviewer/lib"
 
 const DEFAULT_PUBLIC_LIMIT = 48
 const MAX_PUBLIC_LIMIT = 100
 
 type StoredInstitutePerson = InstitutePersonRecord & {
-  _id: string
+  _id: Id<"institutePeople">
   visibility: "public" | "hidden"
   displayOrder: number
 }
@@ -173,9 +175,9 @@ async function getPublicPersonResearchGroupMemberships(
 }
 
 /**
- * AIA's fast-pass directory deliberately exports public reads only. Write
- * endpoints remain absent until the session and authorization foundation is
- * integrated server-side.
+ * AIA's public directory reads only export allow-listed profiles. The one
+ * account-binding write path is intentionally separate, session-gated, and
+ * limited to super-admins below.
  */
 export const listPublicPeople = queryGeneric({
   args: {
@@ -274,5 +276,123 @@ export const getPublicResearchGroup = queryGeneric({
       getPublicResearchGroupMembers(ctx, group._id),
     ])
     return toPublicResearchGroup(group, leader, members)
+  },
+})
+
+/**
+ * A super-admin-only selector for explicit directory-to-account links. It
+ * intentionally excludes emails, student IDs, credentials, sessions, and
+ * other account-management data; a caller can only select an exact account ID
+ * from this minimal set.
+ */
+export const listAccountBindingCandidates = queryGeneric({
+  args: {
+    sessionToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireSuperAdminBySession(ctx, args.sessionToken)
+
+    const [people, users] = await Promise.all([
+      ctx.db.query("institutePeople").collect() as Promise<StoredInstitutePerson[]>,
+      ctx.db.query("users").collect(),
+    ])
+
+    return {
+      people: sortPeople(people).map((person) => ({
+        slug: person.slug,
+        kind: person.kind,
+        nameZh: person.nameZh,
+        nameEn: person.nameEn,
+        ...(person.accountUserId !== undefined
+          ? { accountUserId: String(person.accountUserId) }
+          : {}),
+      })),
+      users: users
+        .slice()
+        .sort((left: any, right: any) => (
+          compareText(left.englishName, right.englishName)
+          || compareText(left.username, right.username)
+        ))
+        .map((user: any) => ({
+          id: String(user._id),
+          username: user.username,
+          englishName: user.englishName,
+          ...(user.chineseName !== undefined ? { chineseName: user.chineseName } : {}),
+          ...(user.identityType !== undefined ? { identityType: user.identityType } : {}),
+        })),
+    }
+  },
+})
+
+/**
+ * Binds or unbinds one institute-person record and one existing main-site
+ * account. The target account is resolved by its exact database ID, never by
+ * a name or email. A main account may belong to at most one directory record.
+ */
+export const bindPersonAccount = mutationGeneric({
+  args: {
+    sessionToken: v.string(),
+    personSlug: v.string(),
+    accountUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    await requireSuperAdminBySession(ctx, args.sessionToken)
+
+    const personSlug = normalizePublicSlug(args.personSlug)
+    if (!personSlug) {
+      throw new Error("目录人员标识不能为空")
+    }
+
+    const person = await ctx.db
+      .query("institutePeople")
+      .withIndex("by_slug", (index: any) => index.eq("slug", personSlug))
+      .first() as StoredInstitutePerson | null
+
+    if (!person) {
+      throw new Error("目录人员不存在")
+    }
+
+    if (args.accountUserId === undefined) {
+      if (person.accountUserId !== undefined) {
+        await ctx.db.patch(person._id, {
+          accountUserId: undefined,
+          updatedAt: Date.now(),
+        })
+      }
+
+      return {
+        personSlug: person.slug,
+        accountUserId: undefined,
+      }
+    }
+
+    const account = await ctx.db.get(args.accountUserId)
+    if (!account) {
+      throw new Error("要绑定的主站账号不存在")
+    }
+
+    const existingBindings = await ctx.db
+      .query("institutePeople")
+      .withIndex("by_accountUserId", (index: any) => index.eq("accountUserId", args.accountUserId))
+      .collect() as StoredInstitutePerson[]
+    const conflictingBinding = existingBindings.find((candidate) => (
+      String(candidate._id) !== String(person._id)
+    ))
+
+    if (conflictingBinding) {
+      throw new Error("该主站账号已绑定到另一个研究院目录人员；请先解除原绑定")
+    }
+
+    if (String(person.accountUserId) !== String(args.accountUserId)) {
+      await ctx.db.patch(person._id, {
+        accountUserId: args.accountUserId,
+        updatedAt: Date.now(),
+      })
+    }
+
+    return {
+      personSlug: person.slug,
+      accountUserId: String(args.accountUserId),
+    }
   },
 })
