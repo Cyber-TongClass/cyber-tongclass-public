@@ -8,12 +8,8 @@ const submissionUrl = pathToFileURL(
 ).href
 const submission = await import(submissionUrl)
 
-test("Coffee Talk normalizes a first-release application without optional notes", () => {
+test("Coffee Talk normalizes editable application content without optional notes", () => {
   const result = submission.normalizeCoffeeTalkSubmission({
-    applicantName: "  王同学  ",
-    affiliation: "  北京大学计算机学院 ",
-    identity: "graduate",
-    email: " WANG@PKU.EDU.CN ",
     teacherSlug: "  demo-teacher-li ",
     topic: "  多智能体协作  ",
     availability: "  周二下午或周四上午 ",
@@ -21,35 +17,19 @@ test("Coffee Talk normalizes a first-release application without optional notes"
   })
 
   assert.deepEqual(result, {
-    applicantName: "王同学",
-    affiliation: "北京大学计算机学院",
-    identity: "graduate",
-    email: "wang@pku.edu.cn",
     teacherSlug: "demo-teacher-li",
     topic: "多智能体协作",
     availability: "周二下午或周四上午",
   })
 })
 
-test("Coffee Talk rejects invalid applicant content before persistence", () => {
+test("Coffee Talk rejects invalid editable application content before persistence", () => {
   const valid = {
-    applicantName: "王同学",
-    affiliation: "北京大学",
-    identity: "undergraduate",
-    email: "student@example.edu",
     teacherSlug: "teacher-a",
     topic: "研究交流",
     availability: "下周",
   }
 
-  assert.throws(
-    () => submission.normalizeCoffeeTalkSubmission({ ...valid, email: "not-an-email" }),
-    /COFFEE_TALK_EMAIL_INVALID/,
-  )
-  assert.throws(
-    () => submission.normalizeCoffeeTalkSubmission({ ...valid, identity: "teacher" }),
-    /COFFEE_TALK_IDENTITY_INVALID/,
-  )
   assert.throws(
     () => submission.normalizeCoffeeTalkSubmission({ ...valid, teacherSlug: "not a slug" }),
     /COFFEE_TALK_TEACHER_INVALID/,
