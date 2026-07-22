@@ -1,22 +1,36 @@
 import { readFile } from "fs/promises"
 import path from "path"
 import fontkit from "@pdf-lib/fontkit"
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
-import { getAcademicExchangePaperPdfLabel, hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
+import { PDFDocument, rgb } from "pdf-lib"
+import { hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
+
+const TEMPLATE_FILE_NAME = "academic-exchange-application-form-template.pdf"
+const TEMPLATE_DIRECTORY = ["public", "templates"]
+const BLACK = rgb(0, 0, 0)
+const WHITE = rgb(1, 1, 1)
+const FILL_FONT_SIZE = 8.5
+const NUMBER_FONT_SIZE = 10.2
+const CONTINUATION_ROWS_PER_PAGE = 20
+const APPLICATION_NUMBER_RECT = { x: 185, top: 145, width: 225, height: 23 }
+
+type TemplateRect = {
+  x: number
+  top: number
+  width: number
+  height: number
+}
 
 export function sanitizeAcademicExchangePdfFileName(value: string) {
   return value.replace(/[\\/:*?"<>|]/g, "_").slice(0, 80) || "application"
 }
 
-async function loadChineseFontBytes() {
-  // Source Han Sans SC is bundled in public/ so local and deployed PDF output
-  // use the same open-source CJK font instead of relying on server fonts.
+async function loadBundledFontBytes(fileName: string) {
   const fontPath = path.join(
     /*turbopackIgnore: true*/ process.cwd(),
     "public",
     "fonts",
-    "SourceHanSansSC-Regular.otf"
+    fileName
   )
 
   try {
@@ -26,14 +40,26 @@ async function loadChineseFontBytes() {
   }
 }
 
-function formatApplicationDate(value: string) {
-  const [year, month, day] = value.split("-")
-  if (year && month && day) return `${year} 年 ${month} 月 ${day} 日`
-  return value
+async function loadApplicationTemplateBytes() {
+  const templatePath = path.join(
+    /*turbopackIgnore: true*/ process.cwd(),
+    ...TEMPLATE_DIRECTORY,
+    TEMPLATE_FILE_NAME
+  )
+
+  try {
+    return await readFile(templatePath)
+  } catch {
+    throw new Error("缺少新版学术交流支持申请表模板")
+  }
+}
+
+function normalizeText(value: unknown) {
+  return String(value ?? "").trim()
 }
 
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number) {
-  const paragraphs = String(text || "-").split("\n")
+  const paragraphs = text.split("\n")
   const lines: string[] = []
 
   for (const paragraph of paragraphs) {
@@ -53,20 +79,225 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number) {
   return lines
 }
 
-function fitFontSize(text: string, font: any, preferredSize: number, maxWidth: number, minSize = 5.5) {
-  let size = preferredSize
-  while (size > minSize && font.widthOfTextAtSize(text, size) > maxWidth) {
-    size -= 0.25
+function getFixedTextLayout({
+  text,
+  font,
+  fontSize,
+  width,
+  height,
+  paddingX,
+  paddingY,
+}: {
+  text: string
+  font: any
+  fontSize: number
+  width: number
+  height: number
+  paddingX: number
+  paddingY: number
+}) {
+  const lineHeight = Math.max(fontSize + 1.3, fontSize * 1.15)
+  const lines = wrapText(text, font, fontSize, Math.max(1, width - paddingX * 2))
+  const maxLines = Math.max(1, Math.floor((height - paddingY * 2) / lineHeight))
+  const visibleLines = lines.slice(0, maxLines)
+
+  if (lines.length > maxLines) {
+    let finalLine = visibleLines[maxLines - 1].trimEnd()
+    const maxWidth = Math.max(1, width - paddingX * 2)
+    while (finalLine && font.widthOfTextAtSize(`${finalLine}…`, fontSize) > maxWidth) {
+      finalLine = finalLine.slice(0, -1)
+    }
+    visibleLines[maxLines - 1] = `${finalLine}…`
   }
-  return Math.max(size, minSize)
+
+  return {
+    lines: visibleLines,
+    size: fontSize,
+    lineHeight,
+  }
+}
+
+function drawTextInTemplateRect({
+  page,
+  text,
+  rect,
+  font,
+  fontSize = FILL_FONT_SIZE,
+  align = "left",
+  vertical = "middle",
+  paddingX = 5,
+  paddingY = 3,
+}: {
+  page: any
+  text: unknown
+  rect: TemplateRect
+  font: any
+  fontSize?: number
+  align?: "left" | "center"
+  vertical?: "top" | "middle"
+  paddingX?: number
+  paddingY?: number
+}) {
+  const content = normalizeText(text)
+  if (!content) return
+
+  const { lines, size, lineHeight } = getFixedTextLayout({
+    text: content,
+    font,
+    fontSize,
+    width: rect.width,
+    height: rect.height,
+    paddingX,
+    paddingY,
+  })
+  const contentHeight = lines.length * lineHeight
+  const topOffset = vertical === "middle"
+    ? Math.max(paddingY, (rect.height - contentHeight) / 2)
+    : paddingY
+  const pageHeight = page.getHeight()
+
+  lines.forEach((line, index) => {
+    const lineWidth = font.widthOfTextAtSize(line, size)
+    const x = align === "center"
+      ? rect.x + Math.max(paddingX, (rect.width - lineWidth) / 2)
+      : rect.x + paddingX
+    const y = pageHeight - rect.top - topOffset - size - index * lineHeight
+    page.drawText(line, { x, y, size, font, color: BLACK })
+  })
+}
+
+function clearTemplateRect(page: any, rect: TemplateRect) {
+  page.drawRectangle({
+    x: rect.x,
+    y: page.getHeight() - rect.top - rect.height,
+    width: rect.width,
+    height: rect.height,
+    color: WHITE,
+  })
+}
+
+function drawTemplateBorder(page: any, rect: TemplateRect, borderWidth = 0.6) {
+  page.drawRectangle({
+    x: rect.x,
+    y: page.getHeight() - rect.top - rect.height,
+    width: rect.width,
+    height: rect.height,
+    borderColor: BLACK,
+    borderWidth,
+  })
+}
+
+function formatAmount(value: unknown) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return ""
+  return new Intl.NumberFormat("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)
+}
+
+function getTotalAmount(application: any) {
+  const explicitTotal = Number(application.totalAmount)
+  if (Number.isFinite(explicitTotal)) return explicitTotal
+  return (Array.isArray(application.expenseItems) ? application.expenseItems : [])
+    .reduce((total: number, item: any) => total + (Number(item?.amount) || 0), 0)
+}
+
+function getApplicationDisplayNumber(application: any) {
+  const yearMonth = String(application.applicationDate || "").replace(/\D/g, "").slice(0, 6) || "000000"
+  const recordSuffix = String(application._id || "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(-6)
+    .toUpperCase() || "申请"
+  return `[通] ${yearMonth}-${recordSuffix} 号`
+}
+
+function getPaperDetailText(application: any, hasPaperAttachment: boolean) {
+  if (application.projectCategory === "出境访学") {
+    return "出境访学无需关联论文"
+  }
+
+  if (!hasPaperAttachment) {
+    return "未关联论文"
+  }
+
+  const paperAuthors = (application.paperAuthors || [])
+    .map((author: string) => getPublicationAuthorName(author))
+    .join("，")
+
+  return [
+    `论文题目：${application.paperTitle || ""}`,
+    `作者：${paperAuthors}`,
+    `申请人位次：${application.applicantAuthorName || ""}，${application.applicantAuthorIndexLabel || ""}`,
+    `申请人所在单位：${application.applicantAffiliation || ""}`,
+    `总页数：${application.totalPages || ""}；正文页数：${application.bodyPages || ""}`,
+  ].join("\n")
+}
+
+function getR2HostAllowlist() {
+  const hostnames = new Set<string>()
+  const endpoint = process.env.R2_ENDPOINT?.replace(/\/+$/, "")
+  if (endpoint) {
+    try {
+      hostnames.add(new URL(endpoint).hostname.toLowerCase())
+    } catch {
+      // ignore — invalid R2 endpoint env
+    }
+  }
+  const accountId = process.env.R2_ACCOUNT_ID
+  if (accountId) {
+    hostnames.add(`${accountId.toLowerCase()}.r2.cloudflarestorage.com`)
+  }
+  return hostnames
+}
+
+function getExtraHostAllowlist() {
+  const raw = process.env.ACADEMIC_EXCHANGE_PDF_ALLOWED_HOSTS || ""
+  return new Set(
+    raw
+      .split(/[,\s]+/)
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean)
+  )
+}
+
+function isSafePaperPdfUrl(url: string) {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+
+  if (parsed.protocol !== "https:") {
+    return false
+  }
+
+  const host = parsed.hostname.toLowerCase()
+  if (!host) return false
+
+  // Block obvious internal / link-local hosts even if an admin accidentally
+  // added them to the allowlist.
+  if (host === "localhost" || host.endsWith(".localhost")) return false
+  if (host === "0.0.0.0" || host === "::1") return false
+  if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|127\.)/.test(host)) return false
+  if (/^(fc|fd)[0-9a-f]{2}:/i.test(host)) return false
+
+  const allowlist = new Set([...getR2HostAllowlist(), ...getExtraHostAllowlist()])
+  return allowlist.has(host)
 }
 
 async function fetchPaperPdf(url: string) {
+  if (!isSafePaperPdfUrl(url)) {
+    throw new Error("论文链接主机未在允许列表中")
+  }
+
   const response = await fetch(url, {
     headers: {
       accept: "application/pdf",
       "user-agent": "TongClass academic exchange PDF exporter",
     },
+    redirect: "follow",
   })
 
   if (!response.ok) {
@@ -83,225 +314,355 @@ async function fetchPaperPdf(url: string) {
   return bytes
 }
 
+function drawExpenseContinuationPages({
+  pages,
+  fillFont,
+  headingFont,
+  numberFont,
+  totalFont,
+  application,
+  expenseItems,
+  totalAmount,
+}: {
+  pages: any[]
+  fillFont: any
+  headingFont: any
+  numberFont: any
+  totalFont: any
+  application: any
+  expenseItems: any[]
+  totalAmount: number
+}) {
+  const tableX = 91.59
+  const tableWidth = 424.31
+  const columnWidths = [149.52, 147.84, 126.95]
+  const sectionTop = 195.27
+  const sectionHeight = 20.4
+  const headerTop = sectionTop + sectionHeight
+  const rowHeight = 20.4
+
+  pages.forEach((page, pageIndex) => {
+    const start = pageIndex * CONTINUATION_ROWS_PER_PAGE
+    const currentItems = expenseItems.slice(start, start + CONTINUATION_ROWS_PER_PAGE)
+    const isLastPage = pageIndex === pages.length - 1
+
+    clearTemplateRect(page, { x: 70, top: 188, width: 455, height: 590 })
+    clearTemplateRect(page, APPLICATION_NUMBER_RECT)
+    drawTextInTemplateRect({
+      page,
+      text: getApplicationDisplayNumber(application),
+      rect: APPLICATION_NUMBER_RECT,
+      font: numberFont,
+      fontSize: NUMBER_FONT_SIZE,
+      align: "center",
+    })
+
+    const sectionRect = { x: tableX, top: sectionTop, width: tableWidth, height: sectionHeight }
+    drawTemplateBorder(page, sectionRect, 1.5)
+    drawTextInTemplateRect({
+      page,
+      text: "支出明细（续）",
+      rect: sectionRect,
+      font: headingFont,
+      fontSize: 10,
+      align: "center",
+      paddingY: 2,
+    })
+
+    const headerCells = [
+      { text: "项目", width: columnWidths[0] },
+      { text: "预计金额（人民币）", width: columnWidths[1] },
+      { text: "备注", width: columnWidths[2] },
+    ]
+    let headerX = tableX
+    for (const cell of headerCells) {
+      const rect = { x: headerX, top: headerTop, width: cell.width, height: rowHeight }
+      drawTemplateBorder(page, rect, 0.6)
+      drawTextInTemplateRect({ page, text: cell.text, rect, font: fillFont, fontSize: 10, align: "center" })
+      headerX += cell.width
+    }
+
+    currentItems.forEach((item, rowIndex) => {
+      const top = headerTop + rowHeight + rowIndex * rowHeight
+      const cells = [
+        { text: item?.item || "", width: columnWidths[0], align: "left" as const },
+        { text: formatAmount(item?.amount), width: columnWidths[1], align: "center" as const },
+        { text: item?.note || "", width: columnWidths[2], align: "left" as const },
+      ]
+      let columnX = tableX
+      for (const cell of cells) {
+        const rect = { x: columnX, top, width: cell.width, height: rowHeight }
+        drawTemplateBorder(page, rect, 0.55)
+        drawTextInTemplateRect({ page, text: cell.text, rect, font: fillFont, align: cell.align })
+        columnX += cell.width
+      }
+    })
+
+    const contentBottom = headerTop + rowHeight + currentItems.length * rowHeight
+    if (isLastPage) {
+      const labelRect = { x: tableX, top: contentBottom, width: columnWidths[0], height: rowHeight }
+      const amountRect = { x: tableX + columnWidths[0], top: contentBottom, width: columnWidths[1], height: rowHeight }
+      const noteRect = { x: tableX + columnWidths[0] + columnWidths[1], top: contentBottom, width: columnWidths[2], height: rowHeight }
+      ;[labelRect, amountRect, noteRect].forEach((rect) => drawTemplateBorder(page, rect, 0.55))
+      drawTextInTemplateRect({
+        page,
+        text: "总计",
+        rect: labelRect,
+        font: totalFont,
+        fontSize: 10,
+        align: "center",
+      })
+      drawTextInTemplateRect({
+        page,
+        text: formatAmount(totalAmount),
+        rect: amountRect,
+        font: fillFont,
+        align: "center",
+      })
+    }
+
+    const tableBottom = contentBottom + (isLastPage ? rowHeight : 0)
+    drawTemplateBorder(page, {
+      x: tableX,
+      top: sectionTop,
+      width: tableWidth,
+      height: tableBottom - sectionTop,
+    }, 1.5)
+  })
+}
+
+function drawApplicationTemplatePage({
+  page,
+  fillFont,
+  headingFont,
+  numberFont,
+  totalFont,
+  application,
+  expenseItems,
+  totalAmount,
+  hasPaperAttachment,
+  hasExpenseContinuation,
+}: {
+  page: any
+  fillFont: any
+  headingFont: any
+  numberFont: any
+  totalFont: any
+  application: any
+  expenseItems: any[]
+  totalAmount: number
+  hasPaperAttachment: boolean
+  hasExpenseContinuation: boolean
+}) {
+  const fields = {
+    number: APPLICATION_NUMBER_RECT,
+    applicantName: { x: 172.95, top: 215.67, width: 67.67, height: 19.91 },
+    studentId: { x: 317.91, top: 215.67, width: 70.31, height: 19.91 },
+    gender: { x: 447.99, top: 215.67, width: 67.91, height: 19.91 },
+    phone: { x: 171.99, top: 236.07, width: 68.63, height: 19.91 },
+    email: { x: 317.91, top: 236.07, width: 197.99, height: 19.91 },
+    projectName: { x: 171.99, top: 295.83, width: 145.43, height: 19.91 },
+    projectCategory: { x: 388.95, top: 295.83, width: 126.95, height: 19.91 },
+    projectTime: { x: 171.99, top: 316.23, width: 145.43, height: 19.91 },
+    exchangeLocation: { x: 388.95, top: 316.23, width: 126.95, height: 19.91 },
+    paperDetails: { x: 171.99, top: 336.63, width: 343.91, height: 59.51 },
+    otherFunding: { x: 171.99, top: 396.63, width: 343.91, height: 64.07 },
+    projectPlan: { x: 171.99, top: 461.19, width: 343.91, height: 64.55 },
+  }
+
+  clearTemplateRect(page, fields.number)
+  drawTextInTemplateRect({
+    page,
+    text: getApplicationDisplayNumber(application),
+    rect: fields.number,
+    font: numberFont,
+    fontSize: NUMBER_FONT_SIZE,
+    align: "center",
+  })
+
+  const shortFields = [
+    [application.applicantName, fields.applicantName],
+    [application.studentId, fields.studentId],
+    [application.gender, fields.gender],
+    [application.phone, fields.phone],
+    [application.email, fields.email],
+    [application.projectName, fields.projectName],
+    [application.projectCategory, fields.projectCategory],
+    [application.projectTime, fields.projectTime],
+    [application.exchangeLocation, fields.exchangeLocation],
+  ] as const
+  for (const [text, rect] of shortFields) {
+    drawTextInTemplateRect({ page, text, rect, font: fillFont, align: "center", paddingX: 3, paddingY: 2 })
+  }
+
+  drawTextInTemplateRect({
+    page,
+    text: getPaperDetailText(application, hasPaperAttachment),
+    rect: fields.paperDetails,
+    font: fillFont,
+    vertical: "top",
+  })
+  drawTextInTemplateRect({
+    page,
+    text: application.otherFunding,
+    rect: fields.otherFunding,
+    font: fillFont,
+    vertical: "top",
+  })
+  drawTextInTemplateRect({
+    page,
+    text: application.projectPlan,
+    rect: fields.projectPlan,
+    font: fillFont,
+    vertical: "top",
+  })
+
+  const tableX = 91.59
+  const tableWidth = 424.31
+  const columnWidths = [149.52, 147.84, 126.95]
+  const sectionTop = 545.19
+  const rowHeight = 20.4
+  const headerTop = sectionTop + rowHeight
+  const firstPageItems = expenseItems.slice(0, 6)
+
+  // The source template contains six fixed empty rows and a fixed total row.
+  // Replace that whole block so the visible row count follows the web form.
+  clearTemplateRect(page, { x: 88, top: 542, width: 430, height: 208 })
+
+  const sectionRect = { x: tableX, top: sectionTop, width: tableWidth, height: rowHeight }
+  drawTemplateBorder(page, sectionRect, 1.5)
+  drawTextInTemplateRect({
+    page,
+    text: "支出明细",
+    rect: sectionRect,
+    font: headingFont,
+    fontSize: 10,
+    align: "center",
+    paddingY: 2,
+  })
+
+  const headerCells = [
+    { text: "项目", width: columnWidths[0] },
+    { text: "预计金额（人民币）", width: columnWidths[1] },
+    { text: "备注", width: columnWidths[2] },
+  ]
+  let headerX = tableX
+  for (const cell of headerCells) {
+    const rect = { x: headerX, top: headerTop, width: cell.width, height: rowHeight }
+    drawTemplateBorder(page, rect, 0.6)
+    drawTextInTemplateRect({ page, text: cell.text, rect, font: fillFont, fontSize: 10, align: "center" })
+    headerX += cell.width
+  }
+
+  firstPageItems.forEach((item, rowIndex) => {
+    const top = headerTop + rowHeight + rowIndex * rowHeight
+    const cells = [
+      { text: item?.item || "", width: columnWidths[0], align: "left" as const },
+      { text: formatAmount(item?.amount), width: columnWidths[1], align: "center" as const },
+      { text: item?.note || "", width: columnWidths[2], align: "left" as const },
+    ]
+    let columnX = tableX
+    for (const cell of cells) {
+      const rect = { x: columnX, top, width: cell.width, height: rowHeight }
+      drawTemplateBorder(page, rect, 0.55)
+      drawTextInTemplateRect({ page, text: cell.text, rect, font: fillFont, align: cell.align })
+      columnX += cell.width
+    }
+  })
+
+  const contentBottom = headerTop + rowHeight + firstPageItems.length * rowHeight
+  if (!hasExpenseContinuation) {
+    const labelRect = { x: tableX, top: contentBottom, width: columnWidths[0], height: rowHeight }
+    const amountRect = { x: tableX + columnWidths[0], top: contentBottom, width: columnWidths[1], height: rowHeight }
+    const noteRect = { x: tableX + columnWidths[0] + columnWidths[1], top: contentBottom, width: columnWidths[2], height: rowHeight }
+    ;[labelRect, amountRect, noteRect].forEach((rect) => drawTemplateBorder(page, rect, 0.55))
+    drawTextInTemplateRect({ page, text: "总计", rect: labelRect, font: totalFont, fontSize: 10, align: "center" })
+    drawTextInTemplateRect({ page, text: formatAmount(totalAmount), rect: amountRect, font: fillFont, align: "center" })
+  }
+
+  const tableBottom = contentBottom + (hasExpenseContinuation ? 0 : rowHeight)
+  drawTemplateBorder(page, {
+    x: tableX,
+    top: sectionTop,
+    width: tableWidth,
+    height: tableBottom - sectionTop,
+  }, 1.5)
+
+  drawTextInTemplateRect({
+    page,
+    text: hasPaperAttachment ? "附件材料：论文全文见后附 PDF" : "附件材料：无",
+    rect: { x: 90.4, top: tableBottom + 4, width: 220, height: 14 },
+    font: fillFont,
+    vertical: "top",
+    paddingX: 0.5,
+    paddingY: 0.5,
+  })
+}
+
 export async function buildAcademicExchangePdf(
   application: any,
   options: { paperPdfBytes?: Uint8Array | null } = {}
 ) {
-  const pdfDoc = await PDFDocument.create()
+  const [templateBytes, fangSongBytes, shuSongBytes, heiTiBytes, kaiTiBytes] = await Promise.all([
+    loadApplicationTemplateBytes(),
+    loadBundledFontBytes("FZFSK.TTF"),
+    loadBundledFontBytes("FZSSK.TTF"),
+    loadBundledFontBytes("FZHTK.TTF"),
+    loadBundledFontBytes("FZKTK.TTF"),
+  ])
+  if (!fangSongBytes || !shuSongBytes || !heiTiBytes || !kaiTiBytes) {
+    throw new Error("缺少方正仿宋、方正书宋、方正黑体或方正楷体资源，无法生成申请表 PDF")
+  }
+
+  const pdfDoc = await PDFDocument.load(templateBytes)
+  if (pdfDoc.getPageCount() !== 1) {
+    throw new Error("新版学术交流支持申请表模板必须包含且只包含一页")
+  }
   pdfDoc.registerFontkit(fontkit)
 
-  const fontBytes = await loadChineseFontBytes()
-  if (!fontBytes) {
-    throw new Error("缺少中文字体资源，无法生成中文申请表 PDF")
-  }
-
-  // Full embedding is larger, but CJK subset embedding can produce corrupt
-  // glyph maps in some production PDF viewers.
-  const font = await pdfDoc.embedFont(fontBytes, { subset: false })
-  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const a4: [number, number] = [595.28, 841.89]
-  const margin = 40
-  const tableWidth = a4[0] - margin * 2
-  const lineHeight = 14
-  const black = rgb(0, 0, 0)
-
-  let page = pdfDoc.addPage(a4)
-  let y = a4[1] - 44
-
-  const ensureSpace = (height: number) => {
-    if (y - height > margin + 12) return
-    page = pdfDoc.addPage(a4)
-    y = a4[1] - 44
-  }
-
-  const drawText = (text: string, x: number, yy: number, size = 10, textFont = font) => {
-    page.drawText(text, { x, y: yy, size, font: textFont, color: black })
-  }
-
-  const drawCenteredText = (text: string, x: number, yy: number, width: number, size = 10) => {
-    const textWidth = font.widthOfTextAtSize(text, size)
-    drawText(text, x + Math.max(0, (width - textWidth) / 2), yy, size)
-  }
-
-  const drawCell = ({
-    x,
-    top,
-    width,
-    height,
-    text,
-    size = 10,
-    align = "left",
-    valign = "top",
-    underlineText,
-    noWrap = false,
-    textFont = font,
-  }: {
-    x: number
-    top: number
-    width: number
-    height: number
-    text: string
-    size?: number
-    align?: "left" | "center"
-    valign?: "top" | "middle"
-    underlineText?: string
-    noWrap?: boolean
-    textFont?: any
-  }) => {
-    page.drawRectangle({
-      x,
-      y: top - height,
-      width,
-      height,
-      borderColor: black,
-      borderWidth: 0.8,
-    })
-
-    const innerWidth = width - 14
-    const displayText = text || "-"
-    const effectiveSize = noWrap ? fitFontSize(displayText, textFont, size, innerWidth) : size
-    const lines = noWrap ? [displayText] : wrapText(displayText, textFont, effectiveSize, innerWidth)
-    const effectiveLineHeight = Math.max(9, effectiveSize + 4)
-    const totalTextHeight = lines.length * effectiveLineHeight
-    const startY = valign === "middle"
-      ? top - (height - totalTextHeight) / 2 - effectiveSize
-      : top - 15
-
-    lines.forEach((line, index) => {
-      const lineY = startY - index * effectiveLineHeight
-      const lineWidth = textFont.widthOfTextAtSize(line, effectiveSize)
-      const lineX = align === "center" ? x + Math.max(6, (width - lineWidth) / 2) : x + 6
-      drawText(line, lineX, lineY, effectiveSize, textFont)
-
-      if (underlineText && line.includes(underlineText)) {
-        const prefix = line.slice(0, line.indexOf(underlineText))
-        const startX = lineX + textFont.widthOfTextAtSize(prefix, effectiveSize)
-        const endX = startX + textFont.widthOfTextAtSize(underlineText, effectiveSize)
-        page.drawLine({
-          start: { x: startX, y: lineY - 2 },
-          end: { x: endX, y: lineY - 2 },
-          thickness: 0.8,
-          color: black,
-        })
-      }
-    })
-  }
-
-  const drawRow = (
-    cells: Array<{ text: string; width: number; size?: number; align?: "left" | "center"; valign?: "top" | "middle"; underlineText?: string; noWrap?: boolean; textFont?: any }>,
-    minHeight = 30
-  ) => {
-    const height = Math.max(
-      minHeight,
-      ...cells.map((cell) => {
-        const size = cell.size || 10
-        const innerWidth = cell.width - 14
-        const textFont = cell.textFont || font
-        const effectiveSize = cell.noWrap ? fitFontSize(cell.text || "-", textFont, size, innerWidth) : size
-        const lines = cell.noWrap ? [cell.text || "-"] : wrapText(cell.text || "-", textFont, effectiveSize, innerWidth)
-        return 16 + lines.length * Math.max(9, effectiveSize + 4)
-      })
-    )
-    ensureSpace(height)
-    let x = margin
-    for (const cell of cells) {
-      drawCell({ x, top: y, height, ...cell })
-      x += cell.width
-    }
-    y -= height
-  }
-
-  const labelWidth = 54
-  const pair = (label: string, value: string, width: number, valueSize = 10, noWrap = false, textFont = font) => ([
-    { text: label, width: labelWidth, align: "center" as const, valign: "middle" as const },
-    { text: value || "-", width: width - labelWidth, valign: "middle" as const, size: valueSize, noWrap, textFont },
-  ])
-  const thirdWidth = tableWidth / 3
-  const halfWidth = tableWidth / 2
+  const numberFont = await pdfDoc.embedFont(fangSongBytes, { subset: true })
+  const fillFont = await pdfDoc.embedFont(shuSongBytes, { subset: true })
+  const headingFont = await pdfDoc.embedFont(heiTiBytes, { subset: true })
+  const totalFont = await pdfDoc.embedFont(kaiTiBytes, { subset: true })
+  const expenseItems = (Array.isArray(application.expenseItems) ? application.expenseItems : [])
+    .filter((item: any) => item && (normalizeText(item.item) || Number.isFinite(Number(item.amount)) || normalizeText(item.note)))
+  const totalAmount = getTotalAmount(application)
   const hasPaperAttachment = hasAcademicExchangePaperPdfAttachment(application)
-  const paperPdfLabel = getAcademicExchangePaperPdfLabel(application)
-  const paperAuthors = (application.paperAuthors || []).map((author: string) => getPublicationAuthorName(author)).join("，")
-  const paperDetailText = hasPaperAttachment
-    ? `论文题目：${application.paperTitle || ""}\n作者：${paperAuthors}\n申请人位次：${application.applicantAuthorName || ""}，${application.applicantAuthorIndexLabel || ""}\n申请人所在单位：${application.applicantAffiliation || ""}\n总页数：${application.totalPages || ""}；正文页数：${application.bodyPages || ""}\n论文 PDF：${paperPdfLabel}`
-    : " "
+  const hasExpenseContinuation = expenseItems.length > 6
 
-  drawCenteredText("通班学术交流支持项目", margin, y, tableWidth, 16)
-  y -= 22
-  drawCenteredText("申 请 表", margin, y, tableWidth, 18)
-  y -= 28
+  drawApplicationTemplatePage({
+    page: pdfDoc.getPage(0),
+    fillFont,
+    headingFont,
+    numberFont,
+    totalFont,
+    application,
+    expenseItems,
+    totalAmount,
+    hasPaperAttachment,
+    hasExpenseContinuation,
+  })
 
-  drawRow([
-    ...pair("姓 名", application.applicantName, thirdWidth),
-    ...pair("学 号", application.studentId, thirdWidth, 10, false, latinFont),
-    ...pair("性别", application.gender || "-", thirdWidth),
-  ], 32)
-  drawRow([
-    ...pair("联系电话", application.phone || "-", thirdWidth, 10, false, latinFont),
-    ...pair("项目类别", application.projectCategory, tableWidth - thirdWidth),
-  ], 32)
-  drawRow([
-    { text: "邮 箱", width: labelWidth, align: "center", valign: "middle" },
-    { text: String(application.email || "").trim(), width: tableWidth - labelWidth, valign: "middle", size: 10, noWrap: true, textFont: latinFont },
-  ], 32)
-  drawRow([
-    ...pair("项目名称", application.projectName, halfWidth),
-    ...pair("交流地点", application.exchangeLocation, halfWidth),
-  ], 34)
-  drawRow([
-    { text: "项目时间", width: labelWidth, align: "center", valign: "middle" },
-    { text: application.projectTime, width: tableWidth - labelWidth, valign: "middle" },
-  ], 32)
-  if (hasPaperAttachment) {
-    drawRow([
-      { text: "关联接收论文及其作者单位", width: 96, align: "center", valign: "middle" },
-      {
-        text: paperDetailText,
-        width: tableWidth - 96,
-        size: 9,
-        underlineText: application.applicantAuthorName,
-      },
-    ], 108)
+  if (hasExpenseContinuation) {
+    const continuationItems = expenseItems.slice(6)
+    const continuationPageCount = Math.ceil(continuationItems.length / CONTINUATION_ROWS_PER_PAGE)
+    const continuationTemplateDoc = await PDFDocument.load(templateBytes)
+    const continuationPages = await pdfDoc.copyPages(
+      continuationTemplateDoc,
+      Array.from({ length: continuationPageCount }, () => 0)
+    )
+    continuationPages.forEach((page) => pdfDoc.addPage(page))
+    drawExpenseContinuationPages({
+      pages: continuationPages,
+      fillFont,
+      headingFont,
+      numberFont,
+      totalFont,
+      application,
+      expenseItems: continuationItems,
+      totalAmount,
+    })
   }
-  drawRow([
-    { text: "有无\n其他资助来源", width: 78, align: "center", valign: "middle" },
-    { text: application.otherFunding, width: tableWidth - 78 },
-  ], 54)
-  drawRow([
-    { text: "项目\n计划", width: 78, align: "center", valign: "middle" },
-    { text: application.projectPlan, width: tableWidth - 78 },
-  ], 86)
-
-  drawRow([
-    { text: "申请金额", width: tableWidth, align: "center", valign: "middle", size: 11 },
-  ], 28)
-  drawRow([
-    { text: "开支项目", width: tableWidth * 0.42, align: "center", valign: "middle" },
-    { text: "预计金额（人民币元）", width: tableWidth * 0.24, align: "center", valign: "middle" },
-    { text: "备注", width: tableWidth * 0.34, align: "center", valign: "middle" },
-  ], 28)
-  for (const item of application.expenseItems) {
-    drawRow([
-      { text: item.item, width: tableWidth * 0.42 },
-      { text: String(item.amount), width: tableWidth * 0.24, align: "center", valign: "middle" },
-      { text: item.note || "-", width: tableWidth * 0.34 },
-    ], 30)
-  }
-  drawRow([
-    { text: "总计", width: tableWidth * 0.42, align: "center", valign: "middle" },
-    { text: String(application.totalAmount), width: tableWidth * 0.24, align: "center", valign: "middle" },
-    { text: "", width: tableWidth * 0.34 },
-  ], 30)
-
-  if (hasPaperAttachment) {
-    drawRow([
-      { text: "附件材料：论文全文见后附 PDF", width: tableWidth, valign: "middle" },
-    ], 32)
-  }
-
-  ensureSpace(52)
-  y -= 28
-  drawText("签名：____________________", margin + 8, y, 11)
-  drawText(`申请时间：${formatApplicationDate(application.applicationDate)}`, a4[0] - margin - 210, y, 11)
 
   if (hasPaperAttachment) {
     const paperPdfBytes = options.paperPdfBytes || (application.paperPdfUrl ? await fetchPaperPdf(application.paperPdfUrl) : null)
