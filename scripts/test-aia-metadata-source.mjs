@@ -24,18 +24,18 @@ function loadTypeScriptModule(relativePath) {
     },
     fileName: absolutePath,
   }).outputText
-  const module = { exports: {} }
+  const compiledModule = { exports: {} }
   const localRequire = createRequire(absolutePath)
 
   new Function("exports", "require", "module", "__filename", "__dirname", compiled)(
-    module.exports,
+    compiledModule.exports,
     localRequire,
-    module,
+    compiledModule,
     absolutePath,
     dirname(absolutePath),
   )
 
-  return module.exports
+  return compiledModule.exports
 }
 
 test("AIA root metadata uses an internal canonical site URL and local identity", () => {
