@@ -53,7 +53,7 @@ const thuDepartments = [
 
 const thuResearchCards = [
   {
-    title: "通班学术发展与科研实践",
+    title: "清华通班学术发展与科研实践",
     desc: "学术氛围建设与科研能力培养的重要平台，依托清华大学与北京市通用人工智能研究院资源，组织讲座、培训、参观、暑期科研实践等活动，帮助同学们拓宽视野、启迪科研、深入课题。",
     items: [
       "组织 TongTalk 学术讲座，分享 PyTorch、Linux、服务器使用与机器学习前沿等内容",
@@ -392,7 +392,7 @@ export default function AboutPage() {
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
                 >
                   <ChevronDown className={`h-4 w-4 transition-transform ${isThuResearchOpen ? "rotate-180" : ""}`} aria-hidden="true" />
-                  通班学术发展与科研实践
+                  清华通班学术发展与科研实践
                 </button>
 
                 {isThuResearchOpen && (
