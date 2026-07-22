@@ -60,7 +60,6 @@ const oaResultField = v.object({
 const coffeeTalkStatus = v.union(
   v.literal("submitted"),
   v.literal("under_review"),
-  v.literal("needs_information"),
   v.literal("accepted"),
   v.literal("declined"),
   v.literal("withdrawn"),
@@ -71,8 +70,6 @@ const coffeeTalkStatus = v.union(
 const coffeeTalkEventAction = v.union(
   v.literal("submitted"),
   v.literal("start_review"),
-  v.literal("request_information"),
-  v.literal("supplement"),
   v.literal("accept"),
   v.literal("decline"),
   v.literal("withdraw"),

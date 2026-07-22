@@ -1,7 +1,6 @@
 export const coffeeTalkStatuses = [
   "submitted",
   "under_review",
-  "needs_information",
   "accepted",
   "declined",
   "withdrawn",
@@ -22,8 +21,6 @@ export type CoffeeTalkActorKind = (typeof coffeeTalkActorKinds)[number]
 
 export const coffeeTalkActions = [
   "start_review",
-  "request_information",
-  "supplement",
   "accept",
   "decline",
   "withdraw",
@@ -81,9 +78,6 @@ function permittedTransition(
   }
 
   if (actorKind === "applicant") {
-    if (status === "needs_information" && action === "supplement") {
-      return "submitted"
-    }
     if (action === "withdraw") {
       return "withdrawn"
     }
@@ -93,9 +87,6 @@ function permittedTransition(
   if (actorKind === "teacher") {
     if (status === "submitted" && action === "start_review") {
       return "under_review"
-    }
-    if (status === "under_review" && action === "request_information") {
-      return "needs_information"
     }
     if (status === "under_review" && action === "accept") {
       return "accepted"

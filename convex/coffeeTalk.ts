@@ -21,8 +21,6 @@ const COFFEE_TALK_REASSIGNMENT_TARGET_REQUIRED = "COFFEE_TALK_REASSIGNMENT_TARGE
 
 const coffeeTalkActionValidator = v.union(
   v.literal("start_review"),
-  v.literal("request_information"),
-  v.literal("supplement"),
   v.literal("accept"),
   v.literal("decline"),
   v.literal("withdraw"),

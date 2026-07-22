@@ -56,7 +56,7 @@ test("AIA notification and Coffee Talk presentation components keep their safety
   assert.match(inbox, /notifications/, "NotificationInbox must accept server-provided notification DTOs")
 
   const statusBadge = sources["src/components/coffee-talk/coffee-talk-status-badge.tsx"]
-  for (const status of ["submitted", "under_review", "needs_information", "accepted", "declined", "withdrawn", "cancelled", "completed"]) {
+  for (const status of ["submitted", "under_review", "accepted", "declined", "withdrawn", "cancelled", "completed"]) {
     assert.match(statusBadge, new RegExp(`["']${status}["']`), `CoffeeTalkStatusBadge must support ${status}`)
   }
 

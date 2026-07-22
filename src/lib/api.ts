@@ -425,7 +425,7 @@ export function useActOnCoffeeTalkApplication() {
   return useCallback((args: {
     applicationId: string
     expectedVersion: number
-    action: "start_review" | "request_information" | "supplement" | "accept" | "decline" | "withdraw" | "cancel" | "complete" | "reassign" | "correct"
+    action: "start_review" | "accept" | "decline" | "withdraw" | "cancel" | "complete" | "reassign" | "correct"
     teacherSlug?: string
   }) => {
     const sessionToken = getTongClassStoredSessionToken()

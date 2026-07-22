@@ -38,8 +38,7 @@ function formatUpdatedAt(value: number): string {
 
 function itemForApplication(application: MyCoffeeTalkApplication): CoffeeTalkApplicationListItem {
   const allowedActions = application.allowedActions
-    // This first release supports a safe withdrawal from the list. A proper
-    // supplement editor will be added before exposing the supplement action.
+    // This first release supports a safe withdrawal from the list.
     .filter((action) => action === "withdraw")
     .map((action) => ({
       id: action,

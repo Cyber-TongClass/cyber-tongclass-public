@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils"
 export type CoffeeTalkStatus =
   | "submitted"
   | "under_review"
-  | "needs_information"
   | "accepted"
   | "declined"
   | "withdrawn"
@@ -17,7 +16,6 @@ type CoffeeTalkBadgeVariant = NonNullable<BadgeProps["variant"]>
 export const coffeeTalkStatusLabels: Record<CoffeeTalkStatus, string> = {
   submitted: "已提交",
   under_review: "审核中",
-  needs_information: "待补充信息",
   accepted: "已接受",
   declined: "未接受",
   withdrawn: "已撤回",
@@ -28,7 +26,6 @@ export const coffeeTalkStatusLabels: Record<CoffeeTalkStatus, string> = {
 const coffeeTalkStatusVariants: Record<CoffeeTalkStatus, CoffeeTalkBadgeVariant> = {
   submitted: "secondary",
   under_review: "outline",
-  needs_information: "warning",
   accepted: "success",
   declined: "destructive",
   withdrawn: "secondary",
