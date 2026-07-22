@@ -5,7 +5,7 @@ import {
     assertCanManageAccount,
     assertCanProvisionAccount,
     assertCanSetManagedRole,
-} from "./lib/user-account-policy"
+} from "./lib/userAccountPolicy"
 import {
     assertCanAssignUserIdentityType,
     getDefaultStoredIdentityType,

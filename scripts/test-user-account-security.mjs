@@ -4,7 +4,7 @@ import test from "node:test"
 import { pathToFileURL } from "node:url"
 
 const policyUrl = pathToFileURL(
-  path.resolve("convex/lib/user-account-policy.ts"),
+  path.resolve("convex/lib/userAccountPolicy.ts"),
 ).href
 const policy = await import(policyUrl)
 
