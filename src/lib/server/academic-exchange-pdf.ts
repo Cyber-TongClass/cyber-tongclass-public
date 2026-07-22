@@ -215,6 +215,30 @@ function drawTemplateBorder(page: any, rect: TemplateRect, borderWidth = 0.6) {
   })
 }
 
+function drawTemplateLine({
+  page,
+  startX,
+  startTop,
+  endX,
+  endTop,
+  borderWidth,
+}: {
+  page: any
+  startX: number
+  startTop: number
+  endX: number
+  endTop: number
+  borderWidth: number
+}) {
+  const pageHeight = page.getHeight()
+  page.drawLine({
+    start: { x: startX, y: pageHeight - startTop },
+    end: { x: endX, y: pageHeight - endTop },
+    thickness: borderWidth,
+    color: BLACK,
+  })
+}
+
 function formatAmount(value: unknown) {
   const amount = Number(value)
   if (!Number.isFinite(amount)) return ""
@@ -527,7 +551,6 @@ function drawApplicationTemplatePage({
   const labelWidth = 80.4
   const contentX = tableX + labelWidth
   const contentWidth = tableWidth - labelWidth
-  const projectInfoSectionTop = 275.43
   const dynamicRowsTop = 336.63
   const dynamicRows = [
     {
@@ -563,7 +586,7 @@ function drawApplicationTemplatePage({
   // rebuild them from the wrapped content so no field needs an ellipsis.
   clearTemplateRect(page, {
     x: 88,
-    top: dynamicRowsTop - TABLE_OUTER_BORDER_WIDTH,
+    top: dynamicRowsTop,
     width: 430,
     height: 476,
   })
@@ -597,13 +620,33 @@ function drawApplicationTemplatePage({
     dynamicTop += row.height
   }
 
-  // Restore the original 1.5pt outer frame around the complete project table.
-  drawTemplateBorder(page, {
-    x: tableX,
-    top: projectInfoSectionTop,
-    width: tableWidth,
-    height: dynamicTop - projectInfoSectionTop,
-  }, TABLE_OUTER_BORDER_WIDTH)
+  // Preserve the template's upper frame exactly as-is. Only the cleared,
+  // dynamic lower portion needs new 1.5pt left, right, and bottom edges;
+  // redrawing the complete frame would visibly thicken the original lines.
+  drawTemplateLine({
+    page,
+    startX: tableX,
+    startTop: dynamicRowsTop,
+    endX: tableX,
+    endTop: dynamicTop,
+    borderWidth: TABLE_OUTER_BORDER_WIDTH,
+  })
+  drawTemplateLine({
+    page,
+    startX: tableX + tableWidth,
+    startTop: dynamicRowsTop,
+    endX: tableX + tableWidth,
+    endTop: dynamicTop,
+    borderWidth: TABLE_OUTER_BORDER_WIDTH,
+  })
+  drawTemplateLine({
+    page,
+    startX: tableX,
+    startTop: dynamicTop,
+    endX: tableX + tableWidth,
+    endTop: dynamicTop,
+    borderWidth: TABLE_OUTER_BORDER_WIDTH,
+  })
 
   const columnWidths = [149.52, 147.84, 126.95]
   const sectionTop = dynamicTop + 19.45

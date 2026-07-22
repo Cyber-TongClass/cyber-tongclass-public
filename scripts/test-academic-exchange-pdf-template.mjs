@@ -168,6 +168,23 @@ async function assertFirstPageOuterBordersAreBold(pdfPath) {
     assert.ok(getDarkRun(91.59, y) >= 6, `First-page left outer border at ${y}pt must render at 1.5pt`)
     assert.ok(getDarkRun(515.9, y) >= 6, `First-page right outer border at ${y}pt must render at 1.5pt`)
   }
+
+  for (const x of [91.59, 515.9]) {
+    const upperProjectBorderRun = getDarkRun(x, 300)
+    assert.ok(
+      upperProjectBorderRun <= 6,
+      `Template project-info upper border at ${x}pt must not be overdrawn (dark run ${upperProjectBorderRun}px)`
+    )
+
+    const centerX = Math.round(x * scale)
+    const joinStartY = Math.round((336.63 - 2) * scale)
+    const joinEndY = Math.round((336.63 + 2) * scale)
+    for (let y = joinStartY; y <= joinEndY; y += 1) {
+      const hasBorderPixel = Array.from({ length: 11 }, (_, index) => centerX - 5 + index)
+        .some((pixelX) => data[y * info.width + pixelX] < 128)
+      assert.ok(hasBorderPixel, `Project-info outer border must remain continuous at ${x}pt around the dynamic-row join`)
+    }
+  }
 }
 
 function makeExpenseItems(count) {
