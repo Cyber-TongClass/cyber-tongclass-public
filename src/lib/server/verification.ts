@@ -91,7 +91,15 @@ function verifySignedPayload(proof: string) {
         .update(payloadB64)
         .digest("base64url")
 
-    if (signature !== expected) {
+    // Length-checked constant-time comparison. HMAC outputs are fixed-length
+    // base64url strings; if lengths differ we still run a comparison against
+    // the expected value to keep the timing profile consistent.
+    const expectedBuf = Buffer.from(expected, "utf8")
+    const providedBuf = Buffer.from(signature, "utf8")
+    if (
+        expectedBuf.length !== providedBuf.length ||
+        !crypto.timingSafeEqual(expectedBuf, providedBuf)
+    ) {
         return null
     }
 
