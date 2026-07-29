@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 import type { OAReviewStatus } from "@/types"
 
 const reviewStatusPresentation: Record<OAReviewStatus, { label: string; variant: "secondary" | "success" | "warning" | "destructive" }> = {
@@ -24,12 +25,9 @@ export function formatAiaOATime(value?: number) {
 
 export function AiaOALoginRequired({ nextPath, action }: { nextPath: string; action: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-700">
+    <div className="border border-dashed aia-border-rule px-4 py-3 text-sm leading-6 text-[hsl(var(--aia-ink))]">
       登录后才能{action}。
-      <Link
-        className="ml-2 font-medium text-primary underline-offset-4 hover:underline"
-        href={`/login?next=${encodeURIComponent(nextPath)}`}
-      >
+      <Link className="aia-link aia-focus ml-2 font-medium" href={`/login?next=${encodeURIComponent(nextPath)}`}>
         前往登录
       </Link>
     </div>
@@ -37,16 +35,17 @@ export function AiaOALoginRequired({ nextPath, action }: { nextPath: string; act
 }
 
 export function AiaOAAuthLoading() {
-  return <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600" role="status">正在确认登录状态…</p>
+  return (
+    <p role="status" className="aia-text-muted py-6 text-sm">
+      正在确认登录状态…
+    </p>
+  )
 }
 
 export function AiaOAServiceBackLink() {
   return (
-    <Link
-      href="/services/oa"
-      className="inline-flex items-center text-sm font-medium text-slate-700 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-    >
+    <SafeReturnLink fallback="/services/oa" className="aia-link aia-focus text-sm font-medium">
       ← 返回 OA 与审批
-    </Link>
+    </SafeReturnLink>
   )
 }

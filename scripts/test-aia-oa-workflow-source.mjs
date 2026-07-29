@@ -30,6 +30,11 @@ test("AIA OA workflow starts a current step, advances in order, and exposes acti
   assert.match(forms, /export const actOnApprovalTask = mutation\(/)
   assert.match(forms, /export const listMyNotifications = query\(/)
   assert.match(forms, /await startOAWorkflow\(/)
+  assert.match(workflow, /request_changes/)
+  assert.match(workflow, /workflow_changes_requested/)
+  assert.match(workflow, /export async function resumeOAWorkflow\(/)
+  assert.match(forms, /expectedVersion/)
+  assert.match(forms, /workflowVersion/)
 })
 
 test("legacy Tong Class OA paths remain explicitly available when no AIA target scope is configured", () => {
@@ -46,7 +51,7 @@ test("AIA workflow authorization uses stored current tasks and keeps owner data 
   assert.match(forms, /approvalStepsSnapshot: _approvalStepsSnapshot/)
   assert.match(forms, /task\.status === "pending" && task\.stepIndex === submission\.currentApprovalStep/)
   assert.match(forms, /return await advanceOAWorkflow\(/)
-  assert.match(forms, /if \(args\.reviewStatus === "needs_changes"\)/)
+  assert.match(forms, /args\.reviewStatus === "needs_changes"[\s\S]*?request_changes/)
   assert.match(forms, /try \{\s*user = await getUserBySession\(ctx, args\.sessionToken\)\s*\} catch \{\s*return \[\]/)
 })
 

@@ -26,7 +26,7 @@ const markdownBaseClassName = [
   "[&_strong]:font-semibold [&_strong]:text-slate-900",
   "[&_em]:italic",
   "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4",
-  "[&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-200 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600",
+  "[&_blockquote]:my-4 [&_blockquote]:rounded-md [&_blockquote]:border [&_blockquote]:border-slate-200 [&_blockquote]:bg-slate-50 [&_blockquote]:p-4 [&_blockquote]:italic [&_blockquote]:text-slate-600",
   "[&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6",
   "[&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6",
   "[&_li]:my-1 [&_li]:text-slate-600",

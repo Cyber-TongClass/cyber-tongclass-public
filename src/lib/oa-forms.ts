@@ -49,6 +49,7 @@ export type OAUserScope = {
   identityTypes?: OAIdentityType[]
   roles?: OAWorkflowRole[]
   userIds?: string[]
+  researchGroupIds?: string[]
 }
 
 export type OAApprovalCompletion = "any" | "all"
@@ -111,6 +112,10 @@ export type OASubmissionLike = {
   reviewStatus: OAReviewStatus
   answers: Record<string, unknown>
   resultValues?: Record<string, unknown>
+  formSnapshot?: {
+    fields?: OAFormField[]
+    resultFields?: OAResultField[]
+  }
   submittedAt?: number
 }
 
@@ -287,15 +292,17 @@ export function normalizeOAUserScope(value: unknown): OAUserScope | undefined {
   const identityTypes = readAllowedStrings(value.identityTypes, oaIdentityTypes)
   const roles = readAllowedStrings(value.roles, oaWorkflowRoles)
   const userIds = readUserIds(value.userIds)
+  const researchGroupIds = readUserIds(value.researchGroupIds)
   const scope: OAUserScope = {}
   if (identityTypes.length > 0) scope.identityTypes = identityTypes
   if (roles.length > 0) scope.roles = roles
   if (userIds.length > 0) scope.userIds = userIds
+  if (researchGroupIds.length > 0) scope.researchGroupIds = researchGroupIds
   return scope
 }
 
 export function hasOAUserScopeRecipients(scope?: OAUserScope) {
-  return Boolean(scope?.identityTypes?.length || scope?.roles?.length || scope?.userIds?.length)
+  return Boolean(scope?.identityTypes?.length || scope?.roles?.length || scope?.userIds?.length || scope?.researchGroupIds?.length)
 }
 
 export function normalizeOAApprovalSteps(value: unknown): OAApprovalStep[] | undefined {
@@ -391,6 +398,13 @@ export function validateOAFormDraftForSave(draft: Record<string, unknown>) {
   if (!Array.isArray(draft.fields) || draft.fields.length === 0) errors.push("至少需要一个字段")
   if (typeof draft.maxSubmissionsPerUser === "number" && (!Number.isInteger(draft.maxSubmissionsPerUser) || draft.maxSubmissionsPerUser <= 0)) {
     errors.push("提交次数限制必须是正整数")
+  }
+  if (typeof draft.openAt === "number" && typeof draft.closeAt === "number" && draft.closeAt <= draft.openAt) {
+    errors.push("截止时间必须晚于开放时间")
+  }
+  if (Array.isArray(draft.resultFields)) {
+    const emptyResult = (draft.resultFields as OAResultField[]).find((field) => !field.id.trim() || !field.label.trim())
+    if (emptyResult) errors.push("请完整填写审核结果字段")
   }
   return errors
 }
@@ -555,13 +569,31 @@ function formatCsvAnswer(value: unknown) {
 }
 
 export function serializeOAFormSubmissionsToCsv(form: Pick<OAFormLike, "fields" | "resultFields">, submissions: OASubmissionLike[]) {
-  const resultFields = form.resultFields || []
+  const collectHistoricalFields = <T extends { id: string; label: string }>(
+    currentFields: T[],
+    snapshotSelector: (submission: OASubmissionLike) => T[] | undefined,
+  ) => {
+    const byId = new Map<string, { field: T; labels: Set<string> }>()
+    for (const fields of [currentFields, ...submissions.map((submission) => snapshotSelector(submission) || [])]) {
+      for (const field of fields) {
+        const existing = byId.get(field.id)
+        if (existing) existing.labels.add(field.label)
+        else byId.set(field.id, { field, labels: new Set([field.label]) })
+      }
+    }
+    return [...byId.values()].map(({ field, labels }) => ({
+      ...field,
+      label: [...labels].join(" / "),
+    }))
+  }
+  const fields = collectHistoricalFields(form.fields || [], (submission) => submission.formSnapshot?.fields)
+  const resultFields = collectHistoricalFields(form.resultFields || [], (submission) => submission.formSnapshot?.resultFields)
   const headers = [
     "提交人",
     "学号",
     "状态",
     "提交时间",
-    ...(form.fields || []).map((field) => field.label),
+    ...fields.map((field) => field.label),
     ...resultFields.map((field) => field.label),
   ]
   const lines = [headers.map(escapeCsvValue).join(",")]
@@ -572,7 +604,7 @@ export function serializeOAFormSubmissionsToCsv(form: Pick<OAFormLike, "fields" 
       submission.studentId || "",
       oaReviewStatusLabels[submission.reviewStatus] || submission.reviewStatus,
       submission.submittedAt ? new Date(submission.submittedAt).toISOString() : "",
-      ...(form.fields || []).map((field) => formatCsvAnswer(submission.answers?.[field.id])),
+      ...fields.map((field) => formatCsvAnswer(submission.answers?.[field.id])),
       ...resultFields.map((field) => formatCsvAnswer(submission.resultValues?.[field.id])),
     ]
     lines.push(row.map(escapeCsvValue).join(","))

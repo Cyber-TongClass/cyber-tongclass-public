@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { useUpdatePasswordWithCurrent, useUpdateUser } from "@/lib/api"
+import { useMyCoffeeTalkTeacherAvailability, useSetCoffeeTalkTeacherAvailability, useUpdatePasswordWithCurrent, useUpdateUser } from "@/lib/api"
 import { PersonalEmailsInput } from "@/components/profile/personal-emails-input"
 import { UserLinksInput } from "@/components/profile/user-links-input"
 import { Button } from "@/components/ui/button"
@@ -30,9 +30,12 @@ export default function SettingsPage() {
   const { currentUser, isAuthenticated, isLoading: authLoading, logout } = useAuth()
   const updateUser = useUpdateUser()
   const updatePasswordWithCurrent = useUpdatePasswordWithCurrent()
+  const coffeeTalkAvailability = useMyCoffeeTalkTeacherAvailability() as { open: boolean; profileMissing: boolean } | null | undefined
+  const setCoffeeTalkTeacherAvailability = useSetCoffeeTalkTeacherAvailability()
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSavingProfileMarkdown, setIsSavingProfileMarkdown] = useState(false)
+  const [isUpdatingCoffeeTalkAvailability, setIsUpdatingCoffeeTalkAvailability] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [error, setError] = useState("")
   const [showSaveToast, setShowSaveToast] = useState(false)
@@ -79,7 +82,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push("/login")
+      router.push(`/login?next=${encodeURIComponent("/settings")}`)
     }
   }, [authLoading, isAuthenticated, router])
 
@@ -177,6 +180,21 @@ export default function SettingsPage() {
       showToast("error", msg, 4000)
     } finally {
       setIsSavingProfileMarkdown(false)
+    }
+  }
+
+  const handleCoffeeTalkAvailabilityChange = async () => {
+    if (!coffeeTalkAvailability || coffeeTalkAvailability.profileMissing) return
+    setIsUpdatingCoffeeTalkAvailability(true)
+    try {
+      await setCoffeeTalkTeacherAvailability({ open: !coffeeTalkAvailability.open })
+      showToast("success", coffeeTalkAvailability.open ? "Coffee Talk 申请入口已关闭" : "Coffee Talk 申请入口已开放")
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "更新 Coffee Talk 开放状态失败"
+      setError(message)
+      showToast("error", message, 4000)
+    } finally {
+      setIsUpdatingCoffeeTalkAvailability(false)
     }
   }
 
@@ -482,6 +500,23 @@ export default function SettingsPage() {
             </Button>
           </CardFooter>
         </Card>
+
+        {currentUser.identityType === "teacher" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Coffee Talk 申请</CardTitle>
+              <CardDescription>默认开放。关闭后，学生将无法在申请表中选择您；已有申请不受影响。</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {coffeeTalkAvailability === undefined ? <p className="text-sm text-slate-600">正在读取开放状态…</p> : coffeeTalkAvailability?.profileMissing ? <p className="text-sm text-red-700">教师档案暂未同步，请联系超级管理员运行教师档案同步。</p> : <p className="text-sm text-slate-700">当前状态：{coffeeTalkAvailability?.open ? "已开放" : "已关闭"}</p>}
+            </CardContent>
+            <CardFooter>
+              <Button type="button" variant={coffeeTalkAvailability?.open ? "outline" : "default"} onClick={handleCoffeeTalkAvailabilityChange} disabled={!coffeeTalkAvailability || coffeeTalkAvailability.profileMissing || isUpdatingCoffeeTalkAvailability}>
+                {isUpdatingCoffeeTalkAvailability ? "更新中…" : coffeeTalkAvailability?.open ? "关闭 Coffee Talk 申请" : "开放 Coffee Talk 申请"}
+              </Button>
+            </CardFooter>
+          </Card>
+        ) : null}
 
         {/* Password Settings */}
         <Card>

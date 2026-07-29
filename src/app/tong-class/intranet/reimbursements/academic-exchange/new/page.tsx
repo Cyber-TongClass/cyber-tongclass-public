@@ -13,9 +13,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { useCreateAcademicExchangeApplication, useGenerateAcademicExchangeUploadUrl, usePublications, useStudentFormProfile } from "@/lib/api"
+import { getTongClassStoredSessionToken, useCreateAcademicExchangeApplication, useGenerateAcademicExchangeUploadUrl, usePublications, useStudentFormProfile } from "@/lib/api"
 import { formatCurrency, formatPaperAuthors, getApplicantAuthorInfo } from "@/lib/academic-exchange"
 import { validateAcademicExchangePaperPdfUpload } from "@/lib/academic-exchange-pdf-source"
+import { isSafeExternalAcademicPaperPdfUrl } from "@/lib/academic-exchange-paper-url"
+import { validateAcademicExchangeProjectTime } from "@/lib/academic-exchange-project-time"
 import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import { publicationBelongsToUser } from "@/lib/publication-authors"
 import type { Publication, StudentFormProfile } from "@/types"
@@ -41,6 +43,7 @@ const resizeTextarea = (event: FormEvent<HTMLTextAreaElement>) => {
 }
 
 const projectCategoryOptions = ["出境访学", "学术会议", "其他"] as const
+const ACADEMIC_EXCHANGE_DRAFT_KEY = "tong-class:academic-exchange:draft:v1"
 
 export default function NewAcademicExchangeApplicationPage() {
   const router = useRouter()
@@ -81,6 +84,52 @@ export default function NewAcademicExchangeApplicationPage() {
   const [projectCategoryOption, setProjectCategoryOption] = useState("")
   const [message, setMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
+
+  useEffect(() => {
+    try {
+      const rawDraft = window.localStorage.getItem(ACADEMIC_EXCHANGE_DRAFT_KEY)
+      if (rawDraft) {
+        const draft = JSON.parse(rawDraft) as {
+          form?: Partial<typeof form>
+          expenseRows?: ReimbursementExpenseRow[]
+          paperPdfSource?: "url" | "upload"
+          projectCategoryOption?: string
+        }
+        if (draft.form && typeof draft.form === "object") {
+          setForm((current) => ({ ...current, ...draft.form }))
+        }
+        if (Array.isArray(draft.expenseRows) && draft.expenseRows.length) {
+          setExpenseRows(draft.expenseRows.map((row) => ({
+            key: typeof row.key === "string" && row.key ? row.key : newExpenseRow().key,
+            item: typeof row.item === "string" ? row.item : "",
+            amount: typeof row.amount === "string" ? row.amount : "",
+            note: typeof row.note === "string" ? row.note : "",
+          })))
+        }
+        if (draft.paperPdfSource === "url" || draft.paperPdfSource === "upload") {
+          setPaperPdfSource(draft.paperPdfSource)
+        }
+        if (typeof draft.projectCategoryOption === "string") {
+          setProjectCategoryOption(draft.projectCategoryOption)
+        }
+      }
+    } catch {
+      window.localStorage.removeItem(ACADEMIC_EXCHANGE_DRAFT_KEY)
+    } finally {
+      setDraftReady(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!draftReady) return
+    window.localStorage.setItem(ACADEMIC_EXCHANGE_DRAFT_KEY, JSON.stringify({
+      form,
+      expenseRows,
+      paperPdfSource,
+      projectCategoryOption,
+    }))
+  }, [draftReady, expenseRows, form, paperPdfSource, projectCategoryOption])
 
   useEffect(() => {
     setForm((previous) => ({
@@ -141,6 +190,11 @@ export default function NewAcademicExchangeApplicationPage() {
       setMessage(projectCategoryOption === "其他" ? "请填写其他项目类别。" : "请选择项目类别。")
       return
     }
+    const projectTimeError = validateAcademicExchangeProjectTime(form.projectTime)
+    if (projectTimeError) {
+      setMessage(projectTimeError)
+      return
+    }
 
     if (!skipsPaperSection) {
       if (!selectedPublication) {
@@ -162,8 +216,8 @@ export default function NewAcademicExchangeApplicationPage() {
       }))
       .filter((row) => row.item || row.amount || row.note)
 
-    if (!expenseItems.length || expenseItems.some((row) => !row.item || !Number.isFinite(row.amount) || row.amount < 0)) {
-      setMessage("请完整填写申请金额明细，金额需为非负数字。")
+    if (!expenseItems.length || expenseItems.some((row) => !row.item || !Number.isFinite(row.amount) || row.amount <= 0)) {
+      setMessage("请完整填写申请金额明细，每项金额必须大于 0。")
       return
     }
 
@@ -176,8 +230,8 @@ export default function NewAcademicExchangeApplicationPage() {
       }
 
       if (paperPdfSource === "url") {
-        if (!/^https?:\/\//i.test(form.paperPdfUrl.trim())) {
-          setMessage("论文 PDF 链接必须是点开即 PDF 的 http(s) 链接。")
+        if (!isSafeExternalAcademicPaperPdfUrl(form.paperPdfUrl.trim())) {
+          setMessage("论文 PDF 链接必须使用 https://arxiv.org 上可直接打开的 PDF 地址。")
           return
         }
       } else {
@@ -200,6 +254,7 @@ export default function NewAcademicExchangeApplicationPage() {
     }
 
     setSubmitting(true)
+    let uploadedPaperStorageId: string | undefined
     try {
       const payload: Record<string, unknown> = {
         applicantName: form.applicantName,
@@ -226,7 +281,8 @@ export default function NewAcademicExchangeApplicationPage() {
             fileName: paperPdfUpload.name,
             mimeType: paperPdfUpload.type || "application/octet-stream",
           })
-          payload.paperPdfStorageId = await uploadFileToStorageTarget(uploadTarget as any, paperPdfUpload, "论文 PDF 上传失败")
+          uploadedPaperStorageId = String(await uploadFileToStorageTarget(uploadTarget as any, paperPdfUpload, "论文 PDF 上传失败"))
+          payload.paperPdfStorageId = uploadedPaperStorageId
           payload.paperPdfFileName = paperPdfUpload.name
           payload.paperPdfMimeType = paperPdfUpload.type || "application/octet-stream"
           payload.paperPdfSize = paperPdfUpload.size
@@ -236,8 +292,22 @@ export default function NewAcademicExchangeApplicationPage() {
       }
 
       const id = await createApplication(payload)
+      window.localStorage.removeItem(ACADEMIC_EXCHANGE_DRAFT_KEY)
       router.push(`/tong-class/intranet/reimbursements/academic-exchange/${id}`)
     } catch (error) {
+      if (uploadedPaperStorageId) {
+        const sessionToken = getTongClassStoredSessionToken()
+        if (sessionToken) {
+          await fetch("/api/academic-exchange/cleanup-upload", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${sessionToken}`,
+            },
+            body: JSON.stringify({ storageId: uploadedPaperStorageId }),
+          }).catch(() => null)
+        }
+      }
       setMessage(error instanceof Error ? error.message : "提交失败")
     } finally {
       setSubmitting(false)
@@ -256,7 +326,7 @@ export default function NewAcademicExchangeApplicationPage() {
 
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900">新增学术交流支持申请</h1>
-          <p className="mt-1 text-sm text-slate-500">提交后申请将进入历史记录，不能再编辑。</p>
+          <p className="mt-1 text-sm text-slate-500">填写内容会自动保存在当前浏览器；提交后可查看审核进度，待补充时可修改后重新提交。</p>
         </div>
 
         {!skipsPaperSection ? (
@@ -347,7 +417,7 @@ export default function NewAcademicExchangeApplicationPage() {
               </div>
               <div className="grid gap-2">
                 <Label>项目时间</Label>
-                <Input value={form.projectTime} onChange={(event) => updateForm("projectTime", event.target.value)} placeholder="如 2026.08.01-2026.08.18" required />
+                <Input value={form.projectTime} onChange={(event) => updateForm("projectTime", event.target.value)} placeholder="如 2026-08-01 至 2026-08-18" required />
               </div>
               <div className="grid gap-2 md:col-span-2">
                 <Label>有无其他资助来源</Label>
@@ -455,7 +525,7 @@ export default function NewAcademicExchangeApplicationPage() {
                   </div>
                   {paperPdfSource === "url" ? (
                     <>
-                      <Input type="url" value={form.paperPdfUrl} onChange={(event) => updateForm("paperPdfUrl", event.target.value)} placeholder="必须是点开就是 PDF 的链接（例：https://arxiv.org/pdf/......），否则后续无法拼接" required />
+                      <Input type="url" value={form.paperPdfUrl} onChange={(event) => updateForm("paperPdfUrl", event.target.value)} placeholder="仅支持 https://arxiv.org 上可直接打开的 PDF 地址" required />
                       <p className="text-xs text-slate-500">请确认链接直接返回 PDF 文件，并与上方总页数、正文页数对应。</p>
                     </>
                   ) : (

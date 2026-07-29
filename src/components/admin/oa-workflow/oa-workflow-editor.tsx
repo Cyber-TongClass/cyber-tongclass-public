@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useResearchGroupScopeOptions } from "@/lib/api"
 import {
   createOAApprovalStep,
   hasOAUserScopeRecipients,
@@ -38,6 +39,7 @@ type ScopeEditorProps = {
 }
 
 function ScopeEditor({ scope, onChange, idPrefix, description }: ScopeEditorProps) {
+  const researchGroups = useResearchGroupScopeOptions() as Array<{ id: string; name: string }> | undefined
   const updateIdentityType = (identityType: OAIdentityType) => {
     const current = scope.identityTypes || []
     const identityTypes = current.includes(identityType)
@@ -57,6 +59,14 @@ function ScopeEditor({ scope, onChange, idPrefix, description }: ScopeEditorProp
   const updateUserIds = (value: string) => {
     const userIds = value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean)
     onChange(normalizeOAUserScope({ ...scope, userIds }) || {})
+  }
+
+  const updateResearchGroup = (researchGroupId: string) => {
+    const current = scope.researchGroupIds || []
+    const researchGroupIds = current.includes(researchGroupId)
+      ? current.filter((item) => item !== researchGroupId)
+      : [...current, researchGroupId]
+    onChange(normalizeOAUserScope({ ...scope, researchGroupIds }) || {})
   }
 
   return (
@@ -101,6 +111,18 @@ function ScopeEditor({ scope, onChange, idPrefix, description }: ScopeEditorProp
             )
           })}
         </div>
+      </div>
+      <div className="space-y-2">
+        <Label>按课题组</Label>
+        {researchGroups === undefined ? <p className="text-xs text-slate-500">正在加载可选课题组…</p> : researchGroups.length === 0 ? <p className="text-xs text-slate-500">暂无可选课题组。</p> : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {researchGroups.map((group) => {
+              const id = `${idPrefix}-research-group-${group.id}`
+              return <label key={group.id} htmlFor={id} className="flex cursor-pointer items-center gap-2 rounded-md border bg-white p-3 text-sm text-slate-700"><input id={id} type="checkbox" checked={Boolean(scope.researchGroupIds?.includes(group.id))} onChange={() => updateResearchGroup(group.id)} /><span>{group.name}</span></label>
+            })}
+          </div>
+        )}
+        <p className="text-xs text-slate-500">课题组归属不对学生公开展示；选择后会由服务端按当前归属解析范围。</p>
       </div>
       <div className="space-y-2">
         <Label htmlFor={`${idPrefix}-user-ids`}>指定用户 ID（可选）</Label>

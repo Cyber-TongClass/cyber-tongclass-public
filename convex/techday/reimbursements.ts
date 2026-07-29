@@ -31,6 +31,11 @@ const assignedOrganizations = (user: any) => {
   return []
 }
 
+function validateAmount(amount: number) {
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("报销金额必须大于 0")
+  return amount
+}
+
 const statusLabels: Record<string, string> = {
   pending: "待审核",
   approved: "已通过",
@@ -94,7 +99,7 @@ export const create = mutation({
       organization: validateOrganization(user, normalizeText(args.organization)),
       content: normalizeLongText(args.content),
       quantity: args.quantity,
-      amount: args.amount,
+      amount: validateAmount(args.amount),
       invoiceCompany: normalizeText(args.invoiceCompany),
       status: "pending",
       applicantId: user._id,
@@ -120,7 +125,7 @@ export const update = mutation({
       organization: validateOrganization(user, normalizeText(args.organization)),
       content: normalizeLongText(args.content),
       quantity: args.quantity,
-      amount: args.amount,
+      amount: validateAmount(args.amount),
       invoiceCompany: normalizeText(args.invoiceCompany),
       updatedAt: Date.now(),
     })

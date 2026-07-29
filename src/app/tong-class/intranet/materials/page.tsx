@@ -1,7 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import { ArrowLeft, Download, FileText } from "lucide-react"
+import { getTongClassStoredSessionToken } from "@/lib/api"
 import {
   SCHOLARSHIP_REVIEW_MATERIAL_CATEGORY,
   reimbursementMaterialPages,
@@ -14,12 +16,12 @@ const downloadableSections = [
     materials: [
       {
         name: "25级培养方案",
-        file: "/intranet-materials/25级培养方案.pdf",
+        fileName: "25级培养方案.pdf",
         type: "PDF",
       },
       {
         name: "23级培养方案",
-        file: "/intranet-materials/23级培养方案.pdf",
+        fileName: "23级培养方案.pdf",
         type: "PDF",
       },
     ],
@@ -30,17 +32,17 @@ const downloadableSections = [
     materials: [
       {
         name: "通班学术交流项目支持方案",
-        file: "/intranet-materials/通班学术交流项目支持方案.pdf",
+        fileName: "通班学术交流项目支持方案.pdf",
         type: "PDF",
       },
       {
         name: "通班学生出国出境报销注意事项",
-        file: "/intranet-materials/通班学生出国出境报销注意事项.docx",
+        fileName: "通班学生出国出境报销注意事项.docx",
         type: "DOCX",
       },
       {
         name: "各国住宿伙食公杂开支标准",
-        file: "/intranet-materials/各国住宿伙食公杂开支标准.xlsx",
+        fileName: "各国住宿伙食公杂开支标准.xlsx",
         type: "XLSX",
       },
     ],
@@ -59,6 +61,43 @@ const downloadableSections = [
 ]
 
 export default function MaterialsPage() {
+  const [downloading, setDownloading] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState("")
+
+  async function downloadMaterial(fileName: string) {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) {
+      setDownloadError("请先登录后下载内部资料。")
+      return
+    }
+
+    setDownloading(fileName)
+    setDownloadError("")
+    try {
+      const response = await fetch(`/api/intranet-materials/${encodeURIComponent(fileName)}`, {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+        cache: "no-store",
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.message || "资料下载失败")
+      }
+
+      const blobUrl = URL.createObjectURL(await response.blob())
+      const anchor = document.createElement("a")
+      anchor.href = blobUrl
+      anchor.download = fileName
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(blobUrl)
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : "资料下载失败")
+    } finally {
+      setDownloading(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <section className="bg-primary relative overflow-hidden">
@@ -92,14 +131,20 @@ export default function MaterialsPage() {
               <div key={section.title} className="mb-16 last:mb-0">
                 <h2 className="text-2xl font-bold text-slate-900 mb-2">{section.title}</h2>
                 <p className="text-sm text-slate-500 mb-6">{section.description}</p>
+                {downloadError ? (
+                  <p role="alert" className="mb-4 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {downloadError}
+                  </p>
+                ) : null}
                 {hasMaterials ? (
                   <div className="space-y-3">
                     {section.materials.map((item) => (
-                      <a
+                      <button
                         key={item.name}
-                        href={item.file}
-                        download
-                        className="flex items-center gap-4 bg-white border border-slate-200 rounded-sm px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group"
+                        type="button"
+                        onClick={() => downloadMaterial(item.fileName)}
+                        disabled={downloading === item.fileName}
+                        className="flex min-h-14 w-full items-center gap-4 bg-white border border-slate-200 rounded-sm px-5 py-4 text-left shadow-sm hover:shadow-md hover:border-primary/30 transition-all group disabled:cursor-wait disabled:opacity-60"
                       >
                         <div className="flex-shrink-0 w-10 h-10 rounded-sm bg-primary/10 flex items-center justify-center">
                           <Download className="h-5 w-5 text-primary" />
@@ -108,9 +153,11 @@ export default function MaterialsPage() {
                           <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors">
                             {item.name}
                           </p>
-                          <p className="text-xs text-slate-400">下载 {item.type} 文件</p>
+                          <p className="text-xs text-slate-400">
+                            {downloading === item.fileName ? "正在准备安全下载…" : `下载 ${item.type} 文件`}
+                          </p>
                         </div>
-                      </a>
+                      </button>
                     ))}
                     {materialPages.map((item) => (
                       <Link

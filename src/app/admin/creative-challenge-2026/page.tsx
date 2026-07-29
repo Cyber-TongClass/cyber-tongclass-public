@@ -511,7 +511,7 @@ export default function AdminCreativeChallenge2026Page() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
-            <Link href="/intranet/creative-challenge-2026">
+            <Link href="/tong-class/intranet/creative-challenge-2026">
               <ExternalLink className="mr-2 h-4 w-4" />
               前台页面
             </Link>

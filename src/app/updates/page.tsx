@@ -8,9 +8,12 @@ import { AiaPageHero } from "@/components/institute/editorial/page-hero"
 import { usePublicInstituteUpdates } from "@/lib/api"
 import { buildAudienceCollections, type AudienceFilter } from "@/lib/content-audience"
 import type { PublicInstituteUpdate } from "@/types/institute"
+import { withReturnTo } from "@/lib/safe-local-path"
+import { Button } from "@/components/ui/button"
 
 export default function UpdatesPage() {
-  const updates = usePublicInstituteUpdates({ limit: 100 }) as PublicInstituteUpdate[] | undefined
+  const [limit, setLimit] = React.useState(100)
+  const updates = usePublicInstituteUpdates({ limit }) as PublicInstituteUpdate[] | undefined
   const [selectedAudience, setSelectedAudience] = React.useState<AudienceFilter>("all")
   const collections = React.useMemo(() => buildAudienceCollections(updates ?? []), [updates])
   const selectedItems: NewsTimelineItem[] | undefined =
@@ -26,11 +29,16 @@ export default function UpdatesPage() {
 
       <NewsTimeline
         items={selectedItems}
-        detailHref={(item) => `/tong-class/news/${item.id}`}
+        detailHref={(item) => withReturnTo(`/tong-class/news/${item.id}`, "/updates")}
         audienceControl={
           <AudienceTabs value={selectedAudience} onChange={setSelectedAudience} counts={collections.counts} />
         }
       />
+      {updates && updates.length >= limit && limit < 500 ? (
+        <div className="container-custom pb-16 text-center">
+          <Button type="button" variant="outline" onClick={() => setLimit((current) => Math.min(current + 100, 500))}>加载更多动态</Button>
+        </div>
+      ) : null}
     </div>
   )
 }

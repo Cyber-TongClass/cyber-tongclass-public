@@ -38,12 +38,12 @@ for (const [label, source, expected] of [
   ["Tong Class shared archive", tongClassSource, "<PublicationArchive"],
   ["Tong Class detail route", tongClassSource, 'detailHref={(item) => `/tong-class/publications/${item.id}`}'],
   ["Tong Class hero", tongClassSource, "展示通班师生的学术论文、研究成果与创新贡献。"],
-  ["AIA public research hook", researchSource, "usePublicInstituteResearch({ limit: 100 })"],
+  ["AIA public research hook", researchSource, "usePublicInstituteResearch({ limit })"],
   ["AIA deduplication", researchSource, "buildAudienceCollections"],
   ["AIA selected audience", researchSource, "selectedAudience"],
   ["AIA audience tabs", researchSource, "<AudienceTabs"],
   ["AIA shared archive", researchSource, "<PublicationArchive"],
-  ["AIA existing detail route", researchSource, 'detailHref={(item) => `/tong-class/publications/${item.id}`}'],
+  ["AIA existing detail route", researchSource, 'detailHref={(item) => withReturnTo(`/tong-class/publications/${item.id}`, "/research")}'],
   ["AIA hero", researchSource, "展示经发布流程确认的研究成果，帮助访问者从公开信息开始了解研究院工作。"],
 ]) {
   assert.ok(source.includes(expected), `Missing ${label}: ${expected}`)

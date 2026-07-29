@@ -49,7 +49,18 @@ function getTableRows(value: unknown): Array<Record<string, unknown>> {
 }
 
 function emptyTableRow(columns: OATableColumn[]) {
-  return Object.fromEntries(columns.map((column) => [column.id, column.type === "number" ? 0 : ""]))
+  return Object.fromEntries(columns.map((column) => [column.id, column.type === "number" ? undefined : ""]))
+}
+
+function fileTypeAllowed(file: File, acceptedMimeTypes: readonly string[]) {
+  if (acceptedMimeTypes.length === 0) return true
+  const fileType = file.type.toLowerCase()
+  return acceptedMimeTypes.some((candidate) => {
+    const accepted = candidate.trim().toLowerCase()
+    return accepted.endsWith("/*")
+      ? fileType.startsWith(accepted.slice(0, -1))
+      : fileType === accepted
+  })
 }
 
 function getFieldContainerClassName(field: OAFormField) {
@@ -62,15 +73,19 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
   const [message, setMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+  const [touchedFieldIds, setTouchedFieldIds] = useState<Set<string>>(() => new Set())
 
   const errors = useMemo(() => validateOAFormAnswers(form, answers), [answers, form])
 
   const updateAnswer = (fieldId: string, value: unknown) => {
+    setTouchedFieldIds((current) => new Set(current).add(fieldId))
     setAnswers((current) => ({ ...current, [fieldId]: value }))
   }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setAttemptedSubmit(true)
     setMessage("")
     const nextErrors = validateOAFormAnswers(form, answers)
     if (nextErrors.length > 0) {
@@ -89,11 +104,30 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
 
   const uploadFiles = async (field: OAFormField, files: FileList | null) => {
     if (!files?.length) return
-    setUploadingFieldId(field.id)
     setMessage("")
+    const selectedFiles = Array.from(files)
+    const existingFiles = getFileAnswers(answers[field.id])
+    const maximumFiles = field.maxFiles || 1
+    const maximumBytes = (field.maxFileSizeMB || 20) * 1024 * 1024
+    const acceptedMimeTypes = field.acceptedMimeTypes || []
+    if (existingFiles.length + selectedFiles.length > maximumFiles) {
+      setMessage(`${field.label}最多只能上传 ${maximumFiles} 个文件；请先调整已选文件。`)
+      return
+    }
+    const invalidSize = selectedFiles.find((file) => file.size > maximumBytes)
+    if (invalidSize) {
+      setMessage(`${invalidSize.name} 超过 ${field.maxFileSizeMB || 20}MB，尚未上传。`)
+      return
+    }
+    const invalidType = selectedFiles.find((file) => !fileTypeAllowed(file, acceptedMimeTypes))
+    if (invalidType) {
+      setMessage(`${invalidType.name} 的文件类型不符合要求，尚未上传。`)
+      return
+    }
+    setUploadingFieldId(field.id)
     try {
       const uploaded: OAFileAnswer[] = []
-      for (const file of Array.from(files).slice(0, field.maxFiles || 1)) {
+      for (const file of selectedFiles) {
         const uploadTarget = await generateUploadUrl({
           fileName: file.name,
           mimeType: file.type || "application/octet-stream",
@@ -106,7 +140,7 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
           size: file.size,
         })
       }
-      updateAnswer(field.id, uploaded)
+      updateAnswer(field.id, [...existingFiles, ...uploaded])
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "上传失败")
     } finally {
@@ -259,11 +293,20 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
         <CardHeader><CardTitle>{heading || form.title}</CardTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           {form.description ? <p className="text-sm leading-7 text-slate-600 md:col-span-2">{form.description}</p> : null}
-          {form.fields.map((field) => <div key={field.id} className={getFieldContainerClassName(field)}>{renderField(field)}</div>)}
+          {form.fields.map((field) => {
+            const fieldError = errors.find((error) => error.startsWith(field.label))
+            const showFieldError = Boolean(fieldError) && (attemptedSubmit || touchedFieldIds.has(field.id))
+            return (
+              <div key={field.id} className={getFieldContainerClassName(field)}>
+                {renderField(field)}
+                {showFieldError ? <p className="mt-1 text-xs text-red-600" role="alert">{fieldError}</p> : null}
+              </div>
+            )
+          })}
         </CardContent>
       </Card>
       {message ? <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{message}</p> : null}
-      {errors.length > 0 ? <p className="text-xs text-slate-500">当前还有 {errors.length} 项需要补充。</p> : null}
+      {attemptedSubmit && errors.length > 0 ? <p className="text-xs text-slate-500">当前还有 {errors.length} 项需要补充；请检查上方标红字段。</p> : null}
       <div className="flex justify-end">
         <Button type="submit" disabled={submitting || uploadingFieldId !== null}>{submitting ? "提交中..." : submitLabel}</Button>
       </div>

@@ -1,25 +1,32 @@
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import type { Metadata } from "next"
 
 import { CoffeeTalkMyClient } from "@/components/coffee-talk/coffee-talk-my-client"
+import { AiaPageHero } from "@/components/institute/editorial/page-hero"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
+
+export const metadata: Metadata = {
+  title: "我的申请 · Coffee Talk",
+  robots: { index: false, follow: false },
+}
 
 export default function MyCoffeeTalkApplicationsPage() {
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-12 sm:py-16">
-      <div className="mx-auto max-w-3xl">
-        <Link
-          href="/services/coffee-talk"
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+    <div className="min-h-screen">
+      <AiaPageHero
+        kicker="Coffee Talk · 进度"
+        title="我的申请"
+        lede="这里仅显示当前登录账户提交的申请状态。"
+      />
+      <div className="container-custom max-w-3xl py-10 sm:py-12">
+        <SafeReturnLink
+          fallback="/services/coffee-talk"
+          className="aia-link aia-mono text-xs uppercase tracking-[0.14em]"
         >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          返回 Coffee Talk
-        </Link>
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8" aria-labelledby="coffee-talk-my-heading">
-          <p className="text-sm font-semibold text-primary">Coffee Talk</p>
-          <h1 id="coffee-talk-my-heading" className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">我的申请</h1>
-          <p className="mt-3 leading-7 text-slate-600">这里仅显示当前登录账户提交的申请状态。</p>
-          <div className="mt-7"><CoffeeTalkMyClient /></div>
-        </section>
+          ← 返回 Coffee Talk
+        </SafeReturnLink>
+        <div className="mt-8">
+          <CoffeeTalkMyClient />
+        </div>
       </div>
     </div>
   )

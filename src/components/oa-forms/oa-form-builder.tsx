@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { createDefaultOAFormDraft, createFieldFromPalette, fieldTypeLabels, normalizeFormSlug, toOAFormUpsertPayload, validateOAFormDraftForSave } from "@/lib/oa-forms"
-import type { OAFieldType, OAForm, OAFormField, OAFormOption, OAFormStatus, OAResultField, OATableColumn } from "@/types"
+import type { OAFieldType, OAForm, OAFormField, OAFormOption, OAFormStatus, OAResultField, OAResultFieldType, OATableColumn } from "@/types"
 
 type OAFormBuilderProps = {
   form?: Partial<OAForm> | null
@@ -57,6 +57,28 @@ function textToColumns(value: string) {
     if (!id || !label) return null
     return { id, label, type: type === "number" || type === "date" ? type : "text", required: required === "required" } as OATableColumn
   }).filter(Boolean) as OATableColumn[]
+}
+
+function toDateTimeLocal(value?: number) {
+  if (!value || !Number.isFinite(value)) return ""
+  const date = new Date(value)
+  const offset = date.getTimezoneOffset() * 60_000
+  return new Date(value - offset).toISOString().slice(0, 16)
+}
+
+function fromDateTimeLocal(value: string) {
+  if (!value) return undefined
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : undefined
+}
+
+function createResultField(): OAResultField {
+  return {
+    id: `result_${Date.now().toString(36)}`,
+    label: "结果",
+    type: "text",
+    visibleToSubmitter: true,
+  }
 }
 
 function FieldDetailEditor({ field, index, updateField }: FieldDetailEditorProps) {
@@ -221,6 +243,13 @@ export function OAFormBuilder({ form, onSave }: OAFormBuilderProps) {
             </select>
           </div>
           <div className="space-y-2">
+            <Label>可见范围</Label>
+            <select className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm" value={draft.visibility || "members"} onChange={(event) => setDraft((current) => ({ ...current, visibility: event.target.value as OAForm["visibility"] }))}>
+              <option value="members">院内成员可见</option>
+              <option value="admins">仅管理员可见</option>
+            </select>
+          </div>
+          <div className="space-y-2">
             <Label>每人最多提交次数</Label>
             <Input type="number" min={1} value={draft.maxSubmissionsPerUser ?? ""} onChange={(event) => setDraft((current) => ({ ...current, maxSubmissionsPerUser: event.target.value === "" ? undefined : Number(event.target.value) }))} placeholder="留空表示不限" />
           </div>
@@ -232,7 +261,15 @@ export function OAFormBuilder({ form, onSave }: OAFormBuilderProps) {
             <input type="checkbox" checked={Boolean(draft.allowSubmissionEdits)} onChange={(event) => setDraft((current) => ({ ...current, allowSubmissionEdits: event.target.checked }))} />
             允许申请人在开放期内修改提交内容
           </label>
-          <div className="text-xs text-slate-500 md:text-right">系统链接：/intranet/forms/{draft.slug || "form"}</div>
+          <div className="space-y-2">
+            <Label>开放时间</Label>
+            <Input type="datetime-local" value={toDateTimeLocal(draft.openAt)} onChange={(event) => setDraft((current) => ({ ...current, openAt: fromDateTimeLocal(event.target.value) }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>截止时间</Label>
+            <Input type="datetime-local" value={toDateTimeLocal(draft.closeAt)} onChange={(event) => setDraft((current) => ({ ...current, closeAt: fromDateTimeLocal(event.target.value) }))} />
+          </div>
+          <div className="text-xs text-slate-500 md:col-span-2 md:text-right">系统链接：/services/oa/{draft.slug || "form"}</div>
         </CardContent>
       </Card>
 
@@ -270,6 +307,46 @@ export function OAFormBuilder({ form, onSave }: OAFormBuilderProps) {
               )
             })}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>审核结果字段</CardTitle>
+            <Button type="button" variant="outline" size="sm" onClick={() => setDraft((current) => ({ ...current, resultFields: [...(current.resultFields || []), createResultField()] }))}>
+              <Plus className="mr-1 h-3.5 w-3.5" />增加结果字段
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={Boolean(draft.resultsVisible)} onChange={(event) => setDraft((current) => ({ ...current, resultsVisible: event.target.checked }))} />
+            允许申请人查看对其可见的审核结果
+          </label>
+          {(draft.resultFields || []).length === 0 ? (
+            <p className="text-sm text-slate-500">暂未配置结果字段。</p>
+          ) : (
+            <div className="overflow-hidden rounded-lg border">
+              {(draft.resultFields || []).map((field, index) => (
+                <div key={field.id} className="grid gap-3 border-b p-4 last:border-b-0 md:grid-cols-[1fr_160px_150px_72px] md:items-center">
+                  <Input value={field.label} onChange={(event) => setDraft((current) => ({ ...current, resultFields: (current.resultFields || []).map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) }))} placeholder="结果名称" />
+                  <select className="h-10 rounded-md border border-input bg-white px-3 text-sm" value={field.type} onChange={(event) => setDraft((current) => ({ ...current, resultFields: (current.resultFields || []).map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value as OAResultFieldType } : item) }))}>
+                    <option value="text">文本</option>
+                    <option value="number">数字</option>
+                    <option value="date">日期</option>
+                    <option value="select">选择</option>
+                  </select>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={field.visibleToSubmitter !== false} onChange={(event) => setDraft((current) => ({ ...current, resultFields: (current.resultFields || []).map((item, itemIndex) => itemIndex === index ? { ...item, visibleToSubmitter: event.target.checked } : item) }))} />
+                    申请人可见
+                  </label>
+                  <button type="button" className="text-sm text-red-600 hover:underline" onClick={() => setDraft((current) => ({ ...current, resultFields: (current.resultFields || []).filter((_, itemIndex) => itemIndex !== index) }))}>删除</button>
+                  <p className="text-xs text-slate-400 md:col-span-4">字段 ID：{field.id}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

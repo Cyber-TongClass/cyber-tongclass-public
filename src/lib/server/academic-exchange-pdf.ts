@@ -606,6 +606,75 @@ function drawApplicationTemplatePage({
   })
 }
 
+function textExceedsTemplateRect(text: unknown, rect: TemplateRect, font: any, fontSize = FILL_FONT_SIZE) {
+  const content = normalizeText(text)
+  if (!content) return false
+  const paddingX = 5
+  const paddingY = 3
+  const lineHeight = Math.max(fontSize + 1.3, fontSize * 1.15)
+  const maxLines = Math.max(1, Math.floor((rect.height - paddingY * 2) / lineHeight))
+  return wrapText(content, font, fontSize, Math.max(1, rect.width - paddingX * 2)).length > maxLines
+}
+
+function drawTextContinuationPages({
+  pdfDoc,
+  fillFont,
+  headingFont,
+  application,
+  sections,
+}: {
+  pdfDoc: PDFDocument
+  fillFont: any
+  headingFont: any
+  application: any
+  sections: Array<{ label: string; text: string }>
+}) {
+  const firstPage = pdfDoc.getPage(0)
+  const { width, height } = firstPage.getSize()
+  const marginX = 56
+  const topMargin = 64
+  const bottomMargin = 56
+  const bodySize = 9.5
+  const lineHeight = 13
+  let page: any
+  let y = 0
+
+  const addPage = () => {
+    page = pdfDoc.addPage([width, height])
+    y = height - topMargin
+    page.drawText("学术交流支持申请 · 长文本续页", {
+      x: marginX,
+      y,
+      size: 15,
+      font: headingFont,
+      color: BLACK,
+    })
+    y -= 24
+    page.drawText(getApplicationDisplayNumber(application), {
+      x: marginX,
+      y,
+      size: 9,
+      font: fillFont,
+      color: BLACK,
+    })
+    y -= 28
+  }
+
+  addPage()
+  for (const section of sections) {
+    const lines = wrapText(section.text, fillFont, bodySize, width - marginX * 2)
+    if (y - 24 - Math.min(lines.length, 2) * lineHeight < bottomMargin) addPage()
+    page.drawText(section.label, { x: marginX, y, size: 11, font: headingFont, color: BLACK })
+    y -= 20
+    for (const line of lines) {
+      if (y < bottomMargin) addPage()
+      page.drawText(line, { x: marginX, y, size: bodySize, font: fillFont, color: BLACK })
+      y -= lineHeight
+    }
+    y -= 18
+  }
+}
+
 export async function buildAcademicExchangePdf(
   application: any,
   options: { paperPdfBytes?: Uint8Array | null } = {}
@@ -636,6 +705,23 @@ export async function buildAcademicExchangePdf(
   const totalAmount = getTotalAmount(application)
   const hasPaperAttachment = hasAcademicExchangePaperPdfAttachment(application)
   const hasExpenseContinuation = expenseItems.length > 6
+  const longTextSections = [
+    {
+      label: "论文详情（续）",
+      text: getPaperDetailText(application, hasPaperAttachment),
+      rect: { x: 171.99, top: 336.63, width: 343.91, height: 59.51 },
+    },
+    {
+      label: "其他资助来源（续）",
+      text: normalizeText(application.otherFunding),
+      rect: { x: 171.99, top: 396.63, width: 343.91, height: 64.07 },
+    },
+    {
+      label: "项目计划（续）",
+      text: normalizeText(application.projectPlan),
+      rect: { x: 171.99, top: 461.19, width: 343.91, height: 64.55 },
+    },
+  ].filter((section) => textExceedsTemplateRect(section.text, section.rect, fillFont))
 
   drawApplicationTemplatePage({
     page: pdfDoc.getPage(0),
@@ -668,6 +754,16 @@ export async function buildAcademicExchangePdf(
       application,
       expenseItems: continuationItems,
       totalAmount,
+    })
+  }
+
+  if (longTextSections.length > 0) {
+    drawTextContinuationPages({
+      pdfDoc,
+      fillFont,
+      headingFont,
+      application,
+      sections: longTextSections,
     })
   }
 

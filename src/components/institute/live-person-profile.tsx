@@ -1,22 +1,16 @@
 "use client"
 
-import Link from "next/link"
-
 import {
-  demoDirectoryUpdates,
-  demoPeople,
-  demoResearchGroups,
-  demoResearchOutputs,
-  getDemoPerson,
-} from "@/components/institute/demo-directory-data"
-import {
+  toDirectoryResearchOutput,
+  toDirectoryUpdate,
   toDirectoryPerson,
   toDirectoryResearchGroup,
   toDirectoryResearchGroupMember,
 } from "@/components/institute/live-directory-view-model"
 import { PersonProfile } from "@/components/institute/person-profile"
-import { usePublicInstitutePerson, usePublicResearchGroups } from "@/lib/api"
-import type { PublicInstitutePerson, PublicResearchGroup } from "@/types/institute"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
+import { usePublicInstitutePerson, usePublicInstituteResearch, usePublicInstituteUpdates, usePublicResearchGroups } from "@/lib/api"
+import type { PublicInstitutePerson, PublicInstituteResearch, PublicInstituteUpdate, PublicResearchGroup } from "@/types/institute"
 
 type LivePersonProfileProps = {
   slug: string
@@ -24,13 +18,13 @@ type LivePersonProfileProps = {
 
 function PublicPersonNotFound() {
   return (
-    <div className="min-h-screen bg-slate-50 py-10 sm:py-14">
-      <div className="container-custom max-w-5xl rounded-xl border border-slate-200 bg-white p-7 shadow-sm sm:p-9">
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">未找到公开人员资料</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-600">该资料可能尚未公开、已调整，或链接地址有误。</p>
-        <Link href="/people" className="mt-6 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
+    <div className="min-h-screen py-12 sm:py-16">
+      <div className="container-custom max-w-5xl border aia-border-rule p-7 sm:p-9">
+        <h1 className="aia-serif text-2xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">未找到公开人员资料</h1>
+        <p className="aia-text-muted mt-3 text-sm leading-6">该资料可能尚未公开、已调整，或链接地址有误。</p>
+        <SafeReturnLink fallback="/people" className="aia-link aia-focus mt-6 inline-flex min-h-11 items-center text-sm font-semibold">
           返回人员目录
-        </Link>
+        </SafeReturnLink>
       </div>
     </div>
   )
@@ -39,12 +33,14 @@ function PublicPersonNotFound() {
 export function LivePersonProfile({ slug }: LivePersonProfileProps) {
   const person = usePublicInstitutePerson(slug) as PublicInstitutePerson | null | undefined
   const groups = usePublicResearchGroups({ limit: 100 }) as PublicResearchGroup[] | undefined
+  const research = usePublicInstituteResearch({ personSlug: slug, limit: 100 }) as PublicInstituteResearch[] | undefined
+  const updates = usePublicInstituteUpdates({ personSlug: slug, limit: 100 }) as PublicInstituteUpdate[] | undefined
 
-  if (person === undefined || groups === undefined) {
+  if (person === undefined || groups === undefined || research === undefined || updates === undefined) {
     return (
-      <div className="min-h-screen bg-slate-50 py-10 sm:py-14" aria-live="polite">
+      <div className="min-h-screen py-12 sm:py-16" aria-live="polite">
         <div className="container-custom max-w-5xl">
-          <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm leading-6 text-slate-600 shadow-sm" role="status">
+          <p className="aia-text-muted border border-dashed aia-border-rule p-6 text-sm leading-6" role="status">
             正在加载公开人员资料…
           </p>
         </div>
@@ -53,29 +49,7 @@ export function LivePersonProfile({ slug }: LivePersonProfileProps) {
   }
 
   if (person === null) {
-    const demoPerson = getDemoPerson(slug)
-    if (!demoPerson) return <PublicPersonNotFound />
-    const relatedDemoGroups = demoResearchGroups.filter((group) => group.memberSlugs.includes(demoPerson.slug))
-    const relatedGraduateMembers = demoPerson.kind === "teacher"
-      ? relatedDemoGroups.flatMap((group) => demoPeople
-        .filter((member) => member.kind === "graduate" && group.memberSlugs.includes(member.slug))
-        .map((member) => ({
-          person: member,
-          groupSlug: group.slug,
-          groupNameZh: group.nameZh,
-          roleLabel: "研究生",
-        })))
-      : []
-
-    return (
-      <PersonProfile
-        person={demoPerson}
-        groups={relatedDemoGroups}
-        outputs={demoResearchOutputs}
-        updates={demoDirectoryUpdates}
-        relatedGraduateMembers={relatedGraduateMembers}
-      />
-    )
+    return <PublicPersonNotFound />
   }
 
   const directoryPerson = toDirectoryPerson(person)
@@ -100,6 +74,8 @@ export function LivePersonProfile({ slug }: LivePersonProfileProps) {
     <PersonProfile
       person={directoryPerson}
       groups={relatedGroups}
+      outputs={research.map((item) => toDirectoryResearchOutput(item, `/people/${slug}`))}
+      updates={updates.map((item) => toDirectoryUpdate(item, `/people/${slug}`))}
       relatedGraduateMembers={relatedGraduateMembers}
     />
   )

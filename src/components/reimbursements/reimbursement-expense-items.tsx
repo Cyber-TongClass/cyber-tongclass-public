@@ -101,7 +101,7 @@ export function ReimbursementExpenseItems({
                 <td className={expenseCellClassName}>
                   <Input
                     type="number"
-                    min={0}
+                    min={0.01}
                     step="0.01"
                     value={row.amount}
                     onChange={(event) => onUpdateRow(row.key, { amount: event.target.value })}

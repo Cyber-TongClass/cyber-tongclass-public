@@ -1,9 +1,10 @@
-import Image from "next/image"
 import Link from "next/link"
+import path from "node:path"
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { ArrowLeft, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { SecureIntranetImage } from "@/components/intranet/secure-intranet-image"
 import {
   ACADEMIC_EXCHANGE_MATERIAL_CATEGORY,
   buildReimbursementMaterialArticleSections,
@@ -82,12 +83,11 @@ function getParagraphClassName(paragraph: string) {
 function SourceImage({ image }: { image: ReimbursementMaterialImageBlock }) {
   return (
     <div className="mt-4 overflow-hidden rounded-xl bg-slate-50 p-3">
-      <Image
-        src={image.src}
+      <SecureIntranetImage
+        fileName={path.posix.basename(image.src)}
         alt={image.alt}
         width={image.width}
         height={image.height}
-        className="h-auto max-w-full object-contain"
       />
     </div>
   )

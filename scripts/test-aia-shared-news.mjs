@@ -57,7 +57,8 @@ test("Tong Class delegates its real 100-item news archive to NewsTimeline", () =
 test("AIA updates composes deduplicated audience collections with NewsTimeline", () => {
   const page = source("src/app/updates/page.tsx")
 
-  assert.match(page, /usePublicInstituteUpdates\(\{\s*limit:\s*100\s*\}\)/)
+  assert.match(page, /usePublicInstituteUpdates\(\{\s*limit\s*\}\)/)
+  assert.match(page, /加载更多动态/)
   assert.match(page, /buildAudienceCollections/)
   assert.match(page, /AudienceTabs/)
   assert.match(page, /selectedAudience/)

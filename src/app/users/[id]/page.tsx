@@ -5,5 +5,5 @@ export default function UserDetailAliasPage({
 }: {
   params: { id: string }
 }) {
-  redirect(`/members/${params.id}`)
+  redirect(`/tong-class/members/${params.id}`)
 }

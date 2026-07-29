@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
+import { requireEmailServiceToken } from "./lib/emailServiceAuth"
 import { getUserBySession } from "./reviewer/lib"
 import {
     assertCanManageAccount,
@@ -19,6 +20,7 @@ import {
     toTongClassDirectoryUserDto,
 } from "./lib/userDto"
 import type { TongClassUserRecord } from "./lib/userDto"
+import { ensureTeacherGroupManagement } from "./instituteDirectory"
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 const normalizeUsername = (username: string) => username.trim().toLowerCase()
@@ -26,6 +28,19 @@ const normalizeStudentId = (studentId: string) => studentId.trim()
 const PROFILE_MARKDOWN_MAX_LENGTH = 20_000
 const PASSWORD_MIN_LENGTH = 8
 const AUTH_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30
+const PASSWORD_ITERATIONS = 120_000
+const LOGIN_MAX_FAILURES = 5
+const LOGIN_LOCK_MS = 15 * 60_000
+
+async function revokeUserSessions(ctx: any, userId: any, revokedAt = Date.now()) {
+    const sessions = await ctx.db
+        .query("authSessions")
+        .withIndex("by_user", (index: any) => index.eq("userId", userId))
+        .collect()
+    await Promise.all(sessions
+        .filter((session: any) => session.revokedAt === undefined)
+        .map((session: any) => ctx.db.patch(session._id, { revokedAt })))
+}
 
 const normalizeProfileMarkdown = (value: string) => value.replace(/\r\n/g, "\n").trim()
 const normalizeOptionalString = (value?: string) => {
@@ -108,7 +123,7 @@ const pickDefined = <T extends Record<string, any>>(input: T) => {
     return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<T>
 }
 
-const isVisibleClassMember = (user: { isClassMember?: boolean }) => user.isClassMember !== false
+const isVisibleClassMember = (user: { isClassMember?: boolean }) => user.isClassMember === true
 
 type StoredUser = TongClassUserRecord & { _id: unknown }
 
@@ -130,6 +145,47 @@ const sha256Hex = async (input: string) => {
     return Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, "0")).join("")
 }
 
+const bytesToHex = (bytes: Uint8Array) => (
+    Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+)
+
+const constantTimeEqual = (left: string, right: string) => {
+    const maximum = Math.max(left.length, right.length)
+    let difference = left.length ^ right.length
+    for (let index = 0; index < maximum; index += 1) {
+        difference |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0)
+    }
+    return difference === 0
+}
+
+const pbkdf2Hash = async (password: string, salt: string, iterations: number) => {
+    const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
+    const key = await cryptoImpl.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(password),
+        "PBKDF2",
+        false,
+        ["deriveBits"],
+    )
+    const bits = await cryptoImpl.subtle.deriveBits({
+        name: "PBKDF2",
+        hash: "SHA-256",
+        salt: new TextEncoder().encode(salt),
+        iterations,
+    }, key, 256)
+    return bytesToHex(new Uint8Array(bits))
+}
+
+const createPasswordCredential = async (password: string) => {
+    const salt = generateSalt()
+    return {
+        passwordHash: await pbkdf2Hash(password, salt, PASSWORD_ITERATIONS),
+        salt,
+        passwordAlgorithm: "pbkdf2-sha256" as const,
+        passwordIterations: PASSWORD_ITERATIONS,
+    }
+}
+
 const createAuthSession = async (ctx: any, userId: any) => {
     const token = generateSalt(32)
     const now = Date.now()
@@ -142,17 +198,29 @@ const createAuthSession = async (ctx: any, userId: any) => {
     return token
 }
 
-const verifyPassword = async (password: string, credential: { passwordHash: string; salt?: string }) => {
+const verifyPassword = async (password: string, credential: {
+    passwordHash: string
+    salt?: string
+    passwordAlgorithm?: "pbkdf2-sha256"
+    passwordIterations?: number
+}) => {
+    if (credential.passwordAlgorithm === "pbkdf2-sha256" && credential.salt) {
+        return constantTimeEqual(credential.passwordHash, await pbkdf2Hash(
+            password,
+            credential.salt,
+            credential.passwordIterations ?? PASSWORD_ITERATIONS,
+        ))
+    }
     if (credential.salt) {
-        return credential.passwordHash === await sha256Hex(password + credential.salt)
+        return constantTimeEqual(credential.passwordHash, await sha256Hex(password + credential.salt))
     }
 
     // Compatibility for legacy dev/prod data that stored plaintext or unsalted hashes.
-    if (credential.passwordHash === password) {
+    if (constantTimeEqual(credential.passwordHash, password)) {
         return true
     }
 
-    return credential.passwordHash === await sha256Hex(password)
+    return constantTimeEqual(credential.passwordHash, await sha256Hex(password))
 }
 
 const userListArgs = {
@@ -160,6 +228,7 @@ const userListArgs = {
     limit: v.optional(v.number()),
     organization: v.optional(v.union(v.literal("pku"), v.literal("thu"))),
     cohort: v.optional(v.union(v.number(), v.literal("mascot"))),
+    identityType: v.optional(v.union(v.literal("undergrad"), v.literal("graduate"))),
 }
 
 async function listFilteredUsers(ctx: any, args: {
@@ -204,7 +273,9 @@ export const listPublicTongClassMembers = query({
     args: userListArgs,
     handler: async (ctx, args) => {
         const users = await listFilteredUsers(ctx, args)
-        const visibleUsers = users.filter(isVisibleClassMember)
+        const visibleUsers = users
+            .filter(isVisibleClassMember)
+            .filter((user) => !args.identityType || user.identityType === args.identityType)
         return paginate(visibleUsers, args.skip, args.limit).map(toPublicTongClassMemberDto)
     },
 })
@@ -221,7 +292,9 @@ export const listTongClassDirectoryMembers = query({
     handler: async (ctx, args) => {
         await getUserBySession(ctx, args.sessionToken)
         const users = await listFilteredUsers(ctx, args)
-        const visibleUsers = users.filter(isVisibleClassMember)
+        const visibleUsers = users
+            .filter(isVisibleClassMember)
+            .filter((user) => !args.identityType || user.identityType === args.identityType)
         return paginate(visibleUsers, args.skip, args.limit).map(toTongClassDirectoryUserDto)
     },
 })
@@ -425,6 +498,7 @@ export const create = mutation({
             chineseName: normalizeOptionalString(args.chineseName),
             role: requestedRole,
             identityType: storedIdentityType,
+            accountStatus: "active",
             organization: args.organization,
             cohort: args.cohort,
             studentId,
@@ -446,9 +520,13 @@ export const create = mutation({
             updatedAt: now,
         })
 
+        const createdUser = await ctx.db.get(userId)
+        if (storedIdentityType === "teacher" && createdUser) {
+            await ensureTeacherGroupManagement(ctx, { userId, user: createdUser, now })
+        }
+
         if (args.password && args.password.trim()) {
-            const salt = generateSalt()
-            const hash = await sha256Hex(args.password + salt)
+            const passwordCredential = await createPasswordCredential(args.password)
 
             const existingCredential = await ctx.db
                 .query("authCredentials")
@@ -456,15 +534,11 @@ export const create = mutation({
                 .first()
 
             if (existingCredential) {
-                await ctx.db.patch(existingCredential._id, {
-                    passwordHash: hash,
-                    salt,
-                })
+                await ctx.db.patch(existingCredential._id, passwordCredential)
             } else {
                 await ctx.db.insert("authCredentials", {
                     userId,
-                    passwordHash: hash,
-                    salt,
+                    ...passwordCredential,
                 })
             }
         }
@@ -599,15 +673,25 @@ export const update = mutation({
 
         await ctx.db.patch(id, patchData)
 
+        const nextIdentityType = requestedIdentityType ?? user.identityType
+        if (nextIdentityType === "teacher") {
+            const updatedUser = await ctx.db.get(id)
+            if (updatedUser) {
+                await ensureTeacherGroupManagement(ctx, { userId: id, user: updatedUser, now: Date.now() })
+            }
+        }
+
         return id
     },
 })
 
 export const markEmailVerified = mutation({
     args: {
+        serviceToken: v.string(),
         verificationId: v.id("emailVerifications"),
     },
     handler: async (ctx, args) => {
+        requireEmailServiceToken(args.serviceToken)
         const verification = await ctx.db.get(args.verificationId)
         if (
             !verification ||
@@ -675,8 +759,7 @@ export const updatePasswordByUserId = mutation({
             throw new Error("只能修改自己的密码；重置其他账号密码需要超级管理员权限")
         }
 
-        const salt = generateSalt()
-        const hash = await sha256Hex(args.newPassword + salt)
+        const passwordCredential = await createPasswordCredential(args.newPassword)
 
         const existingCredential = await ctx.db
             .query("authCredentials")
@@ -684,21 +767,18 @@ export const updatePasswordByUserId = mutation({
             .first()
 
         if (existingCredential) {
-            await ctx.db.patch(existingCredential._id, {
-                passwordHash: hash,
-                salt,
-            })
+            await ctx.db.patch(existingCredential._id, passwordCredential)
         } else {
             await ctx.db.insert("authCredentials", {
                 userId: args.userId,
-                passwordHash: hash,
-                salt,
+                ...passwordCredential,
             })
         }
 
         await ctx.db.patch(args.userId, {
             updatedAt: Date.now(),
         })
+        await revokeUserSessions(ctx, args.userId)
 
         return args.userId
     },
@@ -726,8 +806,7 @@ export const resetPasswordAsSuperAdmin = mutation({
             throw new Error("User not found")
         }
 
-        const salt = generateSalt()
-        const hash = await sha256Hex(args.newPassword + salt)
+        const passwordCredential = await createPasswordCredential(args.newPassword)
 
         const existingCredential = await ctx.db
             .query("authCredentials")
@@ -735,23 +814,77 @@ export const resetPasswordAsSuperAdmin = mutation({
             .first()
 
         if (existingCredential) {
-            await ctx.db.patch(existingCredential._id, {
-                passwordHash: hash,
-                salt,
-            })
+            await ctx.db.patch(existingCredential._id, passwordCredential)
         } else {
             await ctx.db.insert("authCredentials", {
                 userId: args.targetUserId,
-                passwordHash: hash,
-                salt,
+                ...passwordCredential,
             })
         }
 
         await ctx.db.patch(args.targetUserId, {
             updatedAt: Date.now(),
         })
+        await revokeUserSessions(ctx, args.targetUserId)
 
         return args.targetUserId
+    },
+})
+
+/** Atomically consumes a password-reset token, changes the credential, and revokes sessions. */
+export const resetPasswordWithToken = mutation({
+    args: {
+        serviceToken: v.string(),
+        tokenHash: v.string(),
+        newPassword: v.string(),
+    },
+    handler: async (ctx, args) => {
+        requireEmailServiceToken(args.serviceToken)
+        if (args.newPassword.length < PASSWORD_MIN_LENGTH) {
+            throw new Error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+        }
+        const verification = await ctx.db
+            .query("emailVerifications")
+            .withIndex("by_tokenHash", (index) => index.eq("tokenHash", args.tokenHash))
+            .first()
+        if (
+            !verification
+            || verification.purpose !== "password_reset"
+            || !verification.userId
+            || verification.usedAt !== undefined
+            || Date.now() > verification.expiresAt
+            || verification.resetCompletedAt !== undefined
+        ) {
+            throw new Error("PASSWORD_RESET_VERIFICATION_INVALID")
+        }
+        const user = await ctx.db.get(verification.userId)
+        if (
+            !user
+            || user.accountStatus === "disabled"
+            || normalizeEmail(user.email) !== normalizeEmail(verification.sentTo)
+        ) {
+            throw new Error("PASSWORD_RESET_VERIFICATION_INVALID")
+        }
+
+        const passwordCredential = await createPasswordCredential(args.newPassword)
+        const existingCredential = await ctx.db
+            .query("authCredentials")
+            .withIndex("by_userId", (index) => index.eq("userId", user._id))
+            .first()
+        if (existingCredential) {
+            await ctx.db.patch(existingCredential._id, passwordCredential)
+        } else {
+            await ctx.db.insert("authCredentials", {
+                userId: user._id,
+                ...passwordCredential,
+            })
+        }
+
+        const now = Date.now()
+        await revokeUserSessions(ctx, user._id, now)
+        await ctx.db.patch(verification._id, { usedAt: now, resetCompletedAt: now })
+        await ctx.db.patch(user._id, { updatedAt: now })
+        return { success: true }
     },
 })
 
@@ -791,17 +924,12 @@ export const updatePasswordWithCurrent = mutation({
             throw new Error("Current password is incorrect")
         }
 
-        const newSalt = generateSalt()
-        const newHash = await sha256Hex(args.newPassword + newSalt)
-
-        await ctx.db.patch(credential._id, {
-            passwordHash: newHash,
-            salt: newSalt,
-        })
+        await ctx.db.patch(credential._id, await createPasswordCredential(args.newPassword))
 
         await ctx.db.patch(args.userId, {
             updatedAt: Date.now(),
         })
+        await revokeUserSessions(ctx, args.userId)
 
         return args.userId
     },
@@ -872,7 +1000,7 @@ export const updateProfileMarkdown = mutation({
     },
 })
 
-// Delete a user (admin only)
+// Routine account removal is a reversible soft-disable with session revocation.
 export const remove = mutation({
     args: {
         sessionToken: v.string(),
@@ -887,21 +1015,34 @@ export const remove = mutation({
         }
 
         if (String(actor._id) === String(user._id)) {
-            throw new Error("不能删除自己的账号")
+            throw new Error("不能停用自己的账号")
         }
 
         assertCanManageAccount(actor.role, user.role)
 
-        const credential = await ctx.db
-            .query("authCredentials")
-            .filter((q) => q.eq(q.field("userId"), args.id))
-            .first()
-
-        if (credential) {
-            await ctx.db.delete(credential._id)
+        if (user.role === "super_admin") {
+            const superAdmins = await ctx.db
+                .query("users")
+                .withIndex("by_role", (q) => q.eq("role", "super_admin"))
+                .collect()
+            const activeSuperAdmins = superAdmins.filter((candidate) => candidate.accountStatus !== "disabled")
+            if (activeSuperAdmins.length <= 1) {
+                throw new Error("不能停用最后一个超级管理员")
+            }
         }
 
-        await ctx.db.delete(args.id)
+        const now = Date.now()
+        await ctx.db.patch(args.id, {
+            accountStatus: "disabled",
+            updatedAt: now,
+        })
+        const sessions = await ctx.db
+            .query("authSessions")
+            .withIndex("by_user", (q) => q.eq("userId", args.id))
+            .collect()
+        await Promise.all(sessions
+            .filter((session) => session.revokedAt === undefined)
+            .map((session) => ctx.db.patch(session._id, { revokedAt: now })))
         return args.id
     },
 })
@@ -942,7 +1083,7 @@ export const simpleLogin = mutation({
 
         const user = userByStudentId || userByUsername
 
-        if (!user) {
+        if (!user || user.accountStatus === "disabled") {
             throw new Error("账号或密码错误")
         }
 
@@ -954,20 +1095,29 @@ export const simpleLogin = mutation({
         if (!credential) {
             throw new Error("账号或密码错误")
         }
-
-        const passwordMatches = await verifyPassword(args.password, credential)
-        if (!passwordMatches) {
+        if ((credential.lockedUntil || 0) > Date.now()) {
             throw new Error("账号或密码错误")
         }
 
-        if (!credential.salt) {
-            const salt = generateSalt()
-            const hash = await sha256Hex(args.password + salt)
+        const passwordMatches = await verifyPassword(args.password, credential)
+        if (!passwordMatches) {
+            const failedLoginAttempts = (credential.failedLoginAttempts || 0) + 1
             await ctx.db.patch(credential._id, {
-                passwordHash: hash,
-                salt,
+                failedLoginAttempts,
+                ...(failedLoginAttempts >= LOGIN_MAX_FAILURES
+                    ? { lockedUntil: Date.now() + LOGIN_LOCK_MS }
+                    : {}),
             })
+            throw new Error("账号或密码错误")
         }
+
+        await ctx.db.patch(credential._id, {
+            ...(credential.passwordAlgorithm !== "pbkdf2-sha256"
+                ? await createPasswordCredential(args.password)
+                : {}),
+            failedLoginAttempts: 0,
+            lockedUntil: undefined,
+        })
 
         return {
             success: true,
@@ -982,10 +1132,13 @@ export const simpleLogin = mutation({
 // Get users count
 export const count = query({
     args: {
+        sessionToken: v.string(),
         organization: v.optional(v.union(v.literal("pku"), v.literal("thu"))),
         classMembersOnly: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
+        const actor = await getUserBySession(ctx, args.sessionToken)
+        assertCanViewAccountRecords(actor.role)
         let usersQuery = ctx.db.query("users")
 
         if (args.organization) {

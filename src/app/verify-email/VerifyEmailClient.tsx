@@ -2,13 +2,11 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
 export default function VerifyEmailClient() {
-    const router = useRouter()
     const searchParams = useSearchParams()
     const token = searchParams.get("token") || ""
     const purpose = (searchParams.get("purpose") || "email_verification") as "email_verification"
@@ -38,24 +36,6 @@ export default function VerifyEmailClient() {
                     setStatus("ok")
                     setMessage(data.message || "Email verification succeeded.")
 
-                    if (typeof window !== "undefined" && data?.proof && data?.email) {
-                        const resumeKey =
-                            typeof crypto !== "undefined" && "randomUUID" in crypto
-                                ? crypto.randomUUID()
-                                : `${Date.now()}-${Math.random().toString(16).slice(2)}`
-                        localStorage.setItem(
-                            `tongclass_register_resume_${resumeKey}`,
-                            JSON.stringify({
-                                email: String(data.email),
-                                proof: String(data.proof),
-                                createdAt: Date.now(),
-                            })
-                        )
-
-                        setTimeout(() => {
-                            router.push(`/register?resume=${encodeURIComponent(resumeKey)}&step=3`)
-                        }, 1200)
-                    }
                     return
                 }
                 setStatus("error")
@@ -70,7 +50,7 @@ export default function VerifyEmailClient() {
         return () => {
             cancelled = true
         }
-    }, [token, purpose, router])
+    }, [token, purpose])
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-white px-4 py-12">

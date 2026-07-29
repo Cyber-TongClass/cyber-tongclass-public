@@ -19,8 +19,8 @@ test("AIA login submits the generic identifier and presents institute-wide accou
   const hookSource = readFileSync("src/lib/hooks/use-auth.ts", "utf8")
   const pageSource = readFileSync("src/app/login/page.tsx", "utf8")
 
-  assert.match(hookSource, /loginMutation\(\{\s*identifier:\s*identifier\.trim\(\),\s*password:\s*password\s*\}\)/)
-  assert.doesNotMatch(hookSource, /loginMutation\(\{\s*studentId:/)
+  assert.match(hookSource, /loginMutation\(\{\s*identifier:\s*trimmedIdentifier,\s*password:\s*password\s*,?\s*\}\)/)
+  assert.match(hookSource, /loginMutation\(\{\s*studentId:\s*trimmedIdentifier,\s*password:\s*password\s*,?\s*\}\)/)
   assert.match(pageSource, /账号（学号\s*\/\s*用户名\s*\/\s*工号）/)
   assert.match(pageSource, /请输入学号、用户名或工号/)
   assert.match(pageSource, /账号或密码错误，请重试/)

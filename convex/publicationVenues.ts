@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserBySession } from "./reviewer/lib"
 
 const PREPRINT_VENUE = "arXiv Preprint"
 
@@ -15,33 +16,8 @@ function isPreprintVenue(value: string) {
   return venueKey(value) === venueKey(PREPRINT_VENUE)
 }
 
-async function sha256Hex(input: string) {
-  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
-  const enc = new TextEncoder().encode(input)
-  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
-  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
-}
-
 async function getActorOrThrow(ctx: any, sessionToken: string | undefined) {
-  if (!sessionToken) {
-    throw new Error("请先登录")
-  }
-
-  const tokenHash = await sha256Hex(sessionToken)
-  const session = await ctx.db
-    .query("authSessions")
-    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
-    .first()
-  if (!session || session.revokedAt || session.expiresAt <= Date.now()) {
-    throw new Error("请先登录")
-  }
-
-  const actor = await ctx.db.get(session.userId)
-  if (!actor) {
-    throw new Error("用户不存在")
-  }
-
-  return actor
+  return await getUserBySession(ctx, sessionToken)
 }
 
 function assertSuperAdmin(actor: any) {

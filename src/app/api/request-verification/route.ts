@@ -4,6 +4,8 @@ import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { sendVerificationEmail } from "@/lib/server/mailer"
 import { generateVerificationCode, generateVerificationToken, normalizeEmail, sha256Hex } from "@/lib/server/verification"
 import { verifyTurnstileToken } from "@/lib/server/turnstile"
+import { safeLocalPath } from "@/lib/safe-local-path"
+import { getEmailVerificationServiceToken } from "@/lib/server/email-service-token"
 
 type Purpose = "email_verification" | "password_reset"
 
@@ -38,6 +40,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const email = normalizeEmail(String(body?.email || ""))
         const purpose = String(body?.purpose || "") as Purpose
+        const next = safeLocalPath(body?.next ? String(body.next) : null, "/")
         const turnstileToken = body?.turnstileToken ? String(body.turnstileToken) : ""
 
         if (!email || !isValidEmail(email) || !PURPOSE_SET.has(purpose)) {
@@ -47,8 +50,10 @@ export async function POST(request: NextRequest) {
         const ip = getClientIp(request)
         const userAgent = request.headers.get("user-agent") || ""
         const client = getConvexHttpClient()
+        const serviceToken = getEmailVerificationServiceToken()
 
         const stats = await client.query(getRecentStatsRef, {
+            serviceToken,
             email,
             ip,
             withinMs: WINDOW_MS,
@@ -97,7 +102,8 @@ export async function POST(request: NextRequest) {
             ? Number(process.env.EMAIL_TOKEN_EXPIRY_MIN || 15)
             : Number(process.env.EMAIL_VERIFY_EXPIRY_MIN || 30)
 
-        await client.mutation(createEmailVerificationRef, {
+        const created = await client.mutation(createEmailVerificationRef, {
+            serviceToken,
             tokenHash,
             codeHash,
             purpose,
@@ -111,15 +117,23 @@ export async function POST(request: NextRequest) {
         const path = purpose === "password_reset"
             ? "/reset-password"
             : "/verify-email"
-        const link = `${siteUrl}${path}?token=${encodeURIComponent(token)}&purpose=${purpose}`
+        const linkUrl = new URL(path, siteUrl)
+        linkUrl.searchParams.set("token", token)
+        linkUrl.searchParams.set("purpose", purpose)
+        if (purpose === "password_reset") {
+            linkUrl.searchParams.set("next", next)
+        }
+        const link = linkUrl.toString()
 
-        await sendVerificationEmail({
-            to: email,
-            purpose,
-            link,
-            code,
-            expiryMinutes,
-        })
+        if ((created as { deliverable?: boolean }).deliverable) {
+            await sendVerificationEmail({
+                to: email,
+                purpose,
+                link,
+                code,
+                expiryMinutes,
+            })
+        }
 
         return NextResponse.json({
             ok: true,

@@ -5,6 +5,7 @@ export const REVIEWER_PERMISSIONS = [REVIEWER_ACADEMIC_EXCHANGE_READ] as const
 
 export const REVIEWER_SESSION_TTL_MS = 1000 * 60 * 60 * 12
 export const REVIEWER_PASSWORD_MIN_LENGTH = 8
+export const REVIEWER_PASSWORD_ITERATIONS = 120_000
 
 export const normalizeReviewerUsername = (username: string) => username.trim().toLowerCase()
 
@@ -21,19 +22,64 @@ export const sha256Hex = async (input: string) => {
   return Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, "0")).join("")
 }
 
+const bytesToHex = (bytes: Uint8Array) => (
+  Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("")
+)
+
+const constantTimeEqual = (left: string, right: string) => {
+  const maximum = Math.max(left.length, right.length)
+  let difference = left.length ^ right.length
+  for (let index = 0; index < maximum; index += 1) {
+    difference |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0)
+  }
+  return difference === 0
+}
+
+const pbkdf2ReviewerPassword = async (password: string, salt: string, iterations: number) => {
+  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
+  const key = await cryptoImpl.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  )
+  const bits = await cryptoImpl.subtle.deriveBits({
+    name: "PBKDF2",
+    hash: "SHA-256",
+    salt: new TextEncoder().encode(salt),
+    iterations,
+  }, key, 256)
+  return bytesToHex(new Uint8Array(bits))
+}
+
 export const hashReviewerPassword = async (password: string) => {
   const salt = generateSalt()
   return {
     salt,
-    passwordHash: await sha256Hex(password + salt),
+    passwordHash: await pbkdf2ReviewerPassword(password, salt, REVIEWER_PASSWORD_ITERATIONS),
+    passwordAlgorithm: "pbkdf2-sha256" as const,
+    passwordIterations: REVIEWER_PASSWORD_ITERATIONS,
   }
 }
 
 export const verifyReviewerPassword = async (
   password: string,
-  credential: { passwordHash: string; salt: string }
+  credential: {
+    passwordHash: string
+    salt: string
+    passwordAlgorithm?: "pbkdf2-sha256"
+    passwordIterations?: number
+  }
 ) => {
-  return credential.passwordHash === await sha256Hex(password + credential.salt)
+  const candidate = credential.passwordAlgorithm === "pbkdf2-sha256"
+    ? await pbkdf2ReviewerPassword(
+      password,
+      credential.salt,
+      credential.passwordIterations || REVIEWER_PASSWORD_ITERATIONS,
+    )
+    : await sha256Hex(password + credential.salt)
+  return constantTimeEqual(credential.passwordHash, candidate)
 }
 
 export const normalizeReviewerPermissions = (permissions?: string[]) => {
@@ -60,6 +106,9 @@ export const getUserBySession = async (ctx: any, sessionToken?: string | null) =
   const user = await ctx.db.get(session.userId)
   if (!user) {
     throw new Error("用户不存在")
+  }
+  if (user.accountStatus === "disabled") {
+    throw new Error("账号不可用")
   }
 
   return user

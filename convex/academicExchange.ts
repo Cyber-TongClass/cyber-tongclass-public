@@ -6,6 +6,8 @@ import { getUserBySession, requireAcademicExchangeReviewerAccess } from "./revie
 const AUTHOR_META_PATTERN = /^(.*?)\s*\[tc-author:([^\]]+)\]\s*$/
 const MAX_PAPER_PDF_BYTES = 30 * 1024 * 1024
 const PAPER_PDF_MIME_TYPES = new Set(["application/pdf", "application/octet-stream"])
+const PROJECT_TIME_PATTERN =
+  /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})\s*(?:-|–|—|~|至)\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/
 
 async function requireSuperAdmin(ctx: any, sessionToken?: string) {
   const user = await getUserBySession(ctx, sessionToken)
@@ -19,6 +21,36 @@ function normalizeOptionalString(value?: string) {
   if (value === undefined) return undefined
   const trimmed = value.trim()
   return trimmed ? trimmed : undefined
+}
+
+function normalizeProjectTime(value: string) {
+  const match = value.trim().match(PROJECT_TIME_PATTERN)
+  if (!match) throw new Error("项目时间请按“YYYY-MM-DD 至 YYYY-MM-DD”填写")
+  const parts = match.slice(1).map(Number)
+  const [startYear, startMonth, startDay, endYear, endMonth, endDay] = parts
+  const toTimestamp = (year: number, month: number, day: number) => {
+    const timestamp = Date.UTC(year, month - 1, day)
+    const date = new Date(timestamp)
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+      ? timestamp
+      : null
+  }
+  const start = toTimestamp(startYear, startMonth, startDay)
+  const end = toTimestamp(endYear, endMonth, endDay)
+  if (start === null || end === null) throw new Error("项目时间包含无效日期")
+  if (end < start) throw new Error("项目结束日期不能早于开始日期")
+  const format = (year: number, month: number, day: number) =>
+    `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+  return `${format(startYear, startMonth, startDay)} 至 ${format(endYear, endMonth, endDay)}`
+}
+
+function isSafeExternalPaperPdfUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === "https:" && url.hostname.toLowerCase() === "arxiv.org"
+  } catch {
+    return false
+  }
 }
 
 async function normalizeUploadedPaperPdfMetadata(ctx: any, args: {
@@ -130,6 +162,13 @@ const expenseItemValidator = v.object({
   note: v.optional(v.string()),
 })
 
+const reviewActionValidator = v.union(
+  v.literal("start_review"),
+  v.literal("request_changes"),
+  v.literal("approve"),
+  v.literal("reject"),
+)
+
 function normalizeExpenseItems(items: Array<{ item: string; amount: number; note?: string }>) {
   return items
     .map((item) => ({
@@ -137,7 +176,7 @@ function normalizeExpenseItems(items: Array<{ item: string; amount: number; note
       amount: item.amount,
       note: normalizeOptionalString(item.note),
     }))
-    .filter((item) => item.item && Number.isFinite(item.amount) && item.amount >= 0)
+    .filter((item) => item.item && Number.isFinite(item.amount) && item.amount > 0)
 }
 
 function normalizePositiveInteger(value?: number) {
@@ -236,6 +275,27 @@ export const generateUploadUrl = mutation({
     })
     if (r2Target) return r2Target
     return await ctx.storage.generateUploadUrl()
+  },
+})
+
+export const validateCleanupUpload = query({
+  args: {
+    sessionToken: v.optional(v.string()),
+    storageId: v.union(v.id("_storage"), v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const r2Key = getR2ObjectKeyFromStorageId(args.storageId)
+    if (r2Key) {
+      return r2StorageIdMatches(args.storageId, {
+        ownerId: String(user._id),
+        purpose: "academic-exchange-paper",
+      })
+    }
+    // Legacy Convex storage IDs do not encode an owner, so accepting them here
+    // would let one account delete another account's unbound upload. R2 IDs
+    // carry a signed owner segment and are the only safe cleanup target.
+    return false
   },
 })
 
@@ -342,7 +402,7 @@ export const getPaperPdfUrl = query({
       })
     } else {
       const user = await getUserBySession(ctx, args.sessionToken)
-      if (String(application.userId) !== String(user._id)) {
+      if (String(application.userId) !== String(user._id) && user.role !== "super_admin") {
         return null
       }
     }
@@ -384,6 +444,149 @@ export const logReviewerApplicationDownload = mutation({
   },
 })
 
+export const reviewApplicationForReviewer = mutation({
+  args: {
+    reviewerSessionToken: v.optional(v.string()),
+    mainSessionToken: v.optional(v.string()),
+    id: v.id("academicExchangeSupportApplications"),
+    action: reviewActionValidator,
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const reviewerAccess = await requireAcademicExchangeReviewerAccess(ctx, {
+      reviewerSessionToken: args.reviewerSessionToken,
+      mainSessionToken: args.mainSessionToken,
+    })
+    const application = await ctx.db.get(args.id)
+    if (!application) throw new Error("未找到申请记录")
+    if (["approved", "rejected", "withdrawn"].includes(application.status)) {
+      throw new Error("该申请已结束，不能重复审核")
+    }
+    const note = normalizeOptionalString(args.note)
+    if ((args.action === "request_changes" || args.action === "reject") && !note) {
+      throw new Error("请填写审核意见")
+    }
+    const nextStatus = {
+      start_review: "reviewing",
+      request_changes: "needs_changes",
+      approve: "approved",
+      reject: "rejected",
+    }[args.action] as "reviewing" | "needs_changes" | "approved" | "rejected"
+    const now = Date.now()
+    await ctx.db.patch(args.id, {
+      status: nextStatus,
+      reviewNote: note,
+      reviewerName: reviewerAccess.reviewer.displayName || reviewerAccess.reviewer.username || "Reviewer",
+      reviewedAt: now,
+      updatedAt: now,
+    })
+    return await ctx.db.get(args.id)
+  },
+})
+
+export const withdrawApplication = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    id: v.id("academicExchangeSupportApplications"),
+  },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const application = await ctx.db.get(args.id)
+    if (!application || String(application.userId) !== String(user._id)) {
+      throw new Error("无权操作该申请")
+    }
+    if (!["submitted", "reviewing", "needs_changes"].includes(application.status)) {
+      throw new Error("当前状态不能撤回")
+    }
+    await ctx.db.patch(args.id, {
+      status: "withdrawn",
+      updatedAt: Date.now(),
+    })
+    return args.id
+  },
+})
+
+export const updateApplication = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    id: v.id("academicExchangeSupportApplications"),
+    applicantName: v.string(),
+    email: v.string(),
+    gender: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    projectName: v.string(),
+    exchangeLocation: v.string(),
+    projectTime: v.string(),
+    otherFunding: v.string(),
+    projectPlan: v.string(),
+    expenseItems: v.array(expenseItemValidator),
+    applicationDate: v.string(),
+    applicantAffiliation: v.optional(v.string()),
+    totalPages: v.optional(v.number()),
+    bodyPages: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const application = await ctx.db.get(args.id)
+    if (!application || String(application.userId) !== String(user._id)) {
+      throw new Error("无权操作该申请")
+    }
+    if (application.status !== "needs_changes") {
+      throw new Error("只有待补充的申请可以修改后重新提交")
+    }
+
+    const projectTime = normalizeProjectTime(args.projectTime)
+    const expenseItems = normalizeExpenseItems(args.expenseItems)
+    if (expenseItems.length === 0 || expenseItems.length !== args.expenseItems.length) {
+      throw new Error("请完整填写申请金额明细，每项金额必须大于 0")
+    }
+    const requiredStrings = [
+      args.applicantName,
+      args.email,
+      args.projectName,
+      args.exchangeLocation,
+      args.projectTime,
+      args.otherFunding,
+      args.projectPlan,
+      args.applicationDate,
+    ]
+    if (requiredStrings.some((value) => !value.trim())) {
+      throw new Error("请完整填写申请信息")
+    }
+
+    const requiresPaper = application.projectCategory !== "出境访学"
+    const applicantAffiliation = normalizeOptionalString(args.applicantAffiliation)
+    const totalPages = normalizePositiveInteger(args.totalPages)
+    const bodyPages = normalizePositiveInteger(args.bodyPages)
+    if (requiresPaper && (!applicantAffiliation || !totalPages || !bodyPages)) {
+      throw new Error("请完整填写论文信息")
+    }
+
+    const now = Date.now()
+    await ctx.db.patch(args.id, {
+      applicantName: args.applicantName.trim(),
+      email: args.email.trim().toLowerCase(),
+      gender: normalizeOptionalString(args.gender),
+      phone: normalizeOptionalString(args.phone),
+      projectName: args.projectName.trim(),
+      exchangeLocation: args.exchangeLocation.trim(),
+      projectTime,
+      otherFunding: args.otherFunding.trim(),
+      projectPlan: args.projectPlan.trim(),
+      expenseItems,
+      totalAmount: expenseItems.reduce((sum, item) => sum + item.amount, 0),
+      applicationDate: args.applicationDate.trim(),
+      applicantAffiliation: requiresPaper ? applicantAffiliation : application.applicantAffiliation,
+      totalPages: requiresPaper ? totalPages : application.totalPages,
+      bodyPages: requiresPaper ? bodyPages : application.bodyPages,
+      status: "submitted",
+      submittedAt: now,
+      updatedAt: now,
+    })
+    return args.id
+  },
+})
+
 export const updateApplicationForSuperAdmin = mutation({
   args: {
     sessionToken: v.optional(v.string()),
@@ -419,10 +622,11 @@ export const updateApplicationForSuperAdmin = mutation({
     }
 
     const paperPdfUrl = normalizeOptionalString(args.paperPdfUrl)
-    if (paperPdfUrl && !/^https?:\/\//i.test(paperPdfUrl)) {
-      throw new Error("论文 PDF 链接必须是 http(s) 链接")
+    if (paperPdfUrl && !isSafeExternalPaperPdfUrl(paperPdfUrl)) {
+      throw new Error("论文 PDF 链接必须来自 https://arxiv.org")
     }
 
+    const projectTime = normalizeProjectTime(args.projectTime)
     await ctx.db.patch(args.id, {
       applicantName: args.applicantName.trim(),
       studentId: args.studentId.trim(),
@@ -432,7 +636,7 @@ export const updateApplicationForSuperAdmin = mutation({
       projectCategory: args.projectCategory.trim(),
       projectName: args.projectName.trim(),
       exchangeLocation: args.exchangeLocation.trim(),
-      projectTime: args.projectTime.trim(),
+      projectTime,
       otherFunding: args.otherFunding.trim(),
       projectPlan: args.projectPlan.trim(),
       expenseItems,
@@ -501,6 +705,7 @@ export const createApplication = mutation({
   handler: async (ctx, args) => {
     const user = await getUserBySession(ctx, args.sessionToken)
     const projectCategory = args.projectCategory.trim()
+    const projectTime = normalizeProjectTime(args.projectTime)
     const requiresPaper = projectCategory !== "出境访学"
     const uploadedPaperPdf = requiresPaper ? await normalizeUploadedPaperPdfMetadata(ctx, args, String(user._id)) : null
     const paperPdfUrl = normalizeOptionalString(args.paperPdfUrl)
@@ -557,8 +762,8 @@ export const createApplication = mutation({
         throw new Error("请上传论文 PDF 或填写论文 PDF 链接")
       }
 
-      if (paperPdfUrl && !/^https?:\/\//i.test(paperPdfUrl)) {
-        throw new Error("论文 PDF 链接必须是 http(s) 链接")
+      if (paperPdfUrl && !isSafeExternalPaperPdfUrl(paperPdfUrl)) {
+        throw new Error("论文 PDF 链接必须来自 https://arxiv.org")
       }
 
       if (!Number.isInteger(args.totalPages) || !Number.isInteger(args.bodyPages) || args.totalPages! <= 0 || args.bodyPages! <= 0) {
@@ -598,7 +803,7 @@ export const createApplication = mutation({
       projectCategory,
       projectName: args.projectName.trim(),
       exchangeLocation: args.exchangeLocation.trim(),
-      projectTime: args.projectTime.trim(),
+      projectTime,
       otherFunding: args.otherFunding.trim(),
       projectPlan: args.projectPlan.trim(),
       expenseItems: normalizedExpenseItems,

@@ -16,6 +16,7 @@ const componentPaths = [
   "src/components/coffee-talk/coffee-talk-application-detail.tsx",
   "src/components/coffee-talk/coffee-talk-application-form.tsx",
   "src/components/coffee-talk/coffee-talk-backend-unavailable-state.tsx",
+  "src/components/coffee-talk/coffee-talk-entry-list.tsx",
 ]
 
 const routePaths = [
@@ -95,7 +96,11 @@ test("AIA notification and Coffee Talk presentation components keep their safety
   for (const [path, source] of Object.entries(routes)) {
     assert.doesNotMatch(source, /from\s+["'][^"']*convex[^"']*["']/i, `${path} must not import Convex directly`)
   }
-  assert.match(routes["src/app/services/coffee-talk/page.tsx"], /href=["']\/services\/coffee-talk\/apply["']/)
+  // 入口 href 已随角色门控抽入 CoffeeTalkEntryList（落地页经该组件渲染）。
+  assert.match(
+    sources["src/components/coffee-talk/coffee-talk-entry-list.tsx"],
+    /href=["']\/services\/coffee-talk\/apply["']/,
+  )
   assert.match(routes["src/app/services/coffee-talk/apply/page.tsx"], /CoffeeTalkApplyClient/)
   assert.match(routes["src/app/services/coffee-talk/my/page.tsx"], /CoffeeTalkMyClient/)
 })

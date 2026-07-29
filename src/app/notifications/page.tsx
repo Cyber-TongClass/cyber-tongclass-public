@@ -1,19 +1,19 @@
-import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { AiaNotificationInboxClient } from "@/components/notifications/aia-notification-inbox-client"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 
 export default function NotificationsPage() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-12 sm:py-16">
       <div className="mx-auto max-w-3xl">
-        <Link
-          href="/"
+        <SafeReturnLink
+          fallback="/portal/list"
           className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          返回 AIA 首页
-        </Link>
+          返回进入位置
+        </SafeReturnLink>
         <section className="mt-6" aria-labelledby="aia-notifications-heading">
           <p className="text-sm font-semibold text-primary">AIA</p>
           <h1 id="aia-notifications-heading" className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">站内信</h1>

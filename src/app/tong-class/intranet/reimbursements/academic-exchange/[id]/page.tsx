@@ -3,14 +3,27 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, type ReactNode } from "react"
-import { ArrowLeft, Download } from "lucide-react"
+import { ArrowLeft, Download, Pencil, Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { downloadAcademicExchangePdf, formatCurrency, formatDate, formatPaperAuthors } from "@/lib/academic-exchange"
 import { getAcademicExchangePaperPdfLabel, hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
-import { useAcademicExchangeApplication, useAcademicExchangePaperPdfUrl } from "@/lib/api"
+import {
+  useAcademicExchangeApplication,
+  useAcademicExchangePaperPdfUrl,
+  useWithdrawAcademicExchangeApplication,
+} from "@/lib/api"
 import type { AcademicExchangeSupportApplication } from "@/types"
+
+const STATUS_LABELS: Record<AcademicExchangeSupportApplication["status"], string> = {
+  submitted: "待审核",
+  reviewing: "审核中",
+  needs_changes: "待补充",
+  approved: "已通过",
+  rejected: "已驳回",
+  withdrawn: "已撤回",
+}
 
 function Field({ label, value }: { label: string; value?: ReactNode }) {
   return (
@@ -25,8 +38,10 @@ export default function AcademicExchangeApplicationDetailPage() {
   const params = useParams<{ id: string }>()
   const application = useAcademicExchangeApplication(params.id) as AcademicExchangeSupportApplication | null | undefined
   const uploadedPaperPdfUrl = useAcademicExchangePaperPdfUrl(params.id) as string | null | undefined
+  const withdrawApplication = useWithdrawAcademicExchangeApplication()
   const [message, setMessage] = useState("")
   const [downloading, setDownloading] = useState(false)
+  const [withdrawing, setWithdrawing] = useState(false)
 
   const handleDownload = async () => {
     if (!application) return
@@ -38,6 +53,21 @@ export default function AcademicExchangeApplicationDetailPage() {
       setMessage(error instanceof Error ? error.message : "PDF 导出失败")
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    if (!application) return
+    if (!window.confirm("确定撤回这份申请吗？撤回后不能继续审核，也不能恢复。")) return
+    setMessage("")
+    setWithdrawing(true)
+    try {
+      await withdrawApplication(application._id)
+      setMessage("申请已撤回。")
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "申请撤回失败")
+    } finally {
+      setWithdrawing(false)
     }
   }
 
@@ -70,6 +100,7 @@ export default function AcademicExchangeApplicationDetailPage() {
   const hasPaperInfo = Boolean(application.paperTitle || hasAcademicExchangePaperPdfAttachment(application))
   const paperAuthors = formatPaperAuthors(application.paperAuthors || [], application.applicantAuthorName)
   const paperPdfLabel = getAcademicExchangePaperPdfLabel(application)
+  const canWithdraw = ["submitted", "reviewing", "needs_changes"].includes(application.status)
 
   return (
     <div className="min-h-screen bg-[hsl(211,30%,97%)] py-10 px-4">
@@ -81,18 +112,53 @@ export default function AcademicExchangeApplicationDetailPage() {
               返回学术交流支持
             </Link>
           </Button>
-          <Button type="button" onClick={handleDownload} disabled={downloading}>
-            <Download className="mr-2 h-4 w-4" />
-            {downloading ? "导出中..." : "下载申请表 PDF"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {application.status === "needs_changes" ? (
+              <Button asChild>
+                <Link href={`/tong-class/intranet/reimbursements/academic-exchange/${application._id}/edit`}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  补充并重新提交
+                </Link>
+              </Button>
+            ) : null}
+            {canWithdraw ? (
+              <Button type="button" variant="outline" onClick={handleWithdraw} disabled={withdrawing}>
+                <Undo2 className="mr-2 h-4 w-4" />
+                {withdrawing ? "撤回中..." : "撤回申请"}
+              </Button>
+            ) : null}
+            <Button type="button" onClick={handleDownload} disabled={downloading}>
+              <Download className="mr-2 h-4 w-4" />
+              {downloading ? "导出中..." : "下载申请表 PDF"}
+            </Button>
+          </div>
         </div>
 
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900">{application.projectName}</h1>
-          <p className="mt-1 text-sm text-slate-500">提交时间：{formatDate(application.submittedAt)}。该申请已提交，不能编辑。</p>
+          <p className="mt-1 text-sm text-slate-500">
+            提交时间：{formatDate(application.submittedAt)}。当前状态：{STATUS_LABELS[application.status]}。
+          </p>
         </div>
 
         {message ? <p className="rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{message}</p> : null}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>审核进度</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-3">
+            <Field label="当前状态" value={STATUS_LABELS[application.status]} />
+            <Field label="最近审核人" value={application.reviewerName} />
+            <Field label="最近处理时间" value={application.reviewedAt ? formatDate(application.reviewedAt) : "-"} />
+            <div className="md:col-span-3">
+              <Field
+                label="审核意见"
+                value={application.reviewNote || (application.status === "needs_changes" ? "Reviewer 尚未填写补充说明，请联系报销评审人员。" : "-")}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

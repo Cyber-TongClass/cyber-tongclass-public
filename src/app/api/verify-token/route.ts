@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
-import { normalizeEmail, sha256Hex, signPasswordResetProof } from "@/lib/server/verification"
+import { normalizeEmail, sha256Hex } from "@/lib/server/verification"
+import { getEmailVerificationServiceToken } from "@/lib/server/email-service-token"
 
 type Purpose = "email_verification" | "password_reset"
 const PURPOSE_SET = new Set<Purpose>(["email_verification", "password_reset"])
@@ -19,10 +20,18 @@ export async function POST(request: NextRequest) {
         if (!PURPOSE_SET.has(purpose) || (!token && !code)) {
             return NextResponse.json({ ok: false, message: "Invalid request." }, { status: 400 })
         }
+        if (purpose === "password_reset") {
+            return NextResponse.json(
+                { ok: false, message: "请通过密码重置页面直接提交新密码。" },
+                { status: 400 },
+            )
+        }
 
         const client = getConvexHttpClient()
+        const serviceToken = getEmailVerificationServiceToken()
 
         const consume = await client.mutation(consumeVerificationRef, {
+            serviceToken,
             purpose,
             tokenHash: token ? sha256Hex(token) : undefined,
             codeHash: code ? sha256Hex(code) : undefined,
@@ -37,6 +46,7 @@ export async function POST(request: NextRequest) {
         if (purpose === "email_verification") {
             if (consume.verificationId) {
                 await client.mutation(markEmailVerifiedRef, {
+                    serviceToken,
                     verificationId: consume.verificationId,
                 } as any)
             }
@@ -47,14 +57,7 @@ export async function POST(request: NextRequest) {
             })
         }
 
-        const targetUserId = consume.userId as string | undefined
-
-        if (!targetUserId || !consume.sentTo) {
-            return NextResponse.json({ ok: false, message: "Unable to resolve target account." }, { status: 400 })
-        }
-
-        const proof = signPasswordResetProof(targetUserId, consume.sentTo)
-        return NextResponse.json({ ok: true, proof })
+        return NextResponse.json({ ok: false, message: "Unsupported verification purpose." }, { status: 400 })
     } catch (error) {
         console.error("verify-token error", error)
         return NextResponse.json({ ok: false, message: "Verification failed." }, { status: 500 })

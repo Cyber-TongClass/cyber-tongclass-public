@@ -5,11 +5,13 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Search, FileText, Users, Calendar, BookOpen, Newspaper } from "lucide-react"
 import { useNews, useUsers, usePublications, useEvents, useCourses } from "@/lib/api"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { formatPublicationAuthorsForText, getPublicationAuthorName } from "@/lib/publication-authors"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { Course, Event, News, Publication, User } from "@/types"
+import { withReturnTo } from "@/lib/safe-local-path"
 
 interface SearchResult {
   type: "news" | "member" | "publication" | "event" | "course"
@@ -33,13 +35,14 @@ function SearchContent() {
   const [results, setResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const { currentUser, isAdmin } = useAuth()
 
   // Fetch data from Convex
   const newsData = useNews({})
   const usersData = useUsers({ classMembersOnly: true })
   const publicationsData = usePublications({})
   const eventsData = useEvents({})
-  const coursesData = useCourses({})
+  const coursesData = useCourses({ enabled: currentUser?.isClassMember === true || isAdmin })
 
   const news = useMemo<News[]>(() => newsData || [], [newsData])
   const users = useMemo<SearchMember[]>(() => usersData || [], [usersData])
@@ -72,7 +75,7 @@ function SearchContent() {
           id: item._id,
           title: item.title,
           description: item.content.slice(0, 100) + (item.content.length > 100 ? "..." : ""),
-          url: item.sourceUrl || `/tong-class/news/${item._id}`,
+          url: item.sourceUrl || withReturnTo(`/tong-class/news/${item._id}`, `/search?q=${encodeURIComponent(searchQuery)}`),
           icon: <Newspaper className="h-5 w-5" />,
         })
       }
@@ -93,7 +96,7 @@ function SearchContent() {
           id: user.username,
           title: user.englishName || user.username,
           description: user.bio?.slice(0, 100) || user.username,
-          url: `/tong-class/members/${user.username}`,
+          url: withReturnTo(`/tong-class/members/${user.username}`, `/search?q=${encodeURIComponent(searchQuery)}`),
           icon: <Users className="h-5 w-5" />,
         })
       }
@@ -112,7 +115,7 @@ function SearchContent() {
           id: pub._id,
           title: pub.title,
           description: `${formatPublicationAuthorsForText(pub.authors)} - ${pub.venue} (${pub.year})`,
-          url: `/tong-class/publications/${pub._id}`,
+          url: withReturnTo(`/tong-class/publications/${pub._id}`, `/search?q=${encodeURIComponent(searchQuery)}`),
           icon: <FileText className="h-5 w-5" />,
         })
       }
@@ -134,7 +137,7 @@ function SearchContent() {
           description: eventDescription
             ? eventDescription.slice(0, 100) + (eventDescription.length > 100 ? "..." : "")
             : eventLocation || event.date,
-          url: `/tong-class/events/${event._id}`,
+          url: withReturnTo(`/tong-class/events/${event._id}`, `/search?q=${encodeURIComponent(searchQuery)}`),
           icon: <Calendar className="h-5 w-5" />,
         })
       }
@@ -213,7 +216,11 @@ function SearchContent() {
           <h1 className="text-3xl font-extrabold mb-6">搜索</h1>
           
           <form onSubmit={handleSearch} className="flex gap-2 mb-8">
+            <label htmlFor="site-search-input" className="sr-only">
+              搜索新闻、成员、成果、活动和课程
+            </label>
             <Input
+              id="site-search-input"
               type="search"
               placeholder="输入关键词搜索新闻、成员、成果、活动、课程..."
               value={query}

@@ -31,6 +31,7 @@ export default function NewEventPage() {
     type: "学术",
     description: "",
     url: "",
+    audiences: ["undergrad", "graduate"] as Array<"undergrad" | "graduate">,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,6 +45,7 @@ export default function NewEventPage() {
       description: formData.description,
       url: formData.url,
       color: typeToColor[formData.type] || "#0F4C81",
+      audiences: formData.audiences,
     })
 
     router.push("/admin/events")
@@ -126,6 +128,17 @@ export default function NewEventPage() {
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                 />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>可见人群</Label>
+              <div className="flex gap-4 text-sm">
+                {(["undergrad", "graduate"] as const).map((audience) => (
+                  <label key={audience} className="flex items-center gap-2">
+                    <input type="checkbox" checked={formData.audiences.includes(audience)} onChange={() => setFormData((prev) => ({ ...prev, audiences: prev.audiences.includes(audience) ? prev.audiences.filter((item) => item !== audience) : [...prev.audiences, audience] }))} />
+                    {audience === "undergrad" ? "本科生" : "研究生"}
+                  </label>
+                ))}
               </div>
             </div>
             <div className="space-y-2">

@@ -3,14 +3,26 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useEffect, useState, type ReactNode } from "react"
-import { ArrowLeft, Download } from "lucide-react"
+import { ArrowLeft, Check, Download, MessageSquareWarning, Play, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
 import { formatCurrency, formatDate, formatPaperAuthors } from "@/lib/academic-exchange"
 import { getAcademicExchangePaperPdfLabel, hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
 import { reviewerAccessHeaders, useReviewerAccess, type ReviewerAccess } from "@/app/reviewer/reviewer-access-context"
 import type { AcademicExchangeSupportApplication } from "@/types"
+
+type ReviewAction = "start_review" | "request_changes" | "approve" | "reject"
+
+const STATUS_LABELS: Record<AcademicExchangeSupportApplication["status"], string> = {
+  submitted: "待审核",
+  reviewing: "审核中",
+  needs_changes: "待补充",
+  approved: "已通过",
+  rejected: "已驳回",
+  withdrawn: "已撤回",
+}
 
 function Field({ label, value }: { label: string; value?: ReactNode }) {
   return (
@@ -63,6 +75,8 @@ export default function ReviewerAcademicExchangeDetailPage() {
   const [application, setApplication] = useState<AcademicExchangeSupportApplication | null | undefined>(undefined)
   const [message, setMessage] = useState("")
   const [downloading, setDownloading] = useState(false)
+  const [reviewNote, setReviewNote] = useState("")
+  const [reviewingAction, setReviewingAction] = useState<ReviewAction | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -79,7 +93,10 @@ export default function ReviewerAcademicExchangeDetailPage() {
           if (!cancelled) setApplication(null)
           return
         }
-        if (!cancelled) setApplication(payload.application)
+        if (!cancelled) {
+          setApplication(payload.application)
+          setReviewNote(payload.application?.reviewNote || "")
+        }
       } catch {
         if (!cancelled) {
           setMessage("无法读取申请详情")
@@ -106,6 +123,36 @@ export default function ReviewerAcademicExchangeDetailPage() {
     }
   }
 
+  const handleReview = async (action: ReviewAction) => {
+    if (!application) return
+    const note = reviewNote.trim()
+    if ((action === "request_changes" || action === "reject") && !note) {
+      setMessage("退回补充或驳回申请时，请先填写审核意见。")
+      return
+    }
+
+    setMessage("")
+    setReviewingAction(action)
+    try {
+      const response = await fetch(`/api/reviewer/academic-exchange/${application._id}`, {
+        method: "POST",
+        headers: reviewerAccessHeaders(reviewerAccess, { "Content-Type": "application/json" }),
+        body: JSON.stringify({ action, note: note || undefined }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(payload?.message || "审核操作失败")
+      }
+      setApplication(payload.application)
+      setReviewNote(payload.application?.reviewNote || "")
+      setMessage(`审核状态已更新为“${STATUS_LABELS[payload.application.status as AcademicExchangeSupportApplication["status"]]}”。`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "审核操作失败")
+    } finally {
+      setReviewingAction(null)
+    }
+  }
+
   if (application === undefined) {
     return <p className="text-sm text-slate-500">Loading...</p>
   }
@@ -129,6 +176,7 @@ export default function ReviewerAcademicExchangeDetailPage() {
   const hasPaperInfo = Boolean(application.paperTitle || hasAcademicExchangePaperPdfAttachment(application))
   const paperAuthors = formatPaperAuthors(application.paperAuthors || [], application.applicantAuthorName)
   const paperPdfLabel = getAcademicExchangePaperPdfLabel(application)
+  const isTerminal = ["approved", "rejected", "withdrawn"].includes(application.status)
 
   return (
     <div className="space-y-6">
@@ -147,7 +195,9 @@ export default function ReviewerAcademicExchangeDetailPage() {
 
       <div>
         <h1 className="text-3xl font-extrabold text-slate-950">{application.projectName}</h1>
-        <p className="mt-1 text-sm text-slate-500">提交时间：{formatDate(application.submittedAt)}。Reviewer 仅可只读查看。</p>
+        <p className="mt-1 text-sm text-slate-500">
+          提交时间：{formatDate(application.submittedAt)}。当前状态：{STATUS_LABELS[application.status]}。
+        </p>
       </div>
 
       {message ? (
@@ -155,6 +205,75 @@ export default function ReviewerAcademicExchangeDetailPage() {
           {message}
         </div>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>审核处理</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="当前状态" value={STATUS_LABELS[application.status]} />
+            <Field label="最近审核人" value={application.reviewerName} />
+            <Field label="最近处理时间" value={application.reviewedAt ? formatDate(application.reviewedAt) : "-"} />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="academic-exchange-review-note" className="text-sm font-medium text-slate-900">
+              审核意见
+            </label>
+            <Textarea
+              id="academic-exchange-review-note"
+              value={reviewNote}
+              onChange={(event) => setReviewNote(event.target.value)}
+              placeholder="退回补充或驳回时必填；通过时可填写说明。"
+              rows={4}
+              disabled={isTerminal || reviewingAction !== null}
+            />
+          </div>
+          {isTerminal ? (
+            <p className="text-sm text-slate-600">该申请已结束，审核状态不能再次变更。</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {application.status !== "reviewing" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleReview("start_review")}
+                  disabled={reviewingAction !== null}
+                >
+                  <Play className="mr-2 h-4 w-4" />
+                  {reviewingAction === "start_review" ? "处理中..." : "开始审核"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleReview("request_changes")}
+                disabled={reviewingAction !== null || !reviewNote.trim()}
+              >
+                <MessageSquareWarning className="mr-2 h-4 w-4" />
+                {reviewingAction === "request_changes" ? "处理中..." : "退回补充"}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleReview("approve")}
+                disabled={reviewingAction !== null}
+              >
+                <Check className="mr-2 h-4 w-4" />
+                {reviewingAction === "approve" ? "处理中..." : "通过"}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => handleReview("reject")}
+                disabled={reviewingAction !== null || !reviewNote.trim()}
+              >
+                <X className="mr-2 h-4 w-4" />
+                {reviewingAction === "reject" ? "处理中..." : "驳回"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

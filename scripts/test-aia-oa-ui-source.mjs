@@ -7,6 +7,7 @@ const routeFiles = [
   "src/app/services/oa/[slug]/page.tsx",
   "src/app/services/oa/my/page.tsx",
   "src/app/services/oa/approvals/page.tsx",
+  "src/app/services/oa/submissions/[id]/page.tsx",
 ]
 
 function read(path) {
@@ -18,8 +19,8 @@ test("AIA OA exposes an entry point plus submitter and reviewer routes", () => {
     assert.equal(existsSync(path), true, `expected ${path}`)
   }
 
-  const services = read("src/app/services/page.tsx")
-  assert.match(services, /href=["']\/services\/oa["']/)
+  const portalClient = read("src/components/portal/portal-client.tsx")
+  assert.match(portalClient, /href:\s*withReturnTo\(["']\/services\/oa["']/)
 
   const list = read("src/components/oa/aia-oa-form-list-client.tsx")
   assert.match(list, /usePublishedOAForms/)
@@ -40,6 +41,19 @@ test("AIA OA exposes an entry point plus submitter and reviewer routes", () => {
   assert.match(mine, /useMyOAFormSubmissions/)
   assert.match(mine, /useAuth/)
   assert.doesNotMatch(mine, /useTongClassSessionToken/)
+  assert.match(mine, /formTitle/)
+  assert.match(mine, /ordinalFor/)
+  assert.match(mine, /\/services\/oa\/submissions\//)
+
+  const detail = read("src/app/services/oa/submissions/[id]/page.tsx")
+  assert.match(detail, /formSnapshot/)
+  assert.match(detail, /审批记录/)
+  assert.match(detail, /useMyOAApprovalHistory/)
+  assert.match(detail, /operatorName/)
+
+  const oaForms = read("convex/oaForms.ts")
+  assert.match(oaForms, /export const listMineApprovalHistory = query/)
+  assert.match(oaForms, /actorName/)
 
   const approvals = read("src/components/oa/aia-oa-approval-inbox-client.tsx")
   assert.match(approvals, /useOAApprovalInbox/)
@@ -51,7 +65,9 @@ test("AIA OA exposes an entry point plus submitter and reviewer routes", () => {
   assert.match(approvals, /action/)
   assert.doesNotMatch(approvals, /await review\(\{\s*id:/)
   assert.doesNotMatch(approvals, /await review\(\{[^}]*reviewStatus/)
-  assert.doesNotMatch(approvals, /needs_changes/)
+  assert.match(approvals, /request_changes/)
+  assert.match(approvals, /expectedVersion/)
+  assert.match(detail, /useUpdateOAFormSubmission/)
   assert.match(approvals, /useAuth/)
   assert.doesNotMatch(approvals, /useTongClassSessionToken/)
 

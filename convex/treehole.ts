@@ -2,6 +2,7 @@ import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { getVoteSummaryMap } from "./contentVotes"
+import { getUserBySession } from "./reviewer/lib"
 
 function getDisplayName(user: any) {
   return user?.chineseName?.trim() || user?.englishName?.trim() || user?.username || "用户"
@@ -75,26 +76,9 @@ async function getNextTreeholeSerialNumber(ctx: any) {
   return currentMax + 1
 }
 
-async function sha256Hex(input: string) {
-  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
-  const enc = new TextEncoder().encode(input)
-  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
-  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
-}
-
 async function getActorOrThrow(ctx: any, sessionToken: string | undefined) {
   if (sessionToken) {
-    const tokenHash = await sha256Hex(sessionToken)
-    const session = await ctx.db
-      .query("authSessions")
-      .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
-      .first()
-    if (session && !session.revokedAt && session.expiresAt > Date.now()) {
-      const actor = await ctx.db.get(session.userId)
-      if (actor) {
-        return actor
-      }
-    }
+    return await getUserBySession(ctx, sessionToken)
   }
 
   const identity = await ctx.auth.getUserIdentity()
@@ -103,7 +87,7 @@ async function getActorOrThrow(ctx: any, sessionToken: string | undefined) {
       .query("users")
       .filter((q: any) => q.eq(q.field("email"), identity.email))
       .first()
-    if (identityUser) {
+    if (identityUser && identityUser.accountStatus !== "disabled") {
       return identityUser
     }
   }

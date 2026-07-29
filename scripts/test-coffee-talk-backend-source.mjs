@@ -44,8 +44,8 @@ test("Coffee Talk notifications route applicants and explicitly bound teachers t
   assert.match(source, /application\.applicantUserId/)
   assert.match(source, /assignedTeacherPersonId/)
   assert.match(source, /teacher\.accountUserId/)
-  assert.match(source, /"\/services\/coffee-talk\/my"/)
-  assert.match(source, /"\/services\/coffee-talk\/manage"/)
+  assert.match(source, /`\/services\/coffee-talk\/my\/\$\{String\(applicationId\)\}`/)
+  assert.match(source, /`\/services\/coffee-talk\/manage\/\$\{String\(applicationId\)\}`/)
   assert.match(source, /return Promise\.all\(notifications\.map/)
 })
 

@@ -1,7 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { CheckCircle2, ClipboardCheck, Clock3 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,6 +11,7 @@ import { AiaOAAuthLoading, AiaOALoginRequired, AiaOAReviewStatusBadge, formatAia
 import { useMyOAFormSubmissions, useOAForm, useSubmitOAForm } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { isOAFormCollecting } from "@/lib/oa-forms"
+import { withReturnTo } from "@/lib/safe-local-path"
 import type { OAForm, OAFormSubmission } from "@/types"
 
 function FormMeta({ form }: { form: OAForm }) {
@@ -29,7 +31,7 @@ function FormMeta({ form }: { form: OAForm }) {
   )
 }
 
-function SubmissionSummary({ submissions }: { submissions: OAFormSubmission[] }) {
+function SubmissionSummary({ submissions, returnTo }: { submissions: OAFormSubmission[]; returnTo: string }) {
   if (submissions.length === 0) return null
   return (
     <section className="rounded-xl border border-slate-200 bg-slate-50 p-5" aria-labelledby="aia-oa-current-submissions-heading">
@@ -39,10 +41,14 @@ function SubmissionSummary({ submissions }: { submissions: OAFormSubmission[] })
       </div>
       <div className="mt-4 space-y-3">
         {submissions.map((submission) => (
-          <div key={submission._id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm">
+          <Link
+            key={submission._id}
+            href={withReturnTo(`/services/oa/submissions/${submission._id}`, returnTo)}
+            className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
             <span className="text-slate-600">提交于 {formatAiaOATime(submission.submittedAt)}</span>
             <AiaOAReviewStatusBadge status={submission.reviewStatus} />
-          </div>
+          </Link>
         ))}
       </div>
     </section>
@@ -69,8 +75,9 @@ function AiaOAFormSubmissionAuthenticated({ slug }: { slug: string }) {
   const form = useOAForm(slug || null) as OAForm | null | undefined
   const submit = useSubmitOAForm()
   const submissions = useMyOAFormSubmissions(form?._id) as OAFormSubmission[] | undefined
-  const [success, setSuccess] = useState(false)
+  const [submittedId, setSubmittedId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const idempotencyKeyRef = useRef<string | null>(null)
 
   if (form === undefined) {
     return <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600" role="status">正在加载 OA 事项…</p>
@@ -91,16 +98,38 @@ function AiaOAFormSubmissionAuthenticated({ slug }: { slug: string }) {
         {form.description ? <p className="mt-3 max-w-3xl whitespace-pre-wrap leading-7 text-slate-600">{form.description}</p> : null}
       </section>
 
-      {success ? (
-        <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950" role="status">
-          <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> 已提交。审核状态会同步显示在“我的提交”中。
-        </p>
+      {submittedId ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950" role="status">
+          <p className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> 已提交。审核状态会同步显示在“我的提交”中。
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Link
+              href={withReturnTo(`/services/oa/submissions/${submittedId}`, `/services/oa/${slug}`)}
+              className="font-medium underline underline-offset-4"
+            >
+              查看本次提交
+            </Link>
+            {form.allowMultipleSubmissions !== false ? (
+              <button
+                type="button"
+                className="font-medium underline underline-offset-4"
+                onClick={() => {
+                  idempotencyKeyRef.current = null
+                  setSubmittedId(null)
+                }}
+              >
+                再填一份
+              </button>
+            ) : null}
+          </div>
+        </div>
       ) : null}
       {submitError ? <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{submitError}</p> : null}
 
-      <SubmissionSummary submissions={ownSubmissions} />
+      <SubmissionSummary submissions={ownSubmissions} returnTo={`/services/oa/${slug}`} />
 
-      {collecting ? (
+      {!submittedId && collecting ? (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8" aria-labelledby="aia-oa-submit-heading">
           <h2 id="aia-oa-submit-heading" className="text-xl font-semibold text-slate-950">填写并提交</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">请仅填写办理该事项所必需的信息；提交后由具备权限的处理人审核。</p>
@@ -112,8 +141,13 @@ function AiaOAFormSubmissionAuthenticated({ slug }: { slug: string }) {
               onSubmit={async (answers) => {
                 setSubmitError(null)
                 try {
-                  await submit({ formId: form._id, answers })
-                  setSuccess(true)
+                  idempotencyKeyRef.current ||= crypto.randomUUID()
+                  const id = await submit({
+                    formId: form._id,
+                    answers,
+                    idempotencyKey: idempotencyKeyRef.current,
+                  })
+                  setSubmittedId(String(id))
                 } catch (error) {
                   const message = error instanceof Error ? error.message : "提交未成功完成，请稍后重试。"
                   setSubmitError(message)
@@ -123,9 +157,9 @@ function AiaOAFormSubmissionAuthenticated({ slug }: { slug: string }) {
             />
           </div>
         </section>
-      ) : (
+      ) : !submittedId ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">该事项当前不在可提交时间内。你仍可在“我的提交”中查看已有记录。</p>
-      )}
+      ) : null}
     </div>
   )
 }

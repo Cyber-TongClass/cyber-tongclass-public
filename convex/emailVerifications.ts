@@ -1,10 +1,12 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { requireEmailServiceToken } from "./lib/emailServiceAuth"
 
 const PURPOSE = v.union(v.literal("email_verification"), v.literal("password_reset"))
 
 export const create = mutation({
     args: {
+        serviceToken: v.string(),
         tokenHash: v.string(),
         codeHash: v.optional(v.string()),
         purpose: PURPOSE,
@@ -14,6 +16,7 @@ export const create = mutation({
         expiresAt: v.number(),
     },
     handler: async (ctx, args) => {
+        requireEmailServiceToken(args.serviceToken)
         const sentTo = args.sentTo.trim().toLowerCase()
         const user = await ctx.db
             .query("users")
@@ -40,18 +43,20 @@ export const create = mutation({
             })
         }
 
-        return { verificationId }
+        return { verificationId, deliverable: Boolean(user) }
     },
 })
 
 export const consume = mutation({
     args: {
+        serviceToken: v.string(),
         tokenHash: v.optional(v.string()),
         codeHash: v.optional(v.string()),
         sentTo: v.optional(v.string()),
         purpose: PURPOSE,
     },
     handler: async (ctx, args) => {
+        requireEmailServiceToken(args.serviceToken)
         if (!args.tokenHash && !args.codeHash) {
             return { ok: false as const, reason: "invalid" as const }
         }
@@ -101,11 +106,13 @@ export const consume = mutation({
 
 export const getRecentStats = query({
     args: {
+        serviceToken: v.string(),
         email: v.string(),
         ip: v.optional(v.string()),
         withinMs: v.number(),
     },
     handler: async (ctx, args) => {
+        requireEmailServiceToken(args.serviceToken)
         const normalizedEmail = args.email.trim().toLowerCase()
         const now = Date.now()
         const since = now - args.withinMs

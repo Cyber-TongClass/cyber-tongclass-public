@@ -58,7 +58,8 @@ test("AIA root metadata uses an internal canonical site URL and local identity",
   assert.match(layout, /Artificial Intelligence Agora/)
   assert.match(layout, /The Integrated Services Platform of PKU IAI/)
   assert.match(layout, /\/brand\/aia\/aia-seal\.png/)
-  assert.match(layout, /canonical:\s*["']\/["']/)
+  assert.doesNotMatch(layout, /alternates:\s*\{\s*canonical:\s*["']\/["']/)
+  assert.match(readSource("src/app/page.tsx"), /canonical:\s*["']\/["']/)
 })
 
 test("canonical discovery contains only public AIA and Tong Class routes", () => {
@@ -76,7 +77,6 @@ test("canonical discovery contains only public AIA and Tong Class routes", () =>
     "\"/institute\"",
     "\"/research\"",
     "\"/updates\"",
-    "\"/services\"",
     "\"/contact\"",
   ]) {
     assert.ok(sitemap.includes(publicPath), `Sitemap must include ${publicPath}`)

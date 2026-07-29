@@ -1,71 +1,77 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, ClipboardList, Clock3, ShieldCheck } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
+import { ArrowRight } from "lucide-react"
+
+import { AiaOAApprovalInboxClient } from "@/components/oa/aia-oa-approval-inbox-client"
+import { AiaOAMySubmissionsClient } from "@/components/oa/aia-oa-my-submissions-client"
 import { AiaOAAuthLoading, AiaOALoginRequired } from "@/components/oa/aia-oa-shared"
 import { usePublishedOAForms } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { splitOAFormsByCollectionStatus } from "@/lib/oa-forms"
 import type { OAForm } from "@/types"
 
+/** Legacy section routes redirect into the matching workspace anchors below. */
+const OA_SECTION_ROUTES = { mine: "/services/oa/my", approvals: "/services/oa/approvals" } as const
+
 function formatDate(value?: number) {
   if (!value || !Number.isFinite(value)) return null
   return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric" }).format(new Date(value))
 }
 
-function FormCard({ form, past = false }: { form: OAForm; past?: boolean }) {
+function WorkspaceHeader({
+  headingId,
+  kicker,
+  title,
+  count,
+}: {
+  headingId: string
+  kicker: string
+  title: string
+  count?: number
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b aia-border-rule pb-2">
+      <h2 id={headingId} className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+        <span className="aia-kicker mr-3">{kicker}</span>
+        {title}
+      </h2>
+      {typeof count === "number" ? <span className="aia-mono aia-text-muted text-xs">{count} 项</span> : null}
+    </div>
+  )
+}
+
+function OAFormRow({ form, past = false }: { form: OAForm; past?: boolean }) {
   const deadline = formatDate(form.closeAt)
   const kindLabel = form.kind === "reimbursement" ? "报销" : "申请 / 填报"
 
   return (
-    <Link
-      href={`/services/oa/${encodeURIComponent(form.slug)}`}
-      className="group block rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">{kindLabel}</Badge>
-            {form.category ? <Badge variant="secondary">{form.category}</Badge> : null}
-            {past ? <Badge variant="secondary">已结束</Badge> : <Badge variant="success">开放中</Badge>}
-          </div>
-          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-950 group-hover:text-primary">{form.title}</h2>
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{form.description || "查看填报要求、提交进度与审核结果。"}</p>
-        </div>
-        <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden="true" />
-      </div>
-      <div className="mt-5 flex items-center gap-2 text-xs text-slate-500">
-        <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-        {deadline ? (past ? `结束于 ${deadline}` : `截止 ${deadline}`) : past ? "已结束" : "持续开放"}
-      </div>
-    </Link>
+    <li>
+      <Link
+        href={`/services/oa/${encodeURIComponent(form.slug)}`}
+        className="aia-focus group flex flex-wrap items-baseline gap-x-3 gap-y-1 py-3"
+      >
+        <span className="aia-mono aia-bg-tag px-1.5 py-0.5 text-[11px] tracking-wider">{kindLabel}</span>
+        <span className="min-w-0 flex-1 font-medium text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
+          {form.title}
+          {form.category ? <span className="aia-text-muted ml-2 text-xs">{form.category}</span> : null}
+        </span>
+        <span className="aia-text-muted text-xs">
+          {deadline ? (past ? `结束于 ${deadline}` : `截止 ${deadline}`) : past ? "已结束" : "持续开放"}
+        </span>
+        <span className={past ? "aia-text-muted text-xs" : "text-xs font-medium text-[hsl(var(--aia-red))]"}>
+          {past ? "已结束" : "开放中"}
+        </span>
+        <ArrowRight
+          className="h-3.5 w-3.5 self-center text-[hsl(var(--aia-rule))] transition-colors group-hover:text-[hsl(var(--aia-red))]"
+          aria-hidden="true"
+        />
+      </Link>
+    </li>
   )
 }
 
-function FormSection({ title, description, forms, past = false }: { title: string; description: string; forms: OAForm[]; past?: boolean }) {
-  return (
-    <section aria-labelledby={past ? "aia-oa-past-heading" : "aia-oa-open-heading"}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id={past ? "aia-oa-past-heading" : "aia-oa-open-heading"} className="text-2xl font-bold tracking-tight text-slate-950">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
-        </div>
-        <span className="text-sm text-slate-500">{forms.length} 项</span>
-      </div>
-      {forms.length === 0 ? (
-        <Card className="mt-4"><CardContent className="py-8 text-center text-sm text-slate-500">{past ? "暂无已结束的 OA 事项。" : "当前没有开放中的 OA 事项。"}</CardContent></Card>
-      ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          {forms.map((form) => <FormCard key={form._id} form={form} past={past} />)}
-        </div>
-      )}
-    </section>
-  )
-}
-
-/** AIA OA entry point. Data access stays in the session-aware API wrapper. */
+/** Unified OA workspace: forms, own submissions and the approval inbox share one dense surface. */
 export function AiaOAFormListClient() {
   const { isAuthenticated, isLoading } = useAuth()
 
@@ -77,41 +83,44 @@ export function AiaOAFormListClient() {
     return <AiaOALoginRequired nextPath="/services/oa" action="查看面向院内账户开放的 OA 事项" />
   }
 
-  return <AiaOAFormListAuthenticated />
+  return <AiaOAWorkspace />
 }
 
-function AiaOAFormListAuthenticated() {
+function AiaOAWorkspace() {
   const forms = usePublishedOAForms({ includePast: true }) as OAForm[] | undefined
-
-  if (forms === undefined) {
-    return <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600" role="status">正在加载 OA 事项…</p>
-  }
-
-  const grouped = splitOAFormsByCollectionStatus(forms, Date.now())
+  const grouped = forms === undefined ? null : splitOAFormsByCollectionStatus(forms, Date.now())
 
   return (
-    <div className="space-y-10">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Link
-          href="/services/oa/my"
-          className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-        >
-          <ClipboardList className="h-5 w-5 text-primary" aria-hidden="true" />
-          <h2 className="mt-3 font-semibold text-slate-950">我的提交</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">查看当前账户的提交记录、审核状态和处理意见。</p>
-        </Link>
-        <Link
-          href="/services/oa/approvals"
-          className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-        >
-          <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
-          <h2 className="mt-3 font-semibold text-slate-950">审批处理台</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">获授审批权限的账户可处理分配给自己的 OA 事项。</p>
-        </Link>
-      </div>
+    <div className="space-y-12">
+      <section id="oa-forms" aria-labelledby="aia-oa-forms-heading">
+        <WorkspaceHeader headingId="aia-oa-forms-heading" kicker="事项 · Forms" title="事项办理" count={forms?.length} />
+        {forms === undefined || grouped === null ? (
+          <p role="status" className="aia-text-muted py-6 text-sm">
+            正在加载 OA 事项…
+          </p>
+        ) : forms.length === 0 ? (
+          <p className="aia-text-muted py-6 text-sm">当前没有可办理的 OA 事项；事项可能尚未开放、已截止，或不在当前账户的办理范围内。</p>
+        ) : (
+          <ul className="divide-y divide-[hsl(var(--aia-rule))]">
+            {(grouped.collecting as OAForm[]).map((form) => (
+              <OAFormRow key={form._id} form={form} />
+            ))}
+            {(grouped.past as OAForm[]).map((form) => (
+              <OAFormRow key={form._id} form={form} past />
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <FormSection title="正在办理" description="可在开放期内提交或补充的研究院 OA 事项。" forms={grouped.collecting as OAForm[]} />
-      <FormSection title="历史事项" description="已结束收集的 OA 事项仍可查看自己的提交状态。" forms={grouped.past as OAForm[]} past />
+      <section id="oa-my" aria-labelledby="aia-oa-my-heading" data-legacy-route={OA_SECTION_ROUTES.mine}>
+        <WorkspaceHeader headingId="aia-oa-my-heading" kicker="提交 · Submissions" title="我的提交" />
+        <AiaOAMySubmissionsClient />
+      </section>
+
+      <section id="oa-approvals" aria-labelledby="aia-oa-approvals-heading" data-legacy-route={OA_SECTION_ROUTES.approvals}>
+        <WorkspaceHeader headingId="aia-oa-approvals-heading" kicker="审批 · Approvals" title="审批处理台" />
+        <AiaOAApprovalInboxClient />
+      </section>
     </div>
   )
 }

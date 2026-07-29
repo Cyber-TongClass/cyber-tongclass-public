@@ -12,6 +12,7 @@ const coffeeTalkUi = await import(uiUrl)
 const nonterminalStatuses = [
   "submitted",
   "under_review",
+  "needs_information",
   "accepted",
 ]
 
@@ -22,8 +23,8 @@ test("Coffee Talk validation helpers accept only declared literals", () => {
   assert.equal(coffeeTalk.isCoffeeTalkStatus("reopened"), false)
   assert.equal(coffeeTalk.isCoffeeTalkActorKind("teacher"), true)
   assert.equal(coffeeTalk.isCoffeeTalkActorKind("admin"), false)
-  assert.equal(coffeeTalk.isCoffeeTalkAction("request_information"), false)
-  assert.equal(coffeeTalk.isCoffeeTalkAction("supplement"), false)
+  assert.equal(coffeeTalk.isCoffeeTalkAction("request_information"), true)
+  assert.equal(coffeeTalk.isCoffeeTalkAction("supplement"), true)
   assert.equal(coffeeTalk.isCoffeeTalkAction("reopen"), false)
 })
 
@@ -48,6 +49,10 @@ test("Coffee Talk permits each teacher transition", () => {
   assert.equal(
     coffeeTalk.transitionCoffeeTalk("under_review", "teacher", "decline"),
     "declined",
+  )
+  assert.equal(
+    coffeeTalk.transitionCoffeeTalk("under_review", "teacher", "request_information"),
+    "needs_information",
   )
   assert.equal(
     coffeeTalk.transitionCoffeeTalk("accepted", "teacher", "complete"),
@@ -92,9 +97,9 @@ test("Coffee Talk rejects terminal reopen attempts and unauthorized actions", ()
     () => coffeeTalk.transitionCoffeeTalk("under_review", "system", "decline"),
     /COFFEE_TALK_TRANSITION_FORBIDDEN/,
   )
-  assert.throws(
-    () => coffeeTalk.transitionCoffeeTalk("under_review", "teacher", "request_information"),
-    /COFFEE_TALK_TRANSITION_FORBIDDEN/,
+  assert.equal(
+    coffeeTalk.transitionCoffeeTalk("needs_information", "applicant", "supplement"),
+    "under_review",
   )
   assert.throws(
     () => coffeeTalk.transitionCoffeeTalk("submitted", "applicant", "supplement"),
@@ -112,7 +117,7 @@ test("Coffee Talk reports open states and only actor-permitted actions", () => {
 
   assert.deepEqual(
     coffeeTalk.allowedCoffeeTalkActions("under_review", "teacher"),
-    ["accept", "decline"],
+    ["accept", "decline", "request_information"],
   )
   assert.deepEqual(
     coffeeTalk.allowedCoffeeTalkActions("accepted", "teacher"),
@@ -205,6 +210,7 @@ test("UI Coffee Talk metadata covers statuses and actions without Convex imports
   const statuses = [
     "submitted",
     "under_review",
+    "needs_information",
     "accepted",
     "declined",
     "withdrawn",
@@ -220,6 +226,8 @@ test("UI Coffee Talk metadata covers statuses and actions without Convex imports
     "complete",
     "reassign",
     "correct",
+    "request_information",
+    "supplement",
   ]
 
   for (const status of statuses) {

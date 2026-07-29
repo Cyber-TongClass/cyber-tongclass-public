@@ -27,6 +27,7 @@ import type {
   ReimbursementMaterialTableRow,
 } from "@/types"
 import { cn } from "@/lib/utils"
+import { useUnsavedChangesWarning } from "@/lib/hooks/use-unsaved-changes-warning"
 
 const compactControlClassName =
   "h-8 rounded-sm border-slate-300 bg-white px-2 py-1 text-xs shadow-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
@@ -82,14 +83,19 @@ export default function AdminReimbursementTablesPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<ReimbursementMaterialTableDraft>(() => createNewDraft())
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(draft))
   const [message, setMessage] = useState("")
   const [saving, setSaving] = useState(false)
+  const hasUnsavedChanges = JSON.stringify(draft) !== savedSnapshot
+  useUnsavedChangesWarning(hasUnsavedChanges)
 
   useEffect(() => {
     if (!tables || selectedId || draft._id) return
     if (tables.length > 0) {
       setSelectedId(tables[0]._id)
-      setDraft(tableToDraft(tables[0]))
+      const nextDraft = tableToDraft(tables[0])
+      setDraft(nextDraft)
+      setSavedSnapshot(JSON.stringify(nextDraft))
     }
   }, [draft._id, selectedId, tables])
 
@@ -99,15 +105,21 @@ export default function AdminReimbursementTablesPage() {
   )
 
   const selectTable = (table: ReimbursementMaterialTable) => {
+    if (hasUnsavedChanges && !window.confirm("当前表格有未保存的更改，确定切换吗？")) return
     setMessage("")
     setSelectedId(table._id)
-    setDraft(tableToDraft(table))
+    const nextDraft = tableToDraft(table)
+    setDraft(nextDraft)
+    setSavedSnapshot(JSON.stringify(nextDraft))
   }
 
   const startNewTable = () => {
+    if (hasUnsavedChanges && !window.confirm("当前表格有未保存的更改，确定新建吗？")) return
     setMessage("")
     setSelectedId(null)
-    setDraft(createNewDraft())
+    const nextDraft = createNewDraft()
+    setDraft(nextDraft)
+    setSavedSnapshot(JSON.stringify(nextDraft))
   }
 
   const updateColumn = (index: number, patch: Partial<ReimbursementMaterialTableColumn>) => {
@@ -180,7 +192,9 @@ export default function AdminReimbursementTablesPage() {
       const normalized = normalizeReimbursementTableDraft(draft)
       const id = await upsertTable(normalized)
       setSelectedId(String(id))
-      setDraft({ ...normalized, _id: String(id) })
+      const savedDraft = { ...normalized, _id: String(id) }
+      setDraft(savedDraft)
+      setSavedSnapshot(JSON.stringify(savedDraft))
       setMessage("表格已保存。")
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存失败")
@@ -218,9 +232,12 @@ export default function AdminReimbursementTablesPage() {
   }
 
   const loadDefaultDraft = () => {
+    if (hasUnsavedChanges && !window.confirm("当前表格有未保存的更改，确定载入默认标准吗？")) return
     setMessage("")
     setSelectedId(null)
-    setDraft(createDefaultLivingExpenseTableDraft())
+    const nextDraft = createDefaultLivingExpenseTableDraft()
+    setDraft(nextDraft)
+    setSavedSnapshot(JSON.stringify(nextDraft))
   }
 
   return (
@@ -250,6 +267,7 @@ export default function AdminReimbursementTablesPage() {
           {message}
         </div>
       ) : null}
+      {hasUnsavedChanges ? <p className="text-xs font-medium text-amber-700" role="status">有未保存的更改</p> : null}
 
       <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
         <Card className="overflow-hidden">

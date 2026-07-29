@@ -14,7 +14,12 @@ import type {
   PublicResearchGroupMembershipRole,
   PublicResearchGroup,
 } from "../../src/types/institute"
-import { publicationAuthorDisplayName } from "./contentAudience"
+const PUBLICATION_AUTHOR_META_PATTERN = /^(.*?)\s*\[tc-author:([^\]]+)\]\s*$/
+
+function publicationAuthorDisplayName(value: string): string {
+  const match = value.match(PUBLICATION_AUTHOR_META_PATTERN)
+  return (match?.[1] ?? value).trim()
+}
 
 export type InstitutePersonRecord = {
   slug: string

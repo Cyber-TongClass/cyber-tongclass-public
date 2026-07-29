@@ -1,4 +1,6 @@
 import { BookOpenText } from "lucide-react"
+import Link from "next/link"
+
 import type { PublicResearchOutput } from "@/components/institute/demo-directory-data"
 
 type ResearchOutputListProps = {
@@ -13,38 +15,40 @@ export function ResearchOutputList({
   emptyMessage = "暂未发布可公开展示的相关成果。",
 }: ResearchOutputListProps) {
   return (
-    <section aria-labelledby="research-output-title" className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+    <section aria-labelledby="research-output-title" className="border aia-border-rule p-6 sm:p-7">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-primary">
-          <BookOpenText className="h-5 w-5" aria-hidden="true" />
-        </div>
+        <BookOpenText className="mt-1 h-5 w-5 shrink-0 text-[hsl(var(--aia-muted))]" aria-hidden="true" />
         <div>
-          <h2 id="research-output-title" className="text-xl font-extrabold tracking-tight text-slate-900">
+          <h2 id="research-output-title" className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
             {heading}
           </h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">仅展示已批准公开的目录条目。</p>
+          <p className="aia-text-muted mt-1 text-sm leading-6">仅展示已批准公开的目录条目。</p>
         </div>
       </div>
 
       {outputs.length > 0 ? (
-        <ul className="mt-6 space-y-3" aria-label={heading}>
+        <ul className="mt-6 border-t aia-border-rule" aria-label={heading}>
           {outputs.map((output) => (
-            <li key={output.id} className="rounded-lg border border-slate-200 p-4">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-primary">
+            <li key={output.id} className="border-b aia-border-rule py-4">
+              <div className="aia-mono flex flex-wrap items-center gap-2 text-xs text-[hsl(var(--aia-muted))]">
                 <span>{output.kind}</span>
                 <span aria-hidden="true">·</span>
                 <span>{output.year}</span>
                 {output.isDemo ? (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800">演示数据</span>
+                  <span className="border border-dashed aia-border-rule px-2 py-0.5 text-[0.7rem] uppercase tracking-[0.12em]">
+                    演示数据
+                  </span>
                 ) : null}
               </div>
-              <h3 className="mt-2 text-base font-bold text-slate-900">{output.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{output.summary}</p>
+              <h3 className="aia-serif mt-2 text-base font-semibold text-[hsl(var(--aia-ink))]">
+                {output.href ? <Link href={output.href} className="aia-link">{output.title}</Link> : output.title}
+              </h3>
+              <p className="aia-text-muted mt-2 text-sm leading-6">{output.summary}</p>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-6 rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-600">{emptyMessage}</p>
+        <p className="aia-text-muted mt-6 border border-dashed aia-border-rule p-4 text-sm leading-6">{emptyMessage}</p>
       )}
     </section>
   )

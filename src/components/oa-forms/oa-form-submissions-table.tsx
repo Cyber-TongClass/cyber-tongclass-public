@@ -71,6 +71,19 @@ function formatTime(value?: number) {
   return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value))
 }
 
+function presentationForm(form: OAForm, submission: OAFormSubmission): OAForm {
+  return submission.formSnapshot
+    ? {
+        ...form,
+        title: submission.formSnapshot.title || form.title,
+        description: submission.formSnapshot.description,
+        fields: submission.formSnapshot.fields || form.fields,
+        resultFields: submission.formSnapshot.resultFields || form.resultFields,
+        resultsVisible: submission.formSnapshot.resultsVisible ?? form.resultsVisible,
+      }
+    : form
+}
+
 function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, onReview, onSaved }: SubmissionReviewDialogProps) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<"view" | "edit">(initialMode)
@@ -78,10 +91,13 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
   const [adminNote, setAdminNote] = useState(submission.adminNote || "")
   const [resultValues, setResultValues] = useState<Record<string, string>>(() => Object.fromEntries((form.resultFields || []).map((field) => [field.id, String(submission.resultValues?.[field.id] ?? "")])) as Record<string, string>)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState("")
+  const hasWorkflow = submission.workflowStatus !== undefined || Boolean(submission.approvalStepsSnapshot?.length)
 
   const onOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen)
     if (nextOpen) {
+      setSaveError("")
       setMode(initialMode)
       setReviewStatus(submission.reviewStatus)
       setAdminNote(submission.adminNote || "")
@@ -91,6 +107,7 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
 
   const saveReview = async () => {
     setSaving(true)
+    setSaveError("")
     try {
       const normalizedResults = Object.fromEntries((form.resultFields || []).map((field) => {
         const value = resultValues[field.id] ?? ""
@@ -99,6 +116,8 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
       await onReview({ id: submission._id, reviewStatus, adminNote, resultValues: normalizedResults })
       onSaved("审核结果已保存")
       setOpen(false)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "审核结果保存失败，请稍后重试。")
     } finally {
       setSaving(false)
     }
@@ -116,6 +135,7 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
         </DialogHeader>
         {mode === "edit" ? (
           <div className="space-y-4">
+            {saveError ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{saveError}</p> : null}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">审核状态</label>
@@ -160,7 +180,10 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
               ))}
             </div>
             <div className="flex justify-end">
+              {hasWorkflow ? <p className="mr-auto text-sm text-slate-500">该提交使用审批工作流，请在“审批处理台”按当前任务处理。</p> : null}
+              {!hasWorkflow ? (
               <Button type="button" variant="outline" onClick={() => setMode("edit")}>修改审核</Button>
+              ) : null}
             </div>
           </div>
         )}
@@ -170,7 +193,10 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
 }
 
 export function OAFormSubmissionsTable({ form, submissions, onReview }: Props) {
-  const visibleFields = useMemo(() => form.fields.slice(0, 2), [form.fields])
+  const visibleFieldsBySubmission = useMemo(
+    () => new Map(submissions.map((submission) => [submission._id, presentationForm(form, submission).fields.slice(0, 2)])),
+    [form, submissions],
+  )
   const [message, setMessage] = useState("")
 
   return (
@@ -199,7 +225,10 @@ export function OAFormSubmissionsTable({ form, submissions, onReview }: Props) {
           <TableBody>
             {submissions.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="h-24 text-center text-slate-500">暂无提交</TableCell></TableRow>
-            ) : submissions.map((submission) => (
+            ) : submissions.map((submission) => {
+              const historicalForm = presentationForm(form, submission)
+              const visibleFields = visibleFieldsBySubmission.get(submission._id) || []
+              return (
               <TableRow key={submission._id}>
                 <TableCell className="font-medium">{submission.submitterName}</TableCell>
                 <TableCell>{submission.studentId}</TableCell>
@@ -210,12 +239,15 @@ export function OAFormSubmissionsTable({ form, submissions, onReview }: Props) {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-3">
-                    <SubmissionReviewDialog form={form} submission={submission} initialMode="view" triggerLabel="查看" onReview={onReview} onSaved={setMessage} />
-                    <SubmissionReviewDialog form={form} submission={submission} initialMode="edit" triggerLabel="修改" onReview={onReview} onSaved={setMessage} />
+                    <SubmissionReviewDialog form={historicalForm} submission={submission} initialMode="view" triggerLabel="查看" onReview={onReview} onSaved={setMessage} />
+                    {submission.workflowStatus === undefined && !submission.approvalStepsSnapshot?.length ? (
+                      <SubmissionReviewDialog form={historicalForm} submission={submission} initialMode="edit" triggerLabel="修改" onReview={onReview} onSaved={setMessage} />
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+              )
+            })}
           </TableBody>
         </Table>
       </CardContent>

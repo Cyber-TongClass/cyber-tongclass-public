@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 export type CoffeeTalkStatus =
   | "submitted"
   | "under_review"
+  | "needs_information"
   | "accepted"
   | "declined"
   | "withdrawn"
@@ -16,6 +17,7 @@ type CoffeeTalkBadgeVariant = NonNullable<BadgeProps["variant"]>
 export const coffeeTalkStatusLabels: Record<CoffeeTalkStatus, string> = {
   submitted: "已提交",
   under_review: "审核中",
+  needs_information: "待补充材料",
   accepted: "已接受",
   declined: "未接受",
   withdrawn: "已撤回",
@@ -26,6 +28,7 @@ export const coffeeTalkStatusLabels: Record<CoffeeTalkStatus, string> = {
 const coffeeTalkStatusVariants: Record<CoffeeTalkStatus, CoffeeTalkBadgeVariant> = {
   submitted: "secondary",
   under_review: "outline",
+  needs_information: "outline",
   accepted: "success",
   declined: "destructive",
   withdrawn: "secondary",
@@ -42,7 +45,7 @@ export function CoffeeTalkStatusBadge({ status, className }: CoffeeTalkStatusBad
   return (
     <Badge
       variant={coffeeTalkStatusVariants[status]}
-      className={cn("rounded-md", className)}
+      className={cn("rounded-none font-normal tracking-wide", className)}
       aria-label={`Coffee Talk 申请状态：${coffeeTalkStatusLabels[status]}`}
     >
       {coffeeTalkStatusLabels[status]}

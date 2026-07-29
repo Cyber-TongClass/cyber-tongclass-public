@@ -1,17 +1,31 @@
+import type { Metadata } from "next"
+import { AiaPageHero } from "@/components/institute/editorial/page-hero"
 import { LivePeopleDirectory } from "@/components/institute/live-people-directory"
+import { TongClassPeopleBand } from "@/components/institute/tong-class-people-band"
+
+export const metadata: Metadata = {
+  title: "人员目录",
+  description: "浏览北京大学人工智能研究院经批准公开的人员资料与通班成员目录。",
+  alternates: { canonical: "/people" },
+}
 
 export default function PeoplePage() {
   return (
-    <div className="min-h-screen bg-white">
-      <section className="bg-[hsl(211,54%,24%)] py-16 text-white sm:py-20">
-        <div className="container-custom max-w-5xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-100">People</p>
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">人员</h1>
-          <p className="mt-5 max-w-3xl text-base leading-7 text-sky-50/90 sm:text-lg">
-            浏览研究院经批准公开的人员资料。真实公开目录优先展示；尚未发布时会以明确标注的演示数据说明页面结构。
-          </p>
-        </div>
-      </section>
+    <div className="min-h-screen">
+      <AiaPageHero
+        kicker="人员 · People"
+        title="人员"
+        lede="浏览研究院经批准公开的人员资料。真实公开目录优先展示；尚未发布时会以明确标注的演示数据说明页面结构。"
+      />
+
+      <TongClassPeopleBand
+        kicker="通班 · Tong Class"
+        title="通班人员"
+        description="来自通班的公开成员名录，在此优先呈现。"
+        headingHref="/tong-class/members"
+        headingHrefLabel="通班成员目录"
+        limit={8}
+      />
 
       <LivePeopleDirectory />
     </div>

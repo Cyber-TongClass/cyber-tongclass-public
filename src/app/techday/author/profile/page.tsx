@@ -50,7 +50,17 @@ export default function TechDayAuthorProfilePage() {
                       <TableCell className="min-w-32 text-right">
                         <div className="flex flex-wrap justify-end gap-2">
                           <Button size="sm" variant="outline" asChild><Link href={`/techday/author/submissions/${item._id}/edit`}>编辑</Link></Button>
-                          <Button size="sm" variant="destructive" onClick={() => remove({ ...actorArgs, id: item._id })}>删除</Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              if (window.confirm(`确定删除投稿“${item.title}”吗？此操作无法撤销。`)) {
+                                void remove({ ...actorArgs, id: item._id })
+                              }
+                            }}
+                          >
+                            删除
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

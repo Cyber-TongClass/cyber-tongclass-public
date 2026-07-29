@@ -1,6 +1,8 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { getVoteSummaryMap } from "./contentVotes"
+import { getUserBySession } from "./reviewer/lib"
+import { requireContentAdmin, requireTongClassMember } from "./lib/contentAuthorization"
 
 type ReviewStatus = "pending" | "approved" | "rejected"
 
@@ -49,31 +51,6 @@ function parseLegacySemester(value?: string) {
   return { year, term: term as "spring" | "fall" }
 }
 
-async function sha256Hex(input: string) {
-  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
-  const enc = new TextEncoder().encode(input)
-  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
-  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
-}
-
-async function getActorFromSession(ctx: any, sessionToken?: string) {
-  if (!sessionToken) return undefined
-
-  const tokenHash = await sha256Hex(sessionToken)
-  const session = await ctx.db
-    .query("authSessions")
-    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
-    .first()
-  if (!session || session.revokedAt || session.expiresAt <= Date.now()) return undefined
-
-  const actor = await ctx.db.get(session.userId)
-  return actor || undefined
-}
-
-async function getActorIdFromSession(ctx: any, sessionToken?: string) {
-  return (await getActorFromSession(ctx, sessionToken))?._id
-}
-
 function getEmptyVoteSummary() {
   return { likes: 0, dislikes: 0, score: 0, currentUserVote: undefined }
 }
@@ -84,6 +61,7 @@ function normalizeReviewForClient(review: any, voteSummary?: any, actor?: any) {
   const revealAuthor =
     !review.isAnonymous ||
     (actor && review.authorId && String(actor._id) === String(review.authorId)) ||
+    actor?.role === "admin" ||
     actor?.role === "super_admin"
   const { authorId, ...publicReview } = review
 
@@ -139,13 +117,13 @@ export const listByCourse = query({
     instructor: v.optional(v.string()),
     semesterYear: v.optional(v.number()),
     semesterTerm: v.optional(v.union(v.literal("spring"), v.literal("fall"))),
-    sessionToken: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    const actor = requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     let reviews = await ctx.db.query("courseReviews").order("desc").collect()
     // filter in JS so that missing `active` (older records) are treated as active
     reviews = reviews.filter((r) => r.status === "approved" && r.courseName === args.courseName && r.active !== false)
-    const actor = await getActorFromSession(ctx, args.sessionToken)
     reviews = reviews.map((review) => normalizeReviewForClient(review, undefined, actor))
 
     if (args.instructor) {
@@ -170,9 +148,10 @@ export const listByCourseAll = query({
   args: {
     courseName: v.optional(v.string()),
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
-    sessionToken: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    const actor = requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     let reviews = await ctx.db.query("courseReviews").order("desc").collect()
 
     if (args.courseName) {
@@ -183,7 +162,6 @@ export const listByCourseAll = query({
       reviews = reviews.filter((review) => review.status === args.status)
     }
 
-    const actor = await getActorFromSession(ctx, args.sessionToken)
     const voteSummaries = await getVoteSummaryMap(ctx, "courseReview", reviews.map((review) => String(review._id)), actor?._id)
 
     return reviews.map((review) => normalizeReviewForClient(review, voteSummaries.get(String(review._id)), actor))
@@ -194,8 +172,10 @@ export const listPending = query({
   args: {
     skip: v.optional(v.number()),
     limit: v.optional(v.number()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    const actor = requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const reviews = await ctx.db
       .query("courseReviews")
       .filter((q) => q.eq(q.field("status"), "pending"))
@@ -204,12 +184,16 @@ export const listPending = query({
 
     const skip = args.skip || 0
     const limit = args.limit || 50
-    return reviews.slice(skip, skip + limit).map(normalizeReviewForClient)
+    return reviews.slice(skip, skip + limit).map((review) => normalizeReviewForClient(review, undefined, actor))
   },
 })
 
 export const listCourses = query({
-  handler: async (ctx) => {
+  args: {
+    sessionToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const reviews = await ctx.db.query("courseReviews").order("desc").collect()
 
     const courseMap = new Map<string, { count: number; totalRating: number }>()
@@ -254,10 +238,11 @@ export const create = mutation({
     recommendedStudyMethod: v.optional(v.union(v.literal("attend"), v.literal("recording"), v.literal("self_study"))),
     content: v.string(),
     isAnonymous: v.optional(v.boolean()),
-    authorId: v.optional(v.id("users")),
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    const actor = requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const courseName = args.courseName.trim()
     const instructor = args.instructor.trim()
     const content = args.content.trim()
@@ -272,25 +257,9 @@ export const create = mutation({
     if (args.pace !== undefined) assertRatingRange(args.pace, 1, 5, "Pace")
     if (args.gradingFairness !== undefined) assertRatingRange(args.gradingFairness, 1, 5, "Grading fairness")
 
-    // Normal course submissions come from the local app auth state and pass authorId.
-    // Admin imports/manual entries pass an explicit status and may not have an author.
-    const identity = await ctx.auth.getUserIdentity()
-    let user = null
-    if (!identity || !identity.email) {
-      user = args.authorId ? await ctx.db.get(args.authorId) : null
-    } else {
-      user = await ctx.db
-        .query("users")
-        .filter((q: any) => q.eq(q.field("email"), identity.email))
-        .first()
-    }
-
-    const isAdminManagedEntry = args.status !== undefined && !args.authorId
-
-    if (!isAdminManagedEntry) {
-      if (!user) {
-        throw new Error("Authentication required to create course reviews")
-      }
+    const isAdmin = actor.role === "admin" || actor.role === "super_admin"
+    if (args.status !== undefined && !isAdmin) {
+      throw new Error("无权指定评价审核状态")
     }
 
     const status: ReviewStatus = args.status ?? "approved"
@@ -311,7 +280,7 @@ export const create = mutation({
       recommendedStudyMethod: args.recommendedStudyMethod,
       content,
       isAnonymous: args.isAnonymous ?? false,
-      authorId: user?._id,
+      authorId: actor._id,
       status,
       tags: [],
       active: true,
@@ -348,12 +317,26 @@ export const update = mutation({
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
     tags: v.optional(v.array(v.string())),
     active: v.optional(v.boolean()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    const { id, ...updates } = args
+    const actor = requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
+    const { id, sessionToken: _sessionToken, ...updates } = args
     const review = await ctx.db.get(id)
     if (!review) {
       throw new Error("Review not found")
+    }
+    const isAdmin = actor.role === "admin" || actor.role === "super_admin"
+    const isOwner = review.authorId && String(review.authorId) === String(actor._id)
+    if (!isAdmin && !isOwner) {
+      throw new Error("无权修改该评价")
+    }
+    if (!isAdmin && (
+      updates.status !== undefined ||
+      updates.tags !== undefined ||
+      updates.active !== undefined
+    )) {
+      throw new Error("无权修改评价审核字段")
     }
 
     const normalizedUpdates = {
@@ -405,8 +388,9 @@ export const update = mutation({
 })
 
 export const approve = mutation({
-  args: { id: v.id("courseReviews") },
+  args: { id: v.id("courseReviews"), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const review = await ctx.db.get(args.id)
     if (!review) {
       throw new Error("Review not found")
@@ -428,8 +412,9 @@ export const approve = mutation({
 })
 
 export const reject = mutation({
-  args: { id: v.id("courseReviews") },
+  args: { id: v.id("courseReviews"), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const review = await ctx.db.get(args.id)
     if (!review) {
       throw new Error("Review not found")
@@ -441,11 +426,17 @@ export const reject = mutation({
 })
 
 export const remove = mutation({
-  args: { id: v.id("courseReviews") },
+  args: { id: v.id("courseReviews"), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    const actor = requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const review = await ctx.db.get(args.id)
     if (!review) {
       throw new Error("Review not found")
+    }
+    const isAdmin = actor.role === "admin" || actor.role === "super_admin"
+    const isOwner = review.authorId && String(review.authorId) === String(actor._id)
+    if (!isAdmin && !isOwner) {
+      throw new Error("无权删除该评价")
     }
     await ctx.db.delete(args.id)
     await syncCourseStatsByName(ctx, review.courseName)
@@ -455,8 +446,9 @@ export const remove = mutation({
 
 // Assign reviews that have any of the given tags to a target course.
 export const assignByTags = mutation({
-  args: { tags: v.array(v.string()), targetCourseName: v.string() },
+  args: { tags: v.array(v.string()), targetCourseName: v.string(), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     await ensureTagMeta(ctx, args.tags)
     const all = await ctx.db.query("courseReviews").order("desc").collect()
     const toAssign = all.filter((r) => {
@@ -491,14 +483,22 @@ export const assignByTags = mutation({
 })
 
 export const commonTags = query({
-  handler: async () => {
+  args: {
+    sessionToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     return ["shuike", "haoke", "bilei", "kexue", "daima"]
   },
 })
 
 // List tags with metadata (color if set), including tags appearing in reviews.
 export const listTags = query({
-  handler: async (ctx) => {
+  args: {
+    sessionToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const tagMeta = await ctx.db.query("reviewTags").collect()
     const colorByName = new Map(tagMeta.map((item: any) => [item.name, item.color]))
     const tagSet = new Set(tagMeta.map((item: any) => item.name))
@@ -523,8 +523,10 @@ export const setTagColor = mutation({
   args: {
     tag: v.string(),
     color: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const tag = normalizeTag(args.tag)
     if (!tag) {
       throw new Error("Tag is required")
@@ -559,8 +561,10 @@ export const editTag = mutation({
     oldTag: v.string(),
     action: v.union(v.literal("rename"), v.literal("delete")),
     newTag: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const oldTag = normalizeTag(args.oldTag)
     if (!oldTag) {
       throw new Error("Old tag is required")
@@ -625,8 +629,10 @@ export const updateCourseName = mutation({
   args: {
     oldName: v.string(),
     newName: v.string(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const reviews = await ctx.db
       .query("courseReviews")
       .filter((q) => q.eq(q.field("courseName"), args.oldName))

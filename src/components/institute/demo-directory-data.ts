@@ -13,6 +13,7 @@ export type PublicDirectoryPerson = {
   nameEn: string
   kind: PublicDirectoryPersonKind
   title: string
+  photoUrl?: string
   bio: string
   researchAreas: readonly string[]
   groupSlugs: readonly string[]
@@ -45,6 +46,7 @@ export type PublicResearchOutput = {
   contributorSlugs: readonly string[]
   groupSlugs: readonly string[]
   isDemo: boolean
+  href?: `/${string}`
 }
 
 export type PublicDirectoryUpdate = {
@@ -55,6 +57,7 @@ export type PublicDirectoryUpdate = {
   relatedPersonSlugs: readonly string[]
   relatedGroupSlugs: readonly string[]
   isDemo: boolean
+  href?: `/${string}`
 }
 
 export const demoPeople: readonly PublicDirectoryPerson[] = [

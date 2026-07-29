@@ -23,6 +23,7 @@ import {
   useTechDayActorArgs,
   useTechDayCurrentPrincipal,
   useTechDayReimbursements,
+  useUpdateTechDayReimbursement,
 } from "@/lib/api"
 import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import { downloadCsv, type TechDayReimbursementStatus } from "@/types/techday"
@@ -63,6 +64,7 @@ export default function TechDayReimbursementsPage() {
   const actorArgs = useTechDayActorArgs()
   const principal = useTechDayCurrentPrincipal(actorArgs)
   const create = useCreateTechDayReimbursement()
+  const update = useUpdateTechDayReimbursement()
   const remove = useDeleteTechDayReimbursement()
   const review = useReviewTechDayReimbursement()
   const generateUploadUrl = useGenerateTechDayUploadUrl()
@@ -70,6 +72,7 @@ export default function TechDayReimbursementsPage() {
   const [form, setForm] = useState({ projectName: "", organization: "", content: "", quantity: "", amount: "", invoiceCompany: "" })
   const [file, setFile] = useState<File | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const isAdmin = principal?.techDayUser?.role === "admin" || principal?.mainUser?.role === "admin" || principal?.mainUser?.role === "super_admin"
@@ -81,22 +84,42 @@ export default function TechDayReimbursementsPage() {
   const resetForm = () => {
     setForm({ projectName: "", organization: "", content: "", quantity: "", amount: "", invoiceCompany: "" })
     setFile(null)
+    setEditingId(null)
   }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const amount = Number(form.amount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage("报销金额必须大于 0。")
+      return
+    }
+    if (file && file.size > 20 * 1024 * 1024) {
+      setMessage("附件不能超过 20MB。")
+      return
+    }
+    if (file && !["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setMessage("附件仅支持 PDF、PNG、JPG 或 WebP。")
+      return
+    }
     setSubmitting(true)
     setMessage(null)
+    let createdId: string | null = null
     try {
-      const id = await create({
+      const wasEditing = Boolean(editingId)
+      const payload = {
         ...actorArgs,
         projectName: form.projectName,
         organization: form.organization || orgOptions[0] || "待分配",
         content: form.content,
         quantity: form.quantity ? Number(form.quantity) : undefined,
-        amount: Number(form.amount),
+        amount,
         invoiceCompany: form.invoiceCompany,
-      })
+      }
+      const id = editingId
+        ? await update({ ...payload, id: editingId as any })
+        : await create(payload)
+      if (!editingId) createdId = String(id)
       if (file) {
         const uploadTarget = await generateUploadUrl({
           ...actorArgs,
@@ -116,8 +139,11 @@ export default function TechDayReimbursementsPage() {
       }
       resetForm()
       setDialogOpen(false)
-      setMessage(file ? "报销和附件已提交" : "报销已提交")
+      setMessage(wasEditing ? "报销信息已更新" : file ? "报销和附件已提交" : "报销已提交")
     } catch (error) {
+      if (createdId) {
+        await remove({ ...actorArgs, id: createdId as any }).catch(() => undefined)
+      }
       setMessage(error instanceof Error ? error.message : "提交失败")
     } finally {
       setSubmitting(false)
@@ -139,6 +165,7 @@ export default function TechDayReimbursementsPage() {
                   <Dialog open={dialogOpen} onOpenChange={(open) => {
                     setDialogOpen(open)
                     if (open) setMessage(null)
+                    if (!open && !submitting) resetForm()
                   }}>
                     <DialogTrigger asChild>
                       <Button type="button" size="sm">
@@ -148,8 +175,8 @@ export default function TechDayReimbursementsPage() {
                     </DialogTrigger>
                     <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto sm:rounded-md">
                       <DialogHeader>
-                        <DialogTitle>新建报销</DialogTitle>
-                        <DialogDescription>提交项目、金额、发票信息和附件，管理员会在记录列表中审核。</DialogDescription>
+                        <DialogTitle>{editingId ? "补充报销材料" : "新建报销"}</DialogTitle>
+                        <DialogDescription>{editingId ? "修改信息或重新上传附件后提交，管理员会重新查看这条记录。" : "提交项目、金额、发票信息和附件，管理员会在记录列表中审核。"}</DialogDescription>
                       </DialogHeader>
                       <form className="grid gap-4 md:grid-cols-2" onSubmit={submit}>
                         <div className="grid gap-2">
@@ -162,7 +189,7 @@ export default function TechDayReimbursementsPage() {
                         </div>
                         <div className="grid gap-2">
                           <Label>金额</Label>
-                          <Input value={form.amount} type="number" step="0.01" onChange={(event) => setForm((value) => ({ ...value, amount: event.target.value }))} required />
+                          <Input value={form.amount} type="number" min="0.01" step="0.01" onChange={(event) => setForm((value) => ({ ...value, amount: event.target.value }))} required />
                         </div>
                         <div className="grid gap-2">
                           <Label>数量</Label>
@@ -188,7 +215,7 @@ export default function TechDayReimbursementsPage() {
                         {message ? <p className="text-sm text-slate-600 md:col-span-2">{message}</p> : null}
                         <div className="flex justify-end gap-2 md:col-span-2">
                           <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
-                          <Button type="submit" disabled={submitting}>{submitting ? "提交中..." : "提交"}</Button>
+                          <Button type="submit" disabled={submitting}>{submitting ? "提交中..." : editingId ? "保存补充" : "提交"}</Button>
                         </div>
                       </form>
                     </DialogContent>
@@ -248,6 +275,28 @@ export default function TechDayReimbursementsPage() {
                               {option.label}
                             </Button>
                           )) : null}
+                          {!isAdmin && (item.status === "pending" || item.status === "waiting_more") ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingId(item._id)
+                                setForm({
+                                  projectName: item.projectName || "",
+                                  organization: item.organization || "",
+                                  content: item.content || "",
+                                  quantity: item.quantity ? String(item.quantity) : "",
+                                  amount: String(item.amount ?? ""),
+                                  invoiceCompany: item.invoiceCompany || "",
+                                })
+                                setFile(null)
+                                setMessage(null)
+                                setDialogOpen(true)
+                              }}
+                            >
+                              {item.status === "waiting_more" ? "补充材料" : "编辑"}
+                            </Button>
+                          ) : null}
                           {isAdmin || item.status !== "approved" ? (
                             <Button
                               size="sm"

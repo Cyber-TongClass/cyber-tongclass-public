@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
@@ -92,6 +92,14 @@ function getComputeReportPatch(file: File) {
 }
 
 export default function CreativeChallengeProjectsPage() {
+  return (
+    <Suspense fallback={<p className="py-16 text-center text-sm text-slate-500">正在加载项目材料...</p>}>
+      <CreativeChallengeProjectsContent />
+    </Suspense>
+  )
+}
+
+function CreativeChallengeProjectsContent() {
   const searchParams = useSearchParams()
   const requestedProjectId = searchParams.get("project")
   const summaryRef = useRef<HTMLTextAreaElement | null>(null)

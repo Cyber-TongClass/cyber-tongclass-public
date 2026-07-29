@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { Edit, Search, Trash2 } from "lucide-react"
+import { ArrowLeft, Edit, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -75,9 +75,10 @@ export default function AdminAcademicExchangeApplicationsPage() {
 
   return (
     <div className="space-y-6">
+      <Button asChild variant="ghost" className="w-fit"><Link href="/admin/reimbursements"><ArrowLeft className="mr-2 h-4 w-4" />返回报销管理</Link></Button>
       <div>
         <h1 className="text-3xl font-extrabold text-gray-900">学术交流支持申请</h1>
-        <p className="mt-1 text-gray-500">超级管理员可查看、编辑或删除所有申请记录；此后台不提供 PDF 下载和批量导出。</p>
+        <p className="mt-1 text-gray-500">超级管理员可查看、编辑、下载附件或删除所有申请记录。</p>
       </div>
 
       {message ? <p className="rounded-md border bg-white px-4 py-3 text-sm text-slate-600">{message}</p> : null}

@@ -1,11 +1,14 @@
 "use client"
 
 import { useParams, useRouter } from "next/navigation"
+import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 import { TechDayShell } from "@/components/techday/techday-shell"
 import { TechDayAccessGuard } from "@/components/techday/techday-access-guard"
 import { TechDayFileUpload } from "@/components/techday/techday-file-controls"
 import { TechDaySubmissionForm } from "@/components/techday/techday-submission-form"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { useFinalizeTechDayPoster, useTechDayActorArgs, useTechDaySubmissionById, useUpdateTechDaySubmission } from "@/lib/api"
 
 export default function EditTechDaySubmissionPage() {
@@ -20,6 +23,12 @@ export default function EditTechDaySubmissionPage() {
     <TechDayShell title="编辑作品">
       <TechDayAccessGuard role="author">
         <div className="grid gap-6">
+          <Button asChild variant="ghost" className="w-fit"><Link href="/techday/author/profile"><ArrowLeft className="mr-2 h-4 w-4" />返回我的投稿</Link></Button>
+          {submission && !submission.hasPoster ? (
+            <p className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+              作品信息已保存，但投稿材料尚不完整。请在本页下方上传 Poster PDF；未上传前管理员不能通过审核。
+            </p>
+          ) : null}
           <Card>
             <CardHeader><CardTitle>作品信息</CardTitle></CardHeader>
             <CardContent>

@@ -182,7 +182,7 @@ export default function NewsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link href={`/news/${news._id}`}>
+                            <Link href={`/tong-class/news/${news._id}`}>
                               <Eye className="h-4 w-4 mr-2" />
                               查看
                             </Link>

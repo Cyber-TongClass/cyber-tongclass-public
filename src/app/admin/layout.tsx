@@ -21,6 +21,7 @@ import {
   ClipboardList,
   Trophy,
   LayoutGrid,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -165,7 +166,10 @@ export default function AdminLayout({
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900 mx-auto"></div>
+          <Loader2
+            aria-hidden="true"
+            className="mx-auto h-8 w-8 animate-spin text-blue-900"
+          />
           <p className="mt-2 text-gray-600">加载中...</p>
         </div>
       </div>

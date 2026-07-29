@@ -67,11 +67,25 @@ export function useAuth() {
   const signOutMutation = useMutation(signOutRef)
 
   const login = useCallback(async (identifier: string, password: string) => {
+    const trimmedIdentifier = identifier.trim()
+
     try {
-      const result = await loginMutation({ 
-        identifier: identifier.trim(),
-        password: password 
-      })
+      let result
+
+      try {
+        result = await loginMutation({
+          identifier: trimmedIdentifier,
+          password: password
+        })
+      } catch {
+        // The currently served frontend can be newer than the deployed Convex
+        // schema. Retry the legacy payload so existing Tong Class sessions keep
+        // working until the backend deployment catches up.
+        result = await loginMutation({
+          studentId: trimmedIdentifier,
+          password: password,
+        })
+      }
       
       if (result && "email" in result && result.email && "sessionToken" in result && result.sessionToken) {
         localStorage.setItem(TONGCLASS_SESSION_TOKEN_KEY, result.sessionToken)

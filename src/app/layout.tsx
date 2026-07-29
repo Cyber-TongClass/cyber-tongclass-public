@@ -1,10 +1,12 @@
 import type { Metadata } from "next"
-import Script from "next/script"
+import "@fontsource/noto-sans-sc/400.css"
+import "@fontsource/noto-sans-sc/600.css"
 import "@/styles/globals.css"
 import { ThemeProvider } from "@/components/providers"
 import { AppShell } from "@/components/layout/app-shell"
 import { ConvexAuthClientProvider } from "@/lib/convex-client"
 import { siteUrl } from "@/lib/site-url"
+import { Suspense } from "react"
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,
@@ -15,9 +17,6 @@ export const metadata: Metadata = {
   description: "The Integrated Services Platform of PKU IAI — 北京大学人工智能研究院综合服务系统。",
   keywords: ["人工智能", "北京大学", "北京大学人工智能研究院", "AIA", "Artificial Intelligence Agora", "PKU IAI"],
   authors: [{ name: "北京大学人工智能研究院" }],
-  alternates: {
-    canonical: "/",
-  },
   icons: { icon: "/brand/aia/aia-seal.png" },
   openGraph: {
     title: "北京大学人工智能研究院综合服务系统 | Artificial Intelligence Agora",
@@ -42,25 +41,6 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className="font-sans">
-        <Script id="mathjax-config" strategy="beforeInteractive">
-          {`
-            window.MathJax = {
-              tex: {
-                inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
-                displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
-                processEscapes: true
-              },
-              options: {
-                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-              }
-            };
-          `}
-        </Script>
-        <Script
-          id="mathjax-runtime"
-          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-          strategy="afterInteractive"
-        />
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
@@ -68,7 +48,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ConvexAuthClientProvider>
-            <AppShell>{children}</AppShell>
+            <Suspense fallback={<main>{children}</main>}>
+              <AppShell>{children}</AppShell>
+            </Suspense>
           </ConvexAuthClientProvider>
         </ThemeProvider>
       </body>

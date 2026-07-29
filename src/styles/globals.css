@@ -29,9 +29,17 @@
     --chart-3: 215 28% 17%;
     --chart-4: 0 84% 60%;
     --chart-5: 45 93% 47%;
-    --aia-red: 0 100% 30%;
+    --aia-red: 0 63% 32%;
+    --aia-red-deep: 0 60% 24%;
     --aia-warm: 40 33% 97%;
     --aia-ink: 218 35% 16%;
+    --aia-paper: 42 30% 98%;
+    --aia-rule: 35 14% 85%;
+    --aia-muted: 220 9% 42%;
+    --aia-tag: 38 22% 93%;
+    --font-aia-sans: "Noto Sans SC";
+    --font-aia-serif: "Songti SC";
+    --font-aia-mono: ui-monospace;
   }
 
   .dark {
@@ -96,11 +104,6 @@
     @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
   }
   
-  /* Gradient text */
-  .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70;
-  }
-  
   /* Section spacing */
   .section-padding {
     @apply py-16 md:py-20 lg:py-24;
@@ -112,25 +115,93 @@
   }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  @apply bg-muted;
-}
-
-::-webkit-scrollbar-thumb {
-  @apply bg-muted-foreground/30 rounded-full;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/50;
-}
-
 /* Selection */
 ::selection {
   @apply bg-primary/20 text-primary;
+}
+
+/* ---------------------------------------------------------------------- */
+/* AIA academic-editorial layer (additive only — Tong Class unaffected).   */
+/* Activated solely inside `.aia-scope`; fonts use bundled or system faces. */
+/* ---------------------------------------------------------------------- */
+@layer utilities {
+  .aia-scope {
+    font-family: var(--font-aia-sans), Inter, system-ui, -apple-system,
+      "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+      sans-serif;
+    color: hsl(var(--aia-ink));
+    background-color: hsl(var(--aia-paper));
+  }
+
+  .aia-serif {
+    font-family: var(--font-aia-serif), "Songti SC", "Noto Serif CJK SC",
+      Georgia, "Times New Roman", serif;
+  }
+
+  .aia-mono {
+    font-family: var(--font-aia-mono), ui-monospace, SFMono-Regular, Menlo,
+      Consolas, monospace;
+  }
+
+  /* Uppercase tracked kicker, the editorial section marker. */
+  .aia-kicker {
+    font-family: var(--font-aia-mono), ui-monospace, SFMono-Regular, Menlo,
+      Consolas, monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: hsl(var(--aia-red));
+  }
+
+  /* Hairline rule — the only allowed separator (no shadows, no cards). */
+  .aia-hr {
+    height: 1px;
+    border: 0;
+    background-color: hsl(var(--aia-rule));
+  }
+
+  .aia-border-rule {
+    border-color: hsl(var(--aia-rule));
+  }
+
+  .aia-text-muted {
+    color: hsl(var(--aia-muted));
+  }
+
+  .aia-text-red {
+    color: hsl(var(--aia-red));
+  }
+
+  .aia-bg-tag {
+    background-color: hsl(var(--aia-tag));
+  }
+
+  /* Quiet inline link: hairline underline that warms to red on hover. */
+  .aia-link {
+    text-decoration: underline;
+    text-decoration-color: hsl(var(--aia-rule));
+    text-underline-offset: 4px;
+    transition: color 150ms ease-out, text-decoration-color 150ms ease-out;
+  }
+  .aia-link:hover {
+    color: hsl(var(--aia-red));
+    text-decoration-color: hsl(var(--aia-red));
+  }
+
+  .aia-focus:focus-visible {
+    outline: 2px solid hsl(var(--aia-red));
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aia-scope *,
+  .aia-scope *::before,
+  .aia-scope *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

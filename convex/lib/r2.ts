@@ -244,7 +244,7 @@ async function signingKey(secretAccessKey: string, stamp: string) {
 }
 
 export async function createR2SignedUrl(args: {
-  method: "GET" | "PUT" | "HEAD"
+  method: "GET" | "PUT" | "HEAD" | "DELETE"
   key: string
   contentType?: string
   now?: Date
@@ -286,6 +286,17 @@ export async function createR2SignedUrl(args: {
   ].join("\n")
   const signature = bytesToHex(await hmac(await signingKey(config.secretAccessKey, stamp), stringToSign))
   return `${endpoint.origin}${canonicalUri}?${query}&X-Amz-Signature=${signature}`
+}
+
+export async function deleteR2Object(storageId: unknown) {
+  const key = getR2ObjectKeyFromStorageId(storageId)
+  if (!key) return false
+  const url = await createR2SignedUrl({ method: "DELETE", key, expiresSeconds: 60 })
+  const response = await fetch(url, { method: "DELETE" })
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`R2 cleanup failed (${response.status})`)
+  }
+  return true
 }
 
 export async function createR2UploadTarget(args: {

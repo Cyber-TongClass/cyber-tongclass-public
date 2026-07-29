@@ -22,6 +22,16 @@ const COFFEE_TALK_VERSION_CONFLICT = "COFFEE_TALK_VERSION_CONFLICT"
 const COFFEE_TALK_TEACHER_UNAVAILABLE = "COFFEE_TALK_TEACHER_UNAVAILABLE"
 const COFFEE_TALK_ACTION_FORBIDDEN = "COFFEE_TALK_ACTION_FORBIDDEN"
 const COFFEE_TALK_REASSIGNMENT_TARGET_REQUIRED = "COFFEE_TALK_REASSIGNMENT_TARGET_REQUIRED"
+const COFFEE_TALK_APPLICANT_INELIGIBLE = "COFFEE_TALK_APPLICANT_INELIGIBLE"
+const COFFEE_TALK_IDEMPOTENCY_CONFLICT = "COFFEE_TALK_IDEMPOTENCY_CONFLICT"
+const COFFEE_TALK_RATE_LIMITED = "COFFEE_TALK_RATE_LIMITED"
+const COFFEE_TALK_SUBMISSION_TOO_SOON = "COFFEE_TALK_SUBMISSION_TOO_SOON"
+const COFFEE_TALK_APPLICANT_OPEN_LIMIT_REACHED = "COFFEE_TALK_APPLICANT_OPEN_LIMIT_REACHED"
+const COFFEE_TALK_TEACHER_CAPACITY_REACHED = "COFFEE_TALK_TEACHER_CAPACITY_REACHED"
+const COFFEE_TALK_ACTION_NOTE_REQUIRED = "COFFEE_TALK_ACTION_NOTE_REQUIRED"
+const COFFEE_TALK_APPLICANT_OPEN_LIMIT = 3
+const COFFEE_TALK_TEACHER_OPEN_LIMIT = 20
+const COFFEE_TALK_SUBMISSION_INTERVAL_MS = 60_000
 
 const coffeeTalkActionValidator = v.union(
   v.literal("start_review"),
@@ -32,6 +42,8 @@ const coffeeTalkActionValidator = v.union(
   v.literal("complete"),
   v.literal("reassign"),
   v.literal("correct"),
+  v.literal("request_information"),
+  v.literal("supplement"),
 )
 
 type StoredCoffeeTalkApplication = {
@@ -43,8 +55,16 @@ type StoredCoffeeTalkApplication = {
   applicantIdentity?: "undergraduate" | "graduate" | "teacher" | "other"
   applicantEmail?: string
   topic: string
+  purpose?: string
+  researchBackground?: string
+  expectedOutcome?: string
+  preferredFormat?: "online" | "offline" | "either"
   availability: string
   notes?: string
+  supplementalInformation?: string
+  consentToShareProfile?: boolean
+  idempotencyKey?: string
+  requestPayloadFingerprint?: string
   status: CoffeeTalkStatus
   contentFingerprint: string
   version: number
@@ -73,6 +93,7 @@ function toApplicantApplicationDto(
   application: StoredCoffeeTalkApplication,
   teacher: StoredInstituteTeacher | null,
   applicant: CoffeeTalkApplicantProfile | null,
+  history: any[] = [],
 ) {
   return {
     id: toApplicationId(application),
@@ -86,12 +107,20 @@ function toApplicantApplicationDto(
     applicant,
     status: application.status,
     topic: application.topic,
+    ...(application.purpose !== undefined ? { purpose: application.purpose } : {}),
+    ...(application.researchBackground !== undefined ? { researchBackground: application.researchBackground } : {}),
+    ...(application.expectedOutcome !== undefined ? { expectedOutcome: application.expectedOutcome } : {}),
+    ...(application.preferredFormat !== undefined ? { preferredFormat: application.preferredFormat } : {}),
     availability: application.availability,
     ...(application.notes !== undefined ? { notes: application.notes } : {}),
+    ...(application.supplementalInformation !== undefined
+      ? { supplementalInformation: application.supplementalInformation }
+      : {}),
     version: application.version,
     submittedAt: application.submittedAt,
     updatedAt: application.updatedAt,
     statusChangedAt: application.statusChangedAt,
+    history,
     allowedActions: allowedCoffeeTalkActions(application.status, "applicant"),
   }
 }
@@ -99,6 +128,8 @@ function toApplicantApplicationDto(
 function toTeacherApplicationDto(
   application: StoredCoffeeTalkApplication,
   applicant: CoffeeTalkApplicantProfile | null,
+  history: any[] = [],
+  actorKind: "teacher" | "coordinator" = "teacher",
 ) {
   const redacted = redactCoffeeTalkForTeacher({
     status: application.status,
@@ -128,15 +159,82 @@ function toTeacherApplicationDto(
       }
       : null,
     availability: application.availability,
+    ...(application.purpose !== undefined ? { purpose: application.purpose } : {}),
+    ...(application.researchBackground !== undefined ? { researchBackground: application.researchBackground } : {}),
+    ...(application.expectedOutcome !== undefined ? { expectedOutcome: application.expectedOutcome } : {}),
+    ...(application.preferredFormat !== undefined ? { preferredFormat: application.preferredFormat } : {}),
     ...(application.notes !== undefined ? { notes: application.notes } : {}),
-    allowedActions: allowedCoffeeTalkActions(application.status, "teacher"),
+    ...(application.supplementalInformation !== undefined
+      ? { supplementalInformation: application.supplementalInformation }
+      : {}),
+    history,
+    allowedActions: allowedCoffeeTalkActions(application.status, actorKind),
   }
+}
+
+const coffeeTalkEventActionLabels: Record<string, string> = {
+  submitted: "提交申请",
+  start_review: "开始审核",
+  accept: "接受申请",
+  decline: "婉拒申请",
+  withdraw: "撤回申请",
+  cancel: "取消申请",
+  complete: "标记完成",
+  reassign: "重新分配",
+  correct: "更正记录",
+  request_information: "请求补充材料",
+  supplement: "提交补充材料",
+}
+
+const coffeeTalkActorLabels: Record<string, string> = {
+  applicant: "申请人",
+  teacher: "教师",
+  coordinator: "协调员",
+  system: "系统",
+}
+
+async function listCoffeeTalkHistory(ctx: any, applicationId: any) {
+  const events = await ctx.db
+    .query("coffeeTalkEvents")
+    .withIndex("by_application_sequence", (index: any) => index.eq("applicationId", applicationId))
+    .order("asc")
+    .collect()
+  return events.map((event: any) => ({
+    id: String(event._id),
+    sequenceNo: event.sequenceNo,
+    actionLabel: coffeeTalkEventActionLabels[event.action] || "状态更新",
+    occurredAt: event.createdAt,
+    ...(event.fromStatus !== undefined ? { fromStatus: event.fromStatus } : {}),
+    toStatus: event.toStatus,
+    actorLabel: coffeeTalkActorLabels[event.actorKind] || "系统",
+    ...(event.note ? { note: event.note } : {}),
+  }))
 }
 
 async function getCurrentApplicantProfile(
   ctx: any,
   application: StoredCoffeeTalkApplication,
 ): Promise<CoffeeTalkApplicantProfile | null> {
+  if (
+    application.applicantName
+    && application.applicantAffiliation
+    && application.applicantIdentity
+    && application.applicantEmail
+  ) {
+    const identityLabels = {
+      undergraduate: "本科生",
+      graduate: "研究生",
+      teacher: "教师",
+      other: "其他",
+    } as const
+    return {
+      applicantName: application.applicantName,
+      affiliation: application.applicantAffiliation as CoffeeTalkApplicantProfile["affiliation"],
+      identity: application.applicantIdentity,
+      identityLabel: identityLabels[application.applicantIdentity],
+      email: application.applicantEmail,
+    }
+  }
   const applicant = await ctx.db.get(application.applicantUserId)
   if (!applicant) return null
 
@@ -184,6 +282,7 @@ async function appendCoffeeTalkEvent(
     fromStatus?: CoffeeTalkStatus
     toStatus: CoffeeTalkStatus
     createdAt: number
+    note?: string
   },
 ) {
   const existingEvents = await ctx.db
@@ -202,27 +301,51 @@ async function appendCoffeeTalkEvent(
     action: input.action,
     ...(input.fromStatus !== undefined ? { fromStatus: input.fromStatus } : {}),
     toStatus: input.toStatus,
+    ...(input.note !== undefined ? { note: input.note } : {}),
     sequenceNo,
     createdAt: input.createdAt,
   })
 }
 
-async function notifyCoffeeTalkRecipient(ctx: any, userId: any, applicationId: any, createdAt: number) {
+async function notifyCoffeeTalkRecipient(
+  ctx: any,
+  userId: any,
+  applicationId: any,
+  createdAt: number,
+  status: CoffeeTalkStatus,
+  naturalKey: string,
+) {
+  const existing = await ctx.db
+    .query("notifications")
+    .withIndex("by_naturalKey", (index: any) => index.eq("naturalKey", naturalKey))
+    .first()
+  if (existing) return existing._id
+  const statusLabels: Record<CoffeeTalkStatus, string> = {
+    submitted: "已提交",
+    under_review: "审核中",
+    needs_information: "待补充材料",
+    accepted: "已接受",
+    declined: "未通过",
+    withdrawn: "已撤回",
+    cancelled: "已取消",
+    completed: "已完成",
+  }
   const notification = coffeeTalkNotificationContent()
   await ctx.db.insert("notifications", {
     userId,
     kind: "coffee_talk",
-    title: notification.title,
-    body: notification.body,
+    title: `Coffee Talk · ${statusLabels[status]}`,
+    body: `${notification.body} 当前状态：${statusLabels[status]}。`,
     resourceType: "coffee_talk",
     resourceId: applicationId,
+    naturalKey,
     createdAt,
   })
 }
 
 type CoffeeTalkNotificationHref =
-  | "/services/coffee-talk/my"
-  | "/services/coffee-talk/manage"
+  | `/services/coffee-talk/my/${string}`
+  | `/services/coffee-talk/manage/${string}`
 
 /**
  * Resolves notification navigation solely from the notification recipient and
@@ -236,7 +359,7 @@ async function coffeeTalkNotificationHref(
 ): Promise<CoffeeTalkNotificationHref> {
   const application = await ctx.db.get(applicationId) as StoredCoffeeTalkApplication | null
   if (!application || String(application.applicantUserId) === String(recipientUserId)) {
-    return "/services/coffee-talk/my"
+    return `/services/coffee-talk/my/${String(applicationId)}`
   }
 
   const teacher = await ctx.db.get(application.assignedTeacherPersonId) as StoredInstituteTeacher | null
@@ -245,10 +368,10 @@ async function coffeeTalkNotificationHref(
     && teacher.accountUserId !== undefined
     && String(teacher.accountUserId) === String(recipientUserId)
   ) {
-    return "/services/coffee-talk/manage"
+    return `/services/coffee-talk/manage/${String(applicationId)}`
   }
 
-  return "/services/coffee-talk/my"
+  return `/services/coffee-talk/my/${String(applicationId)}`
 }
 
 /**
@@ -261,16 +384,31 @@ export const submitApplication = mutation({
     sessionToken: v.optional(v.string()),
     teacherSlug: v.string(),
     topic: v.string(),
+    purpose: v.string(),
+    researchBackground: v.string(),
+    expectedOutcome: v.string(),
+    preferredFormat: v.union(v.literal("online"), v.literal("offline"), v.literal("either")),
     availability: v.string(),
+    consentToShareProfile: v.boolean(),
+    idempotencyKey: v.string(),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const applicant = await getUserBySession(ctx, args.sessionToken)
-    deriveCoffeeTalkApplicantProfile(applicant)
+    if (
+      applicant.isEmailVerified !== true
+      || (applicant.identityType !== "undergrad" && applicant.identityType !== "graduate")
+    ) {
+      throw new Error(COFFEE_TALK_APPLICANT_INELIGIBLE)
+    }
+    const applicantProfile = deriveCoffeeTalkApplicantProfile(applicant)
     const submission = normalizeCoffeeTalkSubmission(args)
     const teacher = await getAvailableTeacherBySlug(ctx, submission.teacherSlug)
     const fingerprint = await requestFingerprint({
       applicantUserId: String(applicant._id),
+      idempotencyKey: submission.idempotencyKey,
+    })
+    const requestPayloadFingerprint = await requestFingerprint({
       assignedTeacherPersonId: String(teacher._id),
       submission,
     })
@@ -283,6 +421,12 @@ export const submitApplication = mutation({
       .first() as StoredCoffeeTalkApplication | null
 
     if (duplicate) {
+      if (
+        duplicate.requestPayloadFingerprint
+        && duplicate.requestPayloadFingerprint !== requestPayloadFingerprint
+      ) {
+        throw new Error(COFFEE_TALK_IDEMPOTENCY_CONFLICT)
+      }
       return {
         applicationId: toApplicationId(duplicate),
         deduplicated: true,
@@ -290,12 +434,50 @@ export const submitApplication = mutation({
     }
 
     const now = Date.now()
+    const [applicantApplications, teacherApplications] = await Promise.all([
+      ctx.db
+        .query("coffeeTalkApplications")
+        .withIndex("by_applicant_updatedAt", (index: any) => index.eq("applicantUserId", applicant._id))
+        .collect() as Promise<StoredCoffeeTalkApplication[]>,
+      ctx.db
+        .query("coffeeTalkApplications")
+        .withIndex("by_teacher_updatedAt", (index: any) => index.eq("assignedTeacherPersonId", teacher._id))
+        .collect() as Promise<StoredCoffeeTalkApplication[]>,
+    ])
+    const mostRecent = applicantApplications.reduce(
+      (latest, application) => Math.max(latest, application.submittedAt),
+      0,
+    )
+    if (now - mostRecent < COFFEE_TALK_SUBMISSION_INTERVAL_MS) {
+      throw new Error(COFFEE_TALK_SUBMISSION_TOO_SOON)
+    }
+    if (applicantApplications.filter((application) => (
+      !["declined", "withdrawn", "cancelled", "completed"].includes(application.status)
+    )).length >= COFFEE_TALK_APPLICANT_OPEN_LIMIT) {
+      throw new Error(COFFEE_TALK_APPLICANT_OPEN_LIMIT_REACHED)
+    }
+    if (teacherApplications.filter((application) => (
+      !["declined", "withdrawn", "cancelled", "completed"].includes(application.status)
+    )).length >= COFFEE_TALK_TEACHER_OPEN_LIMIT) {
+      throw new Error(COFFEE_TALK_TEACHER_CAPACITY_REACHED)
+    }
     const applicationId = await ctx.db.insert("coffeeTalkApplications", {
       applicantUserId: applicant._id,
       assignedTeacherPersonId: teacher._id,
+      applicantName: applicantProfile.applicantName,
+      applicantAffiliation: applicantProfile.affiliation,
+      applicantIdentity: applicantProfile.identity,
+      applicantEmail: applicantProfile.email,
       topic: submission.topic,
+      purpose: submission.purpose,
+      researchBackground: submission.researchBackground,
+      expectedOutcome: submission.expectedOutcome,
+      preferredFormat: submission.preferredFormat,
       availability: submission.availability,
       ...(submission.notes !== undefined ? { notes: submission.notes } : {}),
+      consentToShareProfile: true,
+      idempotencyKey: submission.idempotencyKey,
+      requestPayloadFingerprint,
       status: "submitted",
       contentFingerprint: fingerprint,
       version: 1,
@@ -318,7 +500,14 @@ export const submitApplication = mutation({
     // explicitly linked to an institute login. No fallback name/email match is
     // attempted, and no notification is sent to an inferred recipient.
     if (teacher.accountUserId !== undefined) {
-      await notifyCoffeeTalkRecipient(ctx, teacher.accountUserId, applicationId, now)
+      await notifyCoffeeTalkRecipient(
+        ctx,
+        teacher.accountUserId,
+        applicationId,
+        now,
+        "submitted",
+        `coffee-talk:${String(applicationId)}:submitted`,
+      )
     }
 
     return {
@@ -340,12 +529,38 @@ export const listMine = query({
       .collect() as StoredCoffeeTalkApplication[]
 
     return Promise.all(applications.map(async (application) => {
-      const [teacher, applicantProfile] = await Promise.all([
+      const [teacher, applicantProfile, history] = await Promise.all([
         ctx.db.get(application.assignedTeacherPersonId) as Promise<StoredInstituteTeacher | null>,
         getCurrentApplicantProfile(ctx, application),
+        listCoffeeTalkHistory(ctx, application._id),
       ])
-      return toApplicantApplicationDto(application, teacher, applicantProfile)
+      return toApplicantApplicationDto(application, teacher, applicantProfile, history)
     }))
+  },
+})
+
+async function hasCoffeeTalkCoordinatorAccess(ctx: any, actor: any) {
+  if (actor.role === "super_admin") return true
+  if (actor.role !== "admin") return false
+  const grant = await ctx.db
+    .query("accountCapabilities")
+    .withIndex("by_user_capability", (index: any) => (
+      index.eq("userId", actor._id).eq("capability", "coordinate_coffee_talk")
+    ))
+    .first()
+  return grant?.enabled === true
+}
+
+export const getManageAccess = query({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    if (await hasCoffeeTalkCoordinatorAccess(ctx, actor)) return { mode: "coordinator" as const }
+    const teacher = await ctx.db
+      .query("institutePeople")
+      .withIndex("by_accountUserId", (index: any) => index.eq("accountUserId", actor._id))
+      .first()
+    return teacher?.kind === "teacher" ? { mode: "teacher" as const } : { mode: "none" as const }
   },
 })
 
@@ -357,6 +572,7 @@ export const listForTeacher = query({
   args: { sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const actor = await getUserBySession(ctx, args.sessionToken)
+    const coordinatorAllowed = await hasCoffeeTalkCoordinatorAccess(ctx, actor)
     const teachers = await ctx.db
       .query("institutePeople")
       .withIndex("by_accountUserId", (index: any) => index.eq("accountUserId", actor._id))
@@ -365,20 +581,76 @@ export const listForTeacher = query({
       .filter((teacher) => teacher.kind === "teacher")
       .map((teacher) => teacher._id)
 
-    const applicationLists = await Promise.all(teacherIds.map((teacherId) => (
-      ctx.db
-        .query("coffeeTalkApplications")
-        .withIndex("by_teacher_updatedAt", (index: any) => index.eq("assignedTeacherPersonId", teacherId))
-        .order("desc")
-        .collect()
-    )))
+    const applicationLists = coordinatorAllowed
+      ? [await ctx.db.query("coffeeTalkApplications").collect()]
+      : await Promise.all(teacherIds.map((teacherId) => (
+        ctx.db
+          .query("coffeeTalkApplications")
+          .withIndex("by_teacher_updatedAt", (index: any) => index.eq("assignedTeacherPersonId", teacherId))
+          .order("desc")
+          .collect()
+      )))
 
     return Promise.all(applicationLists
       .flat()
       .sort((left: StoredCoffeeTalkApplication, right: StoredCoffeeTalkApplication) => right.updatedAt - left.updatedAt)
-      .map(async (application: StoredCoffeeTalkApplication) => (
-        toTeacherApplicationDto(application, await getCurrentApplicantProfile(ctx, application))
-      )))
+      .map(async (application: StoredCoffeeTalkApplication) => {
+        const [profile, history] = await Promise.all([
+          getCurrentApplicantProfile(ctx, application),
+          listCoffeeTalkHistory(ctx, application._id),
+        ])
+        return toTeacherApplicationDto(application, profile, history, coordinatorAllowed ? "coordinator" : "teacher")
+      }))
+  },
+})
+
+/** Returns the current teacher's own Coffee Talk availability without exposing account bindings. */
+export const getMyTeacherAvailability = query({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    if (actor.identityType !== "teacher") return null
+    const profiles = await ctx.db
+      .query("institutePeople")
+      .withIndex("by_accountUserId", (index: any) => index.eq("accountUserId", actor._id))
+      .collect() as StoredInstituteTeacher[]
+    const teacher = profiles.find((profile) => profile.kind === "teacher")
+    if (!teacher) return { open: false, profileMissing: true }
+    return { teacherSlug: teacher.slug, open: teacher.coffeeTalkOpen === true, profileMissing: false }
+  },
+})
+
+/** Lets a teacher manage only their own availability, while super admins may manage any teacher profile. */
+export const setTeacherAvailability = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    open: v.boolean(),
+    teacherSlug: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    let teacher: StoredInstituteTeacher | null = null
+
+    if (args.teacherSlug && actor.role === "super_admin") {
+      teacher = await ctx.db
+        .query("institutePeople")
+        .withIndex("by_slug", (index: any) => index.eq("slug", args.teacherSlug!.trim().toLowerCase()))
+        .first() as StoredInstituteTeacher | null
+    } else {
+      if (actor.identityType !== "teacher") throw new Error("仅教师或超级管理员可以设置 Coffee Talk 开放状态")
+      const profiles = await ctx.db
+        .query("institutePeople")
+        .withIndex("by_accountUserId", (index: any) => index.eq("accountUserId", actor._id))
+        .collect() as StoredInstituteTeacher[]
+      teacher = profiles.find((profile) => profile.kind === "teacher") || null
+    }
+
+    if (!teacher || teacher.kind !== "teacher") throw new Error("教师目录档案不存在")
+    await ctx.db.patch(teacher._id, {
+      coffeeTalkOpen: args.open,
+      updatedAt: Date.now(),
+    })
+    return { teacherSlug: teacher.slug, open: args.open }
   },
 })
 
@@ -393,6 +665,7 @@ export const actOnApplication = mutation({
     expectedVersion: v.number(),
     action: coffeeTalkActionValidator,
     teacherSlug: v.optional(v.string()),
+    note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const actor = await getUserBySession(ctx, args.sessionToken)
@@ -403,9 +676,11 @@ export const actOnApplication = mutation({
     }
 
     const assignedTeacher = await ctx.db.get(application.assignedTeacherPersonId) as StoredInstituteTeacher | null
+    const coordinatorAllowed = await hasCoffeeTalkCoordinatorAccess(ctx, actor)
     const actorKind = resolveCoffeeTalkActorKind({
       actorUserId: String(actor._id),
       actorRole: actor.role,
+      coordinatorAllowed,
       applicantUserId: String(application.applicantUserId),
       ...(assignedTeacher?.accountUserId !== undefined
         ? { assignedTeacherUserId: String(assignedTeacher.accountUserId) }
@@ -414,6 +689,16 @@ export const actOnApplication = mutation({
     if (!actorKind) throw new Error(COFFEE_TALK_ACTION_FORBIDDEN)
 
     const action = args.action as CoffeeTalkAction
+    const note = args.note?.trim()
+    if (note && note.length > 2_000) {
+      throw new Error("COFFEE_TALK_ACTION_NOTE_TOO_LONG")
+    }
+    if (
+      (action === "request_information" || action === "supplement" || action === "cancel" || action === "correct")
+      && !note
+    ) {
+      throw new Error(COFFEE_TALK_ACTION_NOTE_REQUIRED)
+    }
     const nextStatus = transitionCoffeeTalk(application.status, actorKind, action)
     let assignedTeacherPersonId = application.assignedTeacherPersonId
     let reassignedTeacher: StoredInstituteTeacher | null = null
@@ -431,6 +716,13 @@ export const actOnApplication = mutation({
       version: application.version + 1,
       statusChangedAt: now,
       updatedAt: now,
+      ...(action === "supplement" && note
+        ? {
+          supplementalInformation: application.supplementalInformation
+            ? `${application.supplementalInformation}\n\n${note}`
+            : note,
+        }
+        : {}),
     })
     await appendCoffeeTalkEvent(ctx, {
       applicationId: application._id,
@@ -440,6 +732,7 @@ export const actOnApplication = mutation({
       fromStatus: application.status,
       toStatus: nextStatus,
       createdAt: now,
+      ...(note ? { note } : {}),
     })
 
     // All status actions notify only the other authorized party. The message
@@ -448,15 +741,15 @@ export const actOnApplication = mutation({
     if (actorKind === "applicant") {
       const recipient = reassignedTeacher ?? assignedTeacher
       if (recipient?.accountUserId !== undefined) {
-        await notifyCoffeeTalkRecipient(ctx, recipient.accountUserId, application._id, now)
+        await notifyCoffeeTalkRecipient(ctx, recipient.accountUserId, application._id, now, nextStatus, `coffee-talk:${String(application._id)}:${action}:version:${application.version + 1}:recipient:${String(recipient.accountUserId)}`)
       }
     } else {
-      await notifyCoffeeTalkRecipient(ctx, application.applicantUserId, application._id, now)
+      await notifyCoffeeTalkRecipient(ctx, application.applicantUserId, application._id, now, nextStatus, `coffee-talk:${String(application._id)}:${action}:version:${application.version + 1}:recipient:${String(application.applicantUserId)}`)
       if (
         reassignedTeacher?.accountUserId !== undefined
         && String(reassignedTeacher.accountUserId) !== String(actor._id)
       ) {
-        await notifyCoffeeTalkRecipient(ctx, reassignedTeacher.accountUserId, application._id, now)
+        await notifyCoffeeTalkRecipient(ctx, reassignedTeacher.accountUserId, application._id, now, nextStatus, `coffee-talk:${String(application._id)}:${action}:version:${application.version + 1}:recipient:${String(reassignedTeacher.accountUserId)}`)
       }
     }
 

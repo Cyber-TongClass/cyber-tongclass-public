@@ -14,7 +14,7 @@ test("AIA exposes a session-aware, data-minimized unified notification inbox", (
 
   assert.match(navbar, /useAiaNotifications/)
   assert.match(navbar, /NotificationBell/)
-  assert.match(navbar, /href="\/notifications"/)
+  assert.match(navbar, /href=\{withReturnTo\(["']\/notifications["'],\s*pathname\)\}/)
   assert.doesNotMatch(navbar, /from\s+["'][^"']*convex[^"']*["']/i)
 
   assert.match(inbox, /useCoffeeTalkNotifications/)

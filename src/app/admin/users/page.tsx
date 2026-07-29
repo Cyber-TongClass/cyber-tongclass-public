@@ -163,7 +163,7 @@ export default function UsersPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
-                          <Link href={`/members/${user.username || user._id}`}>
+                          <Link href={`/tong-class/members/${user.username || user._id}`}>
                             <Eye className="h-4 w-4 mr-2" />
                             查看详情
                           </Link>

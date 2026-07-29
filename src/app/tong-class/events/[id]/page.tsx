@@ -8,6 +8,7 @@ import { useEventById } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import type { Event } from "@/types"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 
 const eventTypeStyles = {
   "学术讲座": { bg: "bg-blue-500/10", text: "text-blue-600" },
@@ -55,10 +56,10 @@ export default function EventDetailPage() {
       <div className="min-h-screen bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
           <Button variant="ghost" asChild className="mb-6 -ml-3 gap-2">
-            <Link href="/tong-class/events">
+            <SafeReturnLink fallback="/tong-class/events">
               <ArrowLeft className="h-4 w-4" />
               返回活动列表
-            </Link>
+            </SafeReturnLink>
           </Button>
           <div className="max-w-3xl mx-auto text-center py-16">
             <h2 className="text-2xl font-extrabold text-slate-900 mb-2">活动不存在</h2>
@@ -76,10 +77,10 @@ export default function EventDetailPage() {
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
         <Button variant="ghost" asChild className="mb-6 -ml-3 gap-2">
-          <Link href="/tong-class/events">
+          <SafeReturnLink fallback="/tong-class/events">
             <ArrowLeft className="h-4 w-4" />
             返回活动列表
-          </Link>
+          </SafeReturnLink>
         </Button>
 
         <article className="max-w-4xl mx-auto">

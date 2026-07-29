@@ -30,8 +30,10 @@ const toAdminAccountDto = (user: any) => ({
 
 // Check if student ID is allowed to register
 export const isStudentIdAllowed = query({
-  args: { studentId: v.string() },
+  args: { studentId: v.string(), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    assertCanViewAccountRecords(actor.role)
     const authConfig = await ctx.db.query("authConfig").first()
     if (!authConfig) {
       return true
@@ -55,7 +57,7 @@ export const currentUser = query({
       .filter((q) => q.eq(q.field("email"), identity.email!))
       .first()
 
-    return user ? toCurrentAccountDto(user) : null
+    return user && user.accountStatus !== "disabled" ? toCurrentAccountDto(user) : null
   },
 })
 
@@ -75,7 +77,7 @@ export const currentUserBySession = query({
     }
 
     const user = await ctx.db.get(session.userId)
-    return user ? toCurrentAccountDto(user) : null
+    return user && user.accountStatus !== "disabled" ? toCurrentAccountDto(user) : null
   },
 })
 
@@ -108,7 +110,7 @@ export const currentUserRole = query({
       .filter((q) => q.eq(q.field("email"), identity.email!))
       .first()
 
-    return user?.role || null
+    return user?.accountStatus !== "disabled" ? user?.role || null : null
   },
 })
 
@@ -124,7 +126,7 @@ export const isAdmin = query({
       .filter((q) => q.eq(q.field("email"), identity.email!))
       .first()
     
-    const role = user?.role
+    const role = user?.accountStatus !== "disabled" ? user?.role : undefined
     return role === "admin" || role === "super_admin"
   },
 })
@@ -141,7 +143,7 @@ export const isSuperAdmin = query({
       .filter((q) => q.eq(q.field("email"), identity.email!))
       .first()
     
-    const role = user?.role
+    const role = user?.accountStatus !== "disabled" ? user?.role : undefined
     return role === "super_admin"
   },
 })

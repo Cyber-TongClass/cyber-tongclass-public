@@ -3,9 +3,11 @@ import { v } from "convex/values"
 import { createR2UploadTarget, getR2DownloadUrl, getR2ObjectKeyFromStorageId, r2StorageIdMatches } from "./lib/r2"
 import {
   advanceOAWorkflow,
+  resumeOAWorkflow,
   startOAWorkflow,
   userMatchesOAUserScope,
 } from "./lib/oaWorkflow"
+import { getUserBySession } from "./reviewer/lib"
 
 const MAX_DEFAULT_FILE_BYTES = 20 * 1024 * 1024
 
@@ -80,6 +82,7 @@ const userScopeValidator = v.object({
   identityTypes: v.optional(v.array(userIdentityTypeValidator)),
   roles: v.optional(v.array(userRoleValidator)),
   userIds: v.optional(v.array(v.id("users"))),
+  researchGroupIds: v.optional(v.array(v.id("researchGroups"))),
 })
 
 const approvalStepValidator = v.object({
@@ -89,7 +92,11 @@ const approvalStepValidator = v.object({
   completion: v.optional(v.union(v.literal("any"), v.literal("all"))),
 })
 
-const approvalActionValidator = v.union(v.literal("approve"), v.literal("reject"))
+const approvalActionValidator = v.union(
+  v.literal("approve"),
+  v.literal("reject"),
+  v.literal("request_changes"),
+)
 const approvalTaskStatusValidator = v.union(
   v.literal("pending"),
   v.literal("approved"),
@@ -118,28 +125,6 @@ const formInputValidator = {
   // existing scope so legacy callers do not accidentally retarget a form.
   targetScope: v.optional(v.union(userScopeValidator, v.null())),
   approvalSteps: v.optional(v.array(approvalStepValidator)),
-}
-
-const sha256Hex = async (input: string) => {
-  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
-  const enc = new TextEncoder().encode(input)
-  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
-  return Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, "0")).join("")
-}
-
-async function getUserBySession(ctx: any, sessionToken?: string) {
-  if (!sessionToken) throw new Error("请先登录")
-  const tokenHash = await sha256Hex(sessionToken)
-  const session = await ctx.db
-    .query("authSessions")
-    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
-    .first()
-  if (!session || session.revokedAt || session.expiresAt <= Date.now()) {
-    throw new Error("登录已过期，请重新登录")
-  }
-  const user = await ctx.db.get(session.userId)
-  if (!user) throw new Error("用户不存在")
-  return user
 }
 
 function requireMember(user: any) {
@@ -211,12 +196,23 @@ function normalizeUserScope(scope: any, label: string, allowAll = false): any {
     const normalized = String(userId || "")
     if (normalized) userIdEntries.set(normalized, userId)
   }
-  const hasCriteria = identityTypes.length > 0 || roles.length > 0 || userIdEntries.size > 0
+  const researchGroupIdEntries = new Map<string, any>()
+  for (const researchGroupId of scope?.researchGroupIds || []) {
+    const normalized = String(researchGroupId || "")
+    if (normalized) researchGroupIdEntries.set(normalized, researchGroupId)
+  }
+  const hasCriteria = identityTypes.length > 0
+    || roles.length > 0
+    || userIdEntries.size > 0
+    || researchGroupIdEntries.size > 0
   if (!hasCriteria && !allowAll) throw new Error(`${label}至少需要选择一个用户组、角色或账户`)
   return {
     ...(identityTypes.length > 0 ? { identityTypes } : {}),
     ...(roles.length > 0 ? { roles } : {}),
     ...(userIdEntries.size > 0 ? { userIds: [...userIdEntries.values()] } : {}),
+    ...(researchGroupIdEntries.size > 0
+      ? { researchGroupIds: [...researchGroupIdEntries.values()] }
+      : {}),
   } as any
 }
 
@@ -429,19 +425,27 @@ function assertFormOpen(form: any) {
   if (form.closeAt && form.closeAt < now) throw new Error("表单已截止")
 }
 
-function assertUserCanAccessOAForm(user: any, form: any) {
+async function userResearchGroupId(ctx: any, userId: any) {
+  const assignment = await ctx.db
+    .query("studentResearchGroupAssignments")
+    .withIndex("by_studentUserId", (index: any) => index.eq("studentUserId", userId))
+    .first()
+  return assignment?.researchGroupId
+}
+
+async function assertUserCanAccessOAForm(ctx: any, user: any, form: any) {
   if (!form.targetScope) {
     requireMember(user)
     if (form.visibility !== "members") throw new Error("该表单不面向成员开放")
     return
   }
   if (form.visibility !== "members") throw new Error("该表单不面向成员开放")
-  if (!userMatchesOAUserScope(user, form.targetScope)) throw new Error("无权访问该研究院 OA 表单")
+  if (!userMatchesOAUserScope(user, form.targetScope, await userResearchGroupId(ctx, user._id))) throw new Error("无权访问该研究院 OA 表单")
 }
 
-function canUserAccessOAForm(user: any, form: any) {
+async function canUserAccessOAForm(ctx: any, user: any, form: any) {
   try {
-    assertUserCanAccessOAForm(user, form)
+    await assertUserCanAccessOAForm(ctx, user, form)
     return true
   } catch {
     return false
@@ -482,6 +486,17 @@ function collectAttachmentStorageIds(form: any, answers: any) {
   return ids
 }
 
+function buildFormSnapshot(form: any) {
+  return {
+    title: form.title,
+    ...(form.description === undefined ? {} : { description: form.description }),
+    fields: form.fields,
+    ...(form.allowSubmissionEdits === undefined ? {} : { allowSubmissionEdits: form.allowSubmissionEdits }),
+    ...(form.resultFields === undefined ? {} : { resultFields: form.resultFields }),
+    ...(form.resultsVisible === undefined ? {} : { resultsVisible: form.resultsVisible }),
+  }
+}
+
 function serializeSubmission(form: any, submission: any, viewer: "owner" | "admin") {
   let resultValues = submission.resultValues
   if (viewer !== "admin") {
@@ -513,9 +528,9 @@ export const listPublished = query({
       ? await ctx.db.query("oaForms").withIndex("by_updatedAt").order("desc").collect()
       : await ctx.db.query("oaForms").withIndex("by_status_category", (q) => q.eq("status", "published")).order("desc").collect()
     const now = Date.now()
+    const access = await Promise.all(rows.map((form) => canUserAccessOAForm(ctx, user, form)))
     return rows
-      .filter((form) => form.visibility === "members")
-      .filter((form) => canUserAccessOAForm(user, form))
+      .filter((form, index) => form.visibility === "members" && access[index])
       .filter((form) => args.includePast ? (form.status === "published" || form.status === "archived") : form.status === "published")
       .filter((form) => !args.kind || formKind(form) === args.kind)
       .filter((form) => !args.category || form.category === args.category)
@@ -531,7 +546,7 @@ export const getPublishedBySlug = query({
     const user = await getUserBySession(ctx, args.sessionToken)
     const form = await ctx.db.query("oaForms").withIndex("by_slug", (q) => q.eq("slug", normalizeSlug(args.slug))).first()
     if (!form || (form.status !== "published" && form.status !== "archived")) return null
-    if (!canUserAccessOAForm(user, form)) return null
+    if (!await canUserAccessOAForm(ctx, user, form)) return null
     const now = Date.now()
     if (form.openAt && form.openAt > now) return null
     return toPublishedOAForm(form)
@@ -690,15 +705,36 @@ export const generateUploadUrl = mutation({
 })
 
 export const submit = mutation({
-  args: { sessionToken: v.optional(v.string()), formId: v.id("oaForms"), answers: v.any() },
+  args: {
+    sessionToken: v.optional(v.string()),
+    formId: v.id("oaForms"),
+    answers: v.any(),
+    idempotencyKey: v.string(),
+  },
   handler: async (ctx, args) => {
     const user = await getUserBySession(ctx, args.sessionToken)
     const form = await ctx.db.get(args.formId)
     if (!form) throw new Error("表单不存在")
-    assertUserCanAccessOAForm(user, form)
+    await assertUserCanAccessOAForm(ctx, user, form)
     assertFormOpen(form)
+    const idempotencyKey = String(args.idempotencyKey || "").trim()
+    if (!idempotencyKey || idempotencyKey.length > 200) throw new Error("提交请求标识无效")
     const answers = args.answers && typeof args.answers === "object" ? args.answers as Record<string, unknown> : {}
     const normalizedAnswers = await normalizeAnswers(ctx, form, answers, String(user._id))
+    const submissionRequestFingerprint = JSON.stringify({
+      formId: String(form._id),
+      answers: normalizedAnswers,
+    })
+    const replay = await ctx.db
+      .query("oaFormSubmissions")
+      .withIndex("by_submitter_idempotency", (q) => q.eq("submitterId", user._id).eq("submissionIdempotencyKey", idempotencyKey))
+      .first()
+    if (replay) {
+      if (replay.submissionRequestFingerprint !== submissionRequestFingerprint) {
+        throw new Error("同一提交请求标识不能用于不同内容")
+      }
+      return replay._id
+    }
     const maxSubmissionsPerUser = Number(form.maxSubmissionsPerUser)
     const submissionLimit = Number.isInteger(maxSubmissionsPerUser) && maxSubmissionsPerUser > 0
       ? Math.floor(maxSubmissionsPerUser)
@@ -719,7 +755,10 @@ export const submit = mutation({
       studentId: user.studentId,
       submitterEmail: user.email,
       answers: normalizedAnswers,
+      formSnapshot: buildFormSnapshot(form),
       reviewStatus: "pending",
+      submissionIdempotencyKey: idempotencyKey,
+      submissionRequestFingerprint,
       submittedAt: now,
       createdAt: now,
       updatedAt: now,
@@ -732,27 +771,52 @@ export const submit = mutation({
 })
 
 export const updateSubmission = mutation({
-  args: { sessionToken: v.optional(v.string()), id: v.id("oaFormSubmissions"), answers: v.any() },
+  args: {
+    sessionToken: v.optional(v.string()),
+    id: v.id("oaFormSubmissions"),
+    answers: v.any(),
+    expectedVersion: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const user = await getUserBySession(ctx, args.sessionToken)
     const submission = await ctx.db.get(args.id)
     if (!submission || String(submission.submitterId) !== String(user._id)) throw new Error("无权修改该提交")
     const form = await ctx.db.get(submission.formId)
     if (!form) throw new Error("表单不存在")
-    assertUserCanAccessOAForm(user, form)
-    if (!form.allowSubmissionEdits) throw new Error("该表单不允许修改提交内容")
-    if (submission.workflowStatus !== undefined || Array.isArray(submission.approvalStepsSnapshot)) {
-      throw new Error("已进入审批流程的提交不可修改，请联系审批人处理")
+    await assertUserCanAccessOAForm(ctx, user, form)
+    const hasWorkflow = submission.workflowStatus !== undefined || Array.isArray(submission.approvalStepsSnapshot)
+    if (hasWorkflow) {
+      if (submission.workflowStatus !== "needs_changes") {
+        throw new Error("已进入审批流程的提交仅可在要求补充材料时修改")
+      }
+      const workflowVersion = submission.workflowVersion ?? 1
+      if (args.expectedVersion !== workflowVersion) {
+        throw new Error("OA_WORKFLOW_VERSION_CONFLICT")
+      }
+    } else if (!form.allowSubmissionEdits) {
+      throw new Error("该表单不允许修改提交内容")
     }
-    assertFormOpen(form)
+    if (!hasWorkflow) assertFormOpen(form)
     const answers = args.answers && typeof args.answers === "object" ? args.answers as Record<string, unknown> : {}
-    const normalizedAnswers = await normalizeAnswers(ctx, form, answers, String(user._id))
+    const validationForm = submission.formSnapshot && typeof submission.formSnapshot === "object"
+      ? submission.formSnapshot
+      : form
+    const normalizedAnswers = await normalizeAnswers(ctx, validationForm, answers, String(user._id))
     const now = Date.now()
     await ctx.db.patch(args.id, {
       answers: normalizedAnswers,
+      ...(!submission.formSnapshot ? { formSnapshot: buildFormSnapshot(form) } : {}),
       reviewStatus: "pending",
       updatedAt: now,
     })
+    if (hasWorkflow) {
+      await resumeOAWorkflow(ctx, {
+        form,
+        submission,
+        actorUserId: user._id,
+        now,
+      })
+    }
     return args.id
   },
 })
@@ -766,7 +830,58 @@ export const listMine = query({
       : await ctx.db.query("oaFormSubmissions").withIndex("by_submitter_createdAt", (q) => q.eq("submitterId", user._id)).order("desc").collect()
     return await Promise.all(rows.map(async (row) => {
       const form = await ctx.db.get(row.formId)
-      return form ? serializeSubmission(form, row, "owner") : row
+      const snapshot = row.formSnapshot && typeof row.formSnapshot === "object" ? row.formSnapshot : undefined
+      const presentationForm = snapshot || form
+      const serialized = presentationForm ? serializeSubmission(presentationForm, row, "owner") : row
+      const formTitle = snapshot?.title || form?.title
+      return {
+        ...serialized,
+        ...(formTitle ? { formTitle } : {}),
+        allowSubmissionEdits: Boolean(snapshot?.allowSubmissionEdits ?? form?.allowSubmissionEdits),
+      }
+    }))
+  },
+})
+
+/**
+ * Returns the submitter-visible audit trail for one of their own submissions.
+ * Routing scopes and account IDs remain server-only; the client receives only
+ * the step title, action, comment, and display name of the actual operator.
+ */
+export const listMineApprovalHistory = query({
+  args: { sessionToken: v.optional(v.string()), submissionId: v.id("oaFormSubmissions") },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const submission = await ctx.db.get(args.submissionId)
+    if (!submission || String(submission.submitterId) !== String(user._id)) return null
+
+    const form = await ctx.db.get(submission.formId)
+    const steps = Array.isArray(submission.approvalStepsSnapshot)
+      ? submission.approvalStepsSnapshot
+      : form?.approvalSteps || []
+    const events = await ctx.db
+      .query("oaApprovalEvents")
+      .withIndex("by_submission_createdAt", (index) => index.eq("submissionId", submission._id))
+      .order("asc")
+      .collect()
+
+    return await Promise.all(events.map(async (event) => {
+      const step = event.stepIndex === undefined
+        ? undefined
+        : steps[event.stepIndex]?.id === event.stepId ? steps[event.stepIndex] : undefined
+      const actor = event.actorUserId ? await ctx.db.get(event.actorUserId) : null
+      const actorName = actor
+        ? actor.chineseName || actor.englishName || actor.username || actor.email
+        : "系统"
+      return {
+        action: event.action,
+        ...(event.stepIndex !== undefined ? { stepIndex: event.stepIndex } : {}),
+        ...(event.stepId ? { stepId: event.stepId } : {}),
+        ...(step?.title ? { stepTitle: step.title } : {}),
+        actorName,
+        ...(event.comment ? { comment: event.comment } : {}),
+        createdAt: event.createdAt,
+      }
     }))
   },
 })
@@ -781,6 +896,14 @@ function workflowStepForTask(form: any, submission: any, task: any) {
 
 function toApprovalInboxRow(form: any, submission: any, task: any) {
   const step = workflowStepForTask(form, submission, task)
+  const sourceFields = Array.isArray(submission.formSnapshot?.fields)
+    ? submission.formSnapshot.fields
+    : Array.isArray(form.fields) ? form.fields : []
+  const formFields = sourceFields.map((field: any) => ({
+    id: String(field.id || ""),
+    label: String(field.label || field.id || "未命名字段"),
+    type: String(field.type || "text"),
+  }))
   return {
     // This deliberately mirrors the minimal submission fields the AIA
     // approval UI needs, without exposing submitter name, ID, or email.
@@ -790,10 +913,12 @@ function toApprovalInboxRow(form: any, submission: any, task: any) {
     formTitle: form.title,
     submittedAt: submission.submittedAt,
     answers: submission.answers,
+    formFields,
     reviewStatus: submission.reviewStatus,
     ...(submission.adminNote ? { adminNote: submission.adminNote } : {}),
     ...(submission.workflowStatus ? { workflowStatus: submission.workflowStatus } : {}),
     ...(submission.currentApprovalStep !== undefined ? { currentApprovalStep: submission.currentApprovalStep } : {}),
+    workflowVersion: submission.workflowVersion ?? 1,
     taskId: task._id,
     taskStatus: task.status,
     ...(task.actedAt !== undefined ? { taskActedAt: task.actedAt } : {}),
@@ -807,7 +932,7 @@ function toApprovalInboxRow(form: any, submission: any, task: any) {
   }
 }
 
-async function listApprovalTasksForUser(ctx: any, user: any, status?: "pending" | "approved" | "rejected" | "skipped") {
+async function listApprovalTasksForUser(ctx: any, user: any, status?: "pending" | "approved" | "rejected" | "skipped" | "changes_requested") {
   const rows = status
     ? await ctx.db
       .query("oaApprovalTasks")
@@ -879,26 +1004,59 @@ export const actOnApprovalTask = mutation({
     taskId: v.id("oaApprovalTasks"),
     action: approvalActionValidator,
     comment: v.optional(v.string()),
+    expectedVersion: v.number(),
+    idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
     const actor = await getUserBySession(ctx, args.sessionToken)
     const task = await ctx.db.get(args.taskId)
     if (!task || String(task.userId) !== String(actor._id)) throw new Error("无权处理该审批任务")
+    const idempotencyKey = String(args.idempotencyKey || "").trim()
+    if (!idempotencyKey || idempotencyKey.length > 200) throw new Error("审批请求标识无效")
+    const comment = String(args.comment || "").trim().slice(0, 2000) || undefined
+    const actionRequestFingerprint = JSON.stringify({
+      action: args.action,
+      comment: comment || "",
+      expectedVersion: args.expectedVersion,
+    })
+    if (task.actionIdempotencyKey === idempotencyKey) {
+      if (task.actionRequestFingerprint !== actionRequestFingerprint) {
+        return { updated: false, reason: "idempotency_conflict" }
+      }
+      return task.actionResult || { updated: false, reason: "already_handled" }
+    }
     if (task.status !== "pending") return { updated: false, reason: "task_not_pending" }
     const submission = await ctx.db.get(task.submissionId)
     const form = submission ? await ctx.db.get(submission.formId) : null
     if (!submission || !form || (submission.workflowStatus === undefined && !Array.isArray(submission.approvalStepsSnapshot))) {
       throw new Error("审批任务关联的流程不存在")
     }
-    return await advanceOAWorkflow(ctx, {
+    const currentVersion = submission.workflowVersion ?? 1
+    if (args.expectedVersion !== currentVersion || (task.workflowVersion ?? 1) !== currentVersion) {
+      return { updated: false, reason: "stale_version", currentVersion }
+    }
+    const workflowResult = await advanceOAWorkflow(ctx, {
       form,
       submission,
       task,
       actor,
       action: args.action,
-      comment: args.comment,
+      comment,
+      expectedVersion: args.expectedVersion,
       now: Date.now(),
     })
+    const noOpReasons = new Set(["workflow_not_pending", "task_version_stale", "task_not_current"])
+    const result = workflowResult.advanced === false
+      && typeof workflowResult.reason === "string"
+      && noOpReasons.has(workflowResult.reason)
+      ? { updated: false, reason: workflowResult.reason, currentVersion }
+      : { updated: true, ...workflowResult }
+    await ctx.db.patch(task._id, {
+      actionIdempotencyKey: idempotencyKey,
+      actionRequestFingerprint,
+      actionResult: result,
+    })
+    return result
   },
 })
 
@@ -906,17 +1064,21 @@ async function genericNotificationHref(ctx: any, recipient: any, notification: a
   if (notification.kind === "oa_workflow") {
     const submission = await ctx.db.get(notification.resourceId)
     if (!submission) return "/services/oa/my"
-    if (String(submission.submitterId) === String(recipient._id)) return "/services/oa/my"
+    if (String(submission.submitterId) === String(recipient._id)) {
+      return `/services/oa/submissions/${String(submission._id)}`
+    }
     const task = await ctx.db
       .query("oaApprovalTasks")
       .withIndex("by_submission_user", (index: any) => index.eq("submissionId", submission._id).eq("userId", recipient._id))
       .first()
-    return task ? "/services/oa/approvals" : "/services/oa/my"
+    return task ? `/services/oa/approvals/${String(task._id)}` : "/services/oa/my"
   }
 
   const application = await ctx.db.get(notification.resourceId)
   if (!application || String(application.applicantUserId) === String(recipient._id)) {
-    return "/services/coffee-talk/my"
+    return application
+      ? `/services/coffee-talk/my/${String(application._id)}`
+      : "/services/coffee-talk/my"
   }
   const teacher = await ctx.db.get(application.assignedTeacherPersonId)
   if (
@@ -924,14 +1086,14 @@ async function genericNotificationHref(ctx: any, recipient: any, notification: a
     && teacher.accountUserId !== undefined
     && String(teacher.accountUserId) === String(recipient._id)
   ) {
-    return "/services/coffee-talk/manage"
+    return `/services/coffee-talk/manage/${String(application._id)}`
   }
-  return "/services/coffee-talk/my"
+  return `/services/coffee-talk/my/${String(application._id)}`
 }
 
 /** Unified, recipient-authorized AIA inbox for Coffee Talk and OA workflow notices. */
 export const listMyNotifications = query({
-  args: { sessionToken: v.optional(v.string()) },
+  args: { sessionToken: v.optional(v.string()), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     // The global AIA shell can render before a stale browser token is cleared.
     // Match Coffee Talk's signed-out behavior instead of failing navigation.
@@ -941,11 +1103,12 @@ export const listMyNotifications = query({
     } catch {
       return []
     }
+    const limit = Math.max(1, Math.min(Math.floor(args.limit || 30), 500))
     const notifications = await ctx.db
       .query("notifications")
       .withIndex("by_user_createdAt", (index: any) => index.eq("userId", user._id))
       .order("desc")
-      .collect()
+      .take(limit)
     return Promise.all(notifications.map(async (notification: any) => ({
       id: String(notification._id),
       kind: notification.kind,
@@ -954,6 +1117,7 @@ export const listMyNotifications = query({
       title: notification.title,
       body: notification.body,
       ...(notification.readAt !== undefined ? { readAt: notification.readAt } : {}),
+      ...(notification.archivedAt !== undefined ? { archivedAt: notification.archivedAt } : {}),
       createdAt: notification.createdAt,
       href: await genericNotificationHref(ctx, user, notification),
     })))
@@ -969,6 +1133,23 @@ export const markMyNotificationRead = mutation({
       return { updated: false }
     }
     await ctx.db.patch(args.notificationId, { readAt: Date.now() })
+    return { updated: true }
+  },
+})
+
+export const archiveMyNotification = mutation({
+  args: { sessionToken: v.optional(v.string()), notificationId: v.id("notifications") },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+    const notification = await ctx.db.get(args.notificationId)
+    if (!notification || String(notification.userId) !== String(user._id) || notification.archivedAt !== undefined) {
+      return { updated: false }
+    }
+    const now = Date.now()
+    await ctx.db.patch(args.notificationId, {
+      archivedAt: now,
+      ...(notification.readAt === undefined ? { readAt: now } : {}),
+    })
     return { updated: true }
   },
 })
@@ -1024,11 +1205,8 @@ export const adminReviewSubmission = mutation({
     // control. The actor must own a current stored task, even if they are an
     // administrator, so ordered approval cannot be bypassed.
     if (submission.workflowStatus !== undefined || Array.isArray(submission.approvalStepsSnapshot)) {
-      if (args.reviewStatus === "needs_changes") {
-        throw new Error("研究院 OA 流程当前仅支持同意或驳回，请勿使用“需补材料”")
-      }
-      if (args.reviewStatus !== "approved" && args.reviewStatus !== "rejected") {
-        throw new Error("审批流程只能执行同意或驳回")
+      if (!["approved", "rejected", "needs_changes"].includes(args.reviewStatus)) {
+        throw new Error("审批流程只能执行同意、驳回或要求补充材料")
       }
       const tasks = await ctx.db
         .query("oaApprovalTasks")
@@ -1041,7 +1219,9 @@ export const adminReviewSubmission = mutation({
         submission,
         task,
         actor,
-        action: args.reviewStatus === "approved" ? "approve" : "reject",
+        action: args.reviewStatus === "approved"
+          ? "approve"
+          : args.reviewStatus === "needs_changes" ? "request_changes" : "reject",
         comment: args.adminNote,
         now,
       })
@@ -1084,7 +1264,8 @@ export const getAttachmentUrl = query({
     const hasWorkflow = submission.workflowStatus !== undefined || Array.isArray(submission.approvalStepsSnapshot)
     const isLegacyAdmin = isAdmin && !hasWorkflow && (!isAIAWorkflowForm(form) || user.role === "super_admin")
     if (!isSubmitter && !isCurrentAssignee && !isLegacyAdmin) throw new Error("无权访问该附件")
-    if (!collectAttachmentStorageIds(form, submission.answers).has(args.storageId)) throw new Error("附件不属于该提交")
+    const snapshot = submission.formSnapshot && typeof submission.formSnapshot === "object" ? submission.formSnapshot : form
+    if (!collectAttachmentStorageIds(snapshot, submission.answers).has(args.storageId)) throw new Error("附件不属于该提交")
     const r2Url = await getR2DownloadUrl(args.storageId)
     if (r2Url) return r2Url
     return await ctx.storage.getUrl(args.storageId as any)

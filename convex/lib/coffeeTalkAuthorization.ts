@@ -5,6 +5,7 @@ export type CoffeeTalkRole = "member" | "admin" | "super_admin"
 export type CoffeeTalkActorResolutionInput = {
   actorUserId: string
   actorRole: CoffeeTalkRole
+  coordinatorAllowed?: boolean
   applicantUserId: string
   /** Derived exclusively from the assigned institute person's accountUserId. */
   assignedTeacherUserId?: string
@@ -18,7 +19,10 @@ export type CoffeeTalkActorResolutionInput = {
 export function resolveCoffeeTalkActorKind(
   input: CoffeeTalkActorResolutionInput,
 ): CoffeeTalkActorKind | null {
-  if (input.actorRole === "admin" || input.actorRole === "super_admin") {
+  if (
+    input.actorRole === "super_admin"
+    || (input.actorRole === "admin" && input.coordinatorAllowed === true)
+  ) {
     return "coordinator"
   }
   if (input.actorUserId === input.applicantUserId) {

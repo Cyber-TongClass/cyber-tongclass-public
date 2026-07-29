@@ -101,7 +101,7 @@ export function NewsTimeline({ items, detailHref, audienceControl }: NewsTimelin
 
   return (
     <>
-      <section className="sticky top-16 z-40 border-b border-slate-200 bg-white">
+      <section className="sticky top-16 z-40 border-b border-[hsl(var(--aia-rule))] bg-[hsl(var(--aia-paper))]">
         <div className="container-custom py-4">
           {audienceControl ? <div className="mb-4">{audienceControl}</div> : null}
 
@@ -109,7 +109,7 @@ export function NewsTimeline({ items, detailHref, audienceControl }: NewsTimelin
             <div className="relative max-w-md flex-1">
               <Search
                 aria-hidden="true"
-                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600"
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--aia-muted))]"
               />
               <Input
                 type="search"
@@ -117,18 +117,18 @@ export function NewsTimeline({ items, detailHref, audienceControl }: NewsTimelin
                 placeholder="搜索新闻标题..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                className="pl-10"
+                className="border-[hsl(var(--aia-rule))] bg-[hsl(var(--aia-paper))] pl-10 text-[hsl(var(--aia-ink))] placeholder:text-[hsl(var(--aia-muted))] focus-visible:ring-[hsl(var(--aia-red))] focus-visible:ring-offset-[hsl(var(--aia-paper))]"
               />
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[140px] border-[hsl(var(--aia-rule))] bg-[hsl(var(--aia-paper))] text-[hsl(var(--aia-ink))] focus:ring-[hsl(var(--aia-red))] focus:ring-offset-[hsl(var(--aia-paper))]">
                   <SelectValue placeholder="选择分类" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="border-[hsl(var(--aia-rule))] bg-[hsl(var(--aia-paper))] text-[hsl(var(--aia-ink))]">
                   {categories.map((category) => (
-                    <SelectItem key={category.value} value={category.value}>
+                    <SelectItem className="focus:bg-[hsl(var(--aia-tag))] focus:text-[hsl(var(--aia-red))]" key={category.value} value={category.value}>
                       {category.label}
                     </SelectItem>
                   ))}
@@ -139,6 +139,7 @@ export function NewsTimeline({ items, detailHref, audienceControl }: NewsTimelin
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="text-[hsl(var(--aia-muted))] hover:bg-[hsl(var(--aia-tag))] hover:text-[hsl(var(--aia-red))]"
                   onClick={() => {
                     setSelectedCategory("all")
                     setSearchQuery("")
@@ -150,24 +151,24 @@ export function NewsTimeline({ items, detailHref, audienceControl }: NewsTimelin
             </div>
           </div>
 
-          <div className="mt-4 text-sm text-slate-500">
+          <div className="mt-4 text-sm text-[hsl(var(--aia-muted))]">
             {items === undefined ? "正在加载新闻..." : <>显示 {filteredNews.length} 条新闻</>}
           </div>
         </div>
       </section>
 
-      <section className="bg-slate-100 px-4 py-16 sm:px-6 md:py-24 lg:px-8">
+      <section className="bg-[hsl(var(--aia-warm))] px-4 py-16 sm:px-6 md:py-24 lg:px-8">
         <div className="mx-auto max-w-4xl">
           {items === undefined ? (
             <div className="py-16 text-center" role="status">
-              <Newspaper className="mx-auto mb-4 h-12 w-12 animate-pulse text-slate-400" />
-              <p className="text-slate-500">加载中...</p>
+              <Newspaper className="mx-auto mb-4 h-12 w-12 animate-pulse text-[hsl(var(--aia-muted))]" />
+              <p className="text-[hsl(var(--aia-muted))]">加载中...</p>
             </div>
           ) : filteredNews.length === 0 ? (
             <div className="py-16 text-center">
-              <Newspaper className="mx-auto mb-4 h-12 w-12 text-slate-400" />
-              <h3 className="mb-2 text-lg font-extrabold text-slate-900">未找到匹配新闻</h3>
-              <p className="text-slate-500">尝试调整筛选条件或搜索关键词</p>
+              <Newspaper className="mx-auto mb-4 h-12 w-12 text-[hsl(var(--aia-muted))]" />
+              <h3 className="mb-2 text-lg font-extrabold text-[hsl(var(--aia-ink))]">未找到匹配新闻</h3>
+              <p className="text-[hsl(var(--aia-muted))]">尝试调整筛选条件或搜索关键词</p>
             </div>
           ) : (
             <div className="space-y-20">
@@ -176,7 +177,7 @@ export function NewsTimeline({ items, detailHref, audienceControl }: NewsTimelin
                   key={year}
                   className="grid grid-cols-[72px_1fr] gap-6 md:grid-cols-[96px_1fr] md:gap-10"
                 >
-                  <div className="select-none pt-1 text-5xl font-extrabold leading-none text-slate-300 md:text-6xl">
+                  <div className="select-none pt-1 text-5xl font-extrabold leading-none text-[hsl(var(--aia-rule))] md:text-6xl">
                     {year}
                   </div>
 
@@ -188,10 +189,10 @@ export function NewsTimeline({ items, detailHref, audienceControl }: NewsTimelin
                         return (
                           <div key={month}>
                             <div className="mb-4">
-                              <span className="text-xl font-extrabold uppercase tracking-widest text-[hsl(350,55%,35%)]">
+                              <span className="text-xl font-extrabold uppercase tracking-widest text-[hsl(var(--aia-red))]">
                                 {MONTH_ABBRS[monthIndex]}
                               </span>
-                              <span className="ml-1 text-xs text-slate-400">
+                              <span className="ml-1 text-xs text-[hsl(var(--aia-muted))]">
                                 {groupedNews[month].length} 条
                               </span>
                             </div>
@@ -208,27 +209,27 @@ export function NewsTimeline({ items, detailHref, audienceControl }: NewsTimelin
                                     target={safeSourceUrl ? "_blank" : undefined}
                                     rel={safeSourceUrl ? "noopener noreferrer" : undefined}
                                   >
-                                    <div className="group border-l-[3px] border-transparent bg-white p-6 shadow-sm transition-all duration-200 hover:border-primary hover:bg-slate-50">
+                                    <div className="group border-l-[3px] border-transparent bg-[hsl(var(--aia-paper))] p-6 shadow-sm transition-all duration-200 hover:border-[hsl(var(--aia-red))] hover:bg-[hsl(var(--aia-tag))]">
                                       <div className="flex flex-col gap-4 md:flex-row md:items-start">
                                         <div className="min-w-0 flex-1">
                                           <div className="mb-2 flex items-center gap-3">
-                                            <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-white">
+                                            <span className="rounded-full bg-[hsl(var(--aia-red))] px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-white">
                                               {item.category}
                                             </span>
-                                            <span className="flex items-center gap-1 text-xs text-slate-400">
+                                            <span className="flex items-center gap-1 text-xs text-[hsl(var(--aia-muted))]">
                                               <Clock className="h-3 w-3" />
                                               {new Date(item.publishedAt).toLocaleDateString("zh-CN")}
                                             </span>
                                           </div>
-                                          <h3 className="line-clamp-1 text-lg font-extrabold text-slate-900 transition-colors group-hover:text-primary">
+                                          <h3 className="line-clamp-1 text-lg font-extrabold text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
                                             {item.title}
                                           </h3>
-                                          <p className="mt-2 line-clamp-2 text-sm text-slate-600">
+                                          <p className="mt-2 line-clamp-2 text-sm text-[hsl(var(--aia-muted))]">
                                             {item.content}
                                           </p>
                                         </div>
                                         {item.coverImageUrl ? (
-                                          <div className="h-24 w-full overflow-hidden rounded-md bg-slate-100 md:h-24 md:w-40 md:shrink-0">
+                                          <div className="h-24 w-full overflow-hidden rounded-md bg-[hsl(var(--aia-tag))] md:h-24 md:w-40 md:shrink-0">
                                             {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img
                                               src={item.coverImageUrl}

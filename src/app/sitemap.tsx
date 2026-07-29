@@ -10,7 +10,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { pathname: "/groups", changeFrequency: "weekly", priority: 0.9 },
     { pathname: "/research", changeFrequency: "weekly", priority: 0.8 },
     { pathname: "/updates", changeFrequency: "daily", priority: 0.8 },
-    { pathname: "/services", changeFrequency: "weekly", priority: 0.8 },
     { pathname: "/services/coffee-talk", changeFrequency: "weekly", priority: 0.8 },
     { pathname: "/contact", changeFrequency: "monthly", priority: 0.6 },
     { pathname: "/tong-class", changeFrequency: "weekly", priority: 0.8 },

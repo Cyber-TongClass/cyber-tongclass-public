@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 import { NotificationInbox } from "@/components/notifications/notification-inbox"
 import type { NotificationRowItem } from "@/components/notifications/notification-row"
@@ -22,8 +23,9 @@ type AiaNotification = {
 }
 
 type GenericNotificationHooks = {
-  useAiaNotifications?: () => unknown
+  useAiaNotifications?: (options?: { limit?: number }) => unknown
   useMarkAiaNotificationRead?: () => (notificationId: string) => Promise<unknown>
+  useArchiveAiaNotification?: () => (notificationId: string) => Promise<unknown>
   useMarkAllAiaNotificationsRead?: () => () => Promise<unknown>
 }
 
@@ -36,6 +38,7 @@ const genericNotificationHooks = apiHooks as unknown as GenericNotificationHooks
 const hasGenericNotificationHooks = Boolean(
   genericNotificationHooks.useAiaNotifications
   && genericNotificationHooks.useMarkAiaNotificationRead
+  && genericNotificationHooks.useArchiveAiaNotification
   && genericNotificationHooks.useMarkAllAiaNotificationsRead,
 )
 const useAiaNotificationFeed = hasGenericNotificationHooks
@@ -44,6 +47,9 @@ const useAiaNotificationFeed = hasGenericNotificationHooks
 const useAiaMarkNotificationRead = hasGenericNotificationHooks
   ? genericNotificationHooks.useMarkAiaNotificationRead!
   : apiHooks.useMarkCoffeeTalkNotificationRead
+const useAiaArchiveNotification = hasGenericNotificationHooks
+  ? genericNotificationHooks.useArchiveAiaNotification!
+  : () => async () => undefined
 const useAiaMarkAllNotificationsRead = hasGenericNotificationHooks
   ? genericNotificationHooks.useMarkAllAiaNotificationsRead!
   : apiHooks.useMarkAllCoffeeTalkNotificationsRead
@@ -78,8 +84,10 @@ function toNotificationRow(notification: AiaNotification): NotificationRowItem {
 /** Renders the generic AIA inbox, with Coffee Talk compatibility for older deployments. */
 export function AiaNotificationInboxClient() {
   const { isAuthenticated } = useAuth()
-  const notifications = useAiaNotificationFeed()
+  const [limit, setLimit] = useState(30)
+  const notifications = useAiaNotificationFeed({ limit })
   const markNotificationRead = useAiaMarkNotificationRead()
+  const archiveNotification = useAiaArchiveNotification()
   const markAllNotificationsRead = useAiaMarkAllNotificationsRead()
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -98,6 +106,15 @@ export function AiaNotificationInboxClient() {
       await markAllNotificationsRead()
     } catch {
       setActionError("更新通知状态失败，请稍后重试。")
+    }
+  }
+
+  const handleArchive = async (notification: NotificationRowItem) => {
+    try {
+      setActionError(null)
+      await archiveNotification(notification.id)
+    } catch {
+      setActionError("归档通知失败，请稍后重试。")
     }
   }
 
@@ -124,8 +141,16 @@ export function AiaNotificationInboxClient() {
         emptyMessage="暂时没有站内信。服务申请、审批处理和系统消息会显示在这里。"
         onNotificationOpen={(notification) => { void handleMarkRead(notification) }}
         onMarkRead={(notification) => { void handleMarkRead(notification) }}
+        onArchive={(notification) => { void handleArchive(notification) }}
         onMarkAllRead={() => { void handleMarkAllRead() }}
       />
+      {(notifications as AiaNotification[]).length >= limit && limit < 500 ? (
+        <div className="flex justify-center">
+          <Button type="button" variant="outline" onClick={() => setLimit((current) => Math.min(current + 30, 500))}>
+            加载更早通知
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

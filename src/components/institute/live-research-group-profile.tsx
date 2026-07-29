@@ -1,22 +1,16 @@
 "use client"
 
-import Link from "next/link"
-
 import {
-  demoDirectoryUpdates,
-  demoPeople,
-  demoResearchOutputs,
-  getDemoPerson,
-  getDemoResearchGroup,
-} from "@/components/institute/demo-directory-data"
-import {
+  toDirectoryResearchOutput,
+  toDirectoryUpdate,
   toDirectoryPerson,
   toDirectoryResearchGroup,
   toDirectoryResearchGroupMember,
 } from "@/components/institute/live-directory-view-model"
 import { ResearchGroupProfile } from "@/components/institute/research-group-profile"
-import { usePublicResearchGroup } from "@/lib/api"
-import type { PublicResearchGroup } from "@/types/institute"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
+import { usePublicInstituteResearch, usePublicInstituteUpdates, usePublicResearchGroup } from "@/lib/api"
+import type { PublicInstituteResearch, PublicInstituteUpdate, PublicResearchGroup } from "@/types/institute"
 
 type LiveResearchGroupProfileProps = {
   slug: string
@@ -24,13 +18,13 @@ type LiveResearchGroupProfileProps = {
 
 function PublicResearchGroupNotFound() {
   return (
-    <div className="min-h-screen bg-slate-50 py-10 sm:py-14">
-      <div className="container-custom max-w-5xl rounded-xl border border-slate-200 bg-white p-7 shadow-sm sm:p-9">
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">未找到公开团队资料</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-600">该团队可能尚未公开、已调整，或链接地址有误。</p>
-        <Link href="/groups" className="mt-6 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
+    <div className="min-h-screen py-12 sm:py-16">
+      <div className="container-custom max-w-5xl border aia-border-rule p-7 sm:p-9">
+        <h1 className="aia-serif text-2xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">未找到公开团队资料</h1>
+        <p className="aia-text-muted mt-3 text-sm leading-6">该团队可能尚未公开、已调整，或链接地址有误。</p>
+        <SafeReturnLink fallback="/groups" className="aia-link aia-focus mt-6 inline-flex min-h-11 items-center text-sm font-semibold">
           返回研究团队目录
-        </Link>
+        </SafeReturnLink>
       </div>
     </div>
   )
@@ -38,12 +32,14 @@ function PublicResearchGroupNotFound() {
 
 export function LiveResearchGroupProfile({ slug }: LiveResearchGroupProfileProps) {
   const group = usePublicResearchGroup(slug) as PublicResearchGroup | null | undefined
+  const research = usePublicInstituteResearch({ groupSlug: slug, limit: 100 }) as PublicInstituteResearch[] | undefined
+  const updates = usePublicInstituteUpdates({ groupSlug: slug, limit: 100 }) as PublicInstituteUpdate[] | undefined
 
-  if (group === undefined) {
+  if (group === undefined || research === undefined || updates === undefined) {
     return (
-      <div className="min-h-screen bg-slate-50 py-10 sm:py-14" aria-live="polite">
+      <div className="min-h-screen py-12 sm:py-16" aria-live="polite">
         <div className="container-custom max-w-5xl">
-          <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm leading-6 text-slate-600 shadow-sm" role="status">
+          <p className="aia-text-muted border border-dashed aia-border-rule p-6 text-sm leading-6" role="status">
             正在加载公开团队资料…
           </p>
         </div>
@@ -52,18 +48,7 @@ export function LiveResearchGroupProfile({ slug }: LiveResearchGroupProfileProps
   }
 
   if (group === null) {
-    const demoGroup = getDemoResearchGroup(slug)
-    if (!demoGroup) return <PublicResearchGroupNotFound />
-
-    return (
-      <ResearchGroupProfile
-        group={demoGroup}
-        leader={getDemoPerson(demoGroup.leaderSlug)}
-        members={demoPeople}
-        outputs={demoResearchOutputs}
-        updates={demoDirectoryUpdates}
-      />
-    )
+    return <PublicResearchGroupNotFound />
   }
 
   return (
@@ -71,6 +56,8 @@ export function LiveResearchGroupProfile({ slug }: LiveResearchGroupProfileProps
       group={toDirectoryResearchGroup(group)}
       leader={group.leader ? toDirectoryPerson(group.leader) : undefined}
       memberRoles={(group.members ?? []).map(toDirectoryResearchGroupMember)}
+      outputs={research.map((item) => toDirectoryResearchOutput(item, `/groups/${slug}`))}
+      updates={updates.map((item) => toDirectoryUpdate(item, `/groups/${slug}`))}
     />
   )
 }

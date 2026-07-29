@@ -1,13 +1,14 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { safeLocalPath } from "@/lib/safe-local-path"
 
 export default function LoginPage() {
   return (
@@ -27,12 +28,20 @@ function LoginPageShell() {
 
 function LoginForm() {
   const searchParams = useSearchParams()
-  const { login, isLoading: authLoading } = useAuth()
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const nextPath = safeLocalPath(searchParams.get("next"), "/")
+  const encodedNext = encodeURIComponent(nextPath)
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      window.location.replace(nextPath)
+    }
+  }, [authLoading, isAuthenticated, nextPath])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,8 +55,7 @@ function LoginForm() {
         return
       }
       
-      const nextPath = searchParams.get("next")
-      window.location.href = nextPath?.startsWith("/") ? nextPath : "/"
+      window.location.href = nextPath
     } catch {
       setError("账号或密码错误，请重试")
     } finally {
@@ -60,14 +68,14 @@ function LoginForm() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
-            <h1 className="text-2xl font-extrabold text-primary sm:text-3xl">北京大学人工智能研究院综合服务系统</h1>
+            <span className="block text-2xl font-extrabold text-primary sm:text-3xl">北京大学人工智能研究院综合服务系统</span>
             <p className="mt-1 text-slate-600">Artificial Intelligence Agora</p>
           </Link>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>登录</CardTitle>
+            <h1 className="text-2xl font-semibold leading-none tracking-tight">登录</h1>
             <CardDescription>
               使用您的账号和密码登录
             </CardDescription>
@@ -102,7 +110,7 @@ function LoginForm() {
                     密码
                   </label>
                   <Link
-                    href="/forgot-password"
+                    href={`/forgot-password?next=${encodedNext}`}
                     className="text-sm text-primary hover:underline"
                   >
                     忘记密码?
@@ -144,8 +152,8 @@ function LoginForm() {
         </Card>
 
         <p className="text-center text-sm text-slate-600 mt-6">
-          <Link href="/" className="hover:underline">
-            ← 返回首页
+          <Link href={nextPath} className="hover:underline">
+            ← 返回之前页面
           </Link>
         </p>
       </div>

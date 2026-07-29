@@ -31,10 +31,20 @@ test("Coffee Talk derives applicant, bound teacher, and coordinator actors only 
     authorization.resolveCoffeeTalkActorKind({
       actorUserId: "users:admin",
       actorRole: "admin",
+      coordinatorAllowed: true,
       applicantUserId: "users:applicant",
       assignedTeacherUserId: "users:teacher",
     }),
     "coordinator",
+  )
+  assert.equal(
+    authorization.resolveCoffeeTalkActorKind({
+      actorUserId: "users:admin-without-grant",
+      actorRole: "admin",
+      coordinatorAllowed: false,
+      applicantUserId: "users:applicant",
+    }),
+    null,
   )
 })
 
@@ -52,6 +62,7 @@ test("Coffee Talk never treats unbound teachers or client-selected labels as aut
     authorization.resolveCoffeeTalkActorKind({
       actorUserId: "users:applicant",
       actorRole: "super_admin",
+      coordinatorAllowed: true,
       applicantUserId: "users:other",
       assignedTeacherUserId: undefined,
     }),

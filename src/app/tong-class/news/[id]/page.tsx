@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import { usePublicInstituteUpdateById } from "@/lib/api"
 import { getSafeExternalUrl } from "@/lib/safe-external-url"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 
 export default function NewsDetailPage() {
   const params = useParams<{ id: string }>()
@@ -29,10 +30,10 @@ export default function NewsDetailPage() {
     return (
       <div className="container-custom py-16 md:py-24">
         <Button variant="ghost" asChild className="mb-6 -ml-3 gap-2">
-          <Link href="/tong-class/news">
+          <SafeReturnLink fallback="/tong-class/news">
             <ArrowLeft className="h-4 w-4" />
             返回新闻列表
-          </Link>
+          </SafeReturnLink>
         </Button>
         <div className="max-w-4xl mx-auto text-center py-16">
           <h2 className="text-2xl font-extrabold text-slate-900 mb-2">新闻不存在</h2>
@@ -45,10 +46,10 @@ export default function NewsDetailPage() {
   return (
     <div className="container-custom py-16 md:py-24">
       <Button variant="ghost" asChild className="mb-6 -ml-3 gap-2">
-        <Link href="/tong-class/news">
+        <SafeReturnLink fallback="/tong-class/news">
           <ArrowLeft className="h-4 w-4" />
           返回新闻列表
-        </Link>
+        </SafeReturnLink>
       </Button>
 
       <div className="max-w-4xl mx-auto">

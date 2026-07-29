@@ -10,7 +10,8 @@ test("AIA research page consumes only the safe public research projection", () =
   const research = source("src/app/research/page.tsx")
 
   assert.match(research, /^"use client"/)
-  assert.match(research, /usePublicInstituteResearch\(\{\s*limit:\s*100\s*\}\)/)
+  assert.match(research, /usePublicInstituteResearch\(\{\s*limit\s*\}\)/)
+  assert.match(research, /加载更多研究成果/)
   assert.match(research, /<PublicationArchive/)
   assert.match(research, /<AudienceTabs/)
   assert.match(research, /buildAudienceCollections/)
@@ -23,7 +24,8 @@ test("AIA updates page consumes only the safe public update projection", () => {
   const updates = source("src/app/updates/page.tsx")
 
   assert.match(updates, /^"use client"/)
-  assert.match(updates, /usePublicInstituteUpdates\(\{\s*limit:\s*100\s*\}\)/)
+  assert.match(updates, /usePublicInstituteUpdates\(\{\s*limit\s*\}\)/)
+  assert.match(updates, /加载更多动态/)
   assert.match(updates, /<NewsTimeline/)
   assert.match(updates, /<AudienceTabs/)
   assert.match(updates, /buildAudienceCollections/)

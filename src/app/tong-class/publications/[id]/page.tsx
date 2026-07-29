@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
 import { usePublicInstituteResearchById } from "@/lib/api"
 import { getSafeExternalUrl } from "@/lib/safe-external-url"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 
 export default function PublicationDetailPage() {
   const params = useParams<{ id: string }>()
@@ -49,10 +50,10 @@ export default function PublicationDetailPage() {
       <div className="min-h-screen bg-white">
         <div className="container-custom py-16 md:py-24">
           <Button variant="ghost" asChild className="mb-6 -ml-3 gap-2">
-            <Link href="/tong-class/publications">
+            <SafeReturnLink fallback="/tong-class/publications">
               <ArrowLeft className="h-4 w-4" />
               返回成果列表
-            </Link>
+            </SafeReturnLink>
           </Button>
           <div className="max-w-3xl mx-auto text-center py-16">
             <h2 className="text-2xl font-extrabold text-slate-900 mb-2">成果不存在</h2>
@@ -77,10 +78,10 @@ export default function PublicationDetailPage() {
       )}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
         <Button variant="ghost" asChild className="mb-8 -ml-3 gap-2">
-          <Link href="/tong-class/publications">
+          <SafeReturnLink fallback="/tong-class/publications">
             <ArrowLeft className="h-4 w-4" />
             返回成果列表
-          </Link>
+          </SafeReturnLink>
         </Button>
 
         <article>

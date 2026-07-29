@@ -1,7 +1,9 @@
 "use client"
 
-import { FormEvent, useState } from "react"
+import { FormEvent, Suspense, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { LogIn } from "lucide-react"
 import { TechDayShell } from "@/components/techday/techday-shell"
 import { Button } from "@/components/ui/button"
@@ -9,9 +11,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { notifyTechDayActorStorageChanged, useTechDayLogin } from "@/lib/api"
+import { safeLocalPath } from "@/lib/safe-local-path"
 
 export default function TechDayLoginPage() {
+  return (
+    <Suspense fallback={<TechDayLoginLoading />}>
+      <TechDayLoginForm />
+    </Suspense>
+  )
+}
+
+function TechDayLoginLoading() {
+  return (
+    <TechDayShell title="TechDay 登录" description="正在读取登录入口...">
+      <Card className="mx-auto max-w-md">
+        <CardContent className="py-10 text-center text-sm text-muted-foreground">正在加载...</CardContent>
+      </Card>
+    </TechDayShell>
+  )
+}
+
+function TechDayLoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const login = useTechDayLogin()
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
@@ -26,7 +48,7 @@ export default function TechDayLoginPage() {
       const result = await login({ identifier, password })
       window.localStorage.setItem("techday_session_token", result.sessionToken)
       notifyTechDayActorStorageChanged()
-      router.push("/techday")
+      router.push(safeLocalPath(searchParams.get("next"), "/techday"))
       router.refresh()
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "登录失败")
@@ -58,6 +80,12 @@ export default function TechDayLoginPage() {
             </Button>
             {message ? <p className="text-sm text-red-600">{message}</p> : null}
           </form>
+          <div className="mt-5 border-t pt-4 text-sm text-muted-foreground">
+            还没有账号？
+            <Link className="ml-2 font-medium text-primary underline-offset-4 hover:underline" href="/techday/register/author">注册作者账号</Link>
+            <span className="mx-2" aria-hidden="true">·</span>
+            <Link className="font-medium text-primary underline-offset-4 hover:underline" href="/techday/register/volunteer">申请志愿者账号</Link>
+          </div>
         </CardContent>
       </Card>
     </TechDayShell>

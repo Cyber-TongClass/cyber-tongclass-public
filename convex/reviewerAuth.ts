@@ -17,6 +17,8 @@ import {
 const reviewerPermissionValidator = v.union(
   v.literal(REVIEWER_ACADEMIC_EXCHANGE_READ)
 )
+const REVIEWER_MAX_FAILURES = 5
+const REVIEWER_LOCK_MS = 15 * 60_000
 
 function normalizeDisplayName(value: string) {
   const trimmed = value.trim()
@@ -279,17 +281,30 @@ export const signIn = mutation({
       .withIndex("by_username", (q) => q.eq("username", username))
       .first()
 
-    if (!reviewer || !reviewer.enabled) {
+    if (!reviewer || !reviewer.enabled || (reviewer.lockedUntil || 0) > Date.now()) {
       throw new Error("Reviewer 用户名或密码错误")
     }
 
     const passwordMatches = await verifyReviewerPassword(args.password, reviewer)
     if (!passwordMatches) {
+      const failedLoginAttempts = (reviewer.failedLoginAttempts || 0) + 1
+      await ctx.db.patch(reviewer._id, {
+        failedLoginAttempts,
+        ...(failedLoginAttempts >= REVIEWER_MAX_FAILURES
+          ? { lockedUntil: Date.now() + REVIEWER_LOCK_MS }
+          : {}),
+      })
       throw new Error("Reviewer 用户名或密码错误")
     }
 
     const now = Date.now()
+    const upgradedPasswordFields = reviewer.passwordAlgorithm === "pbkdf2-sha256"
+      ? {}
+      : await hashReviewerPassword(args.password)
     await ctx.db.patch(reviewer._id, {
+      ...upgradedPasswordFields,
+      failedLoginAttempts: 0,
+      lockedUntil: undefined,
       lastLoginAt: now,
       updatedAt: now,
     })

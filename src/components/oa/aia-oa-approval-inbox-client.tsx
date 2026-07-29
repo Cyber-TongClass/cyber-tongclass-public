@@ -1,9 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Check, ExternalLink, FileCheck2, X } from "lucide-react"
+import { Check, ExternalLink, RotateCcw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { AiaOAAuthLoading, AiaOALoginRequired, AiaOAReviewStatusBadge, formatAiaOATime } from "@/components/oa/aia-oa-shared"
 import { useOAApprovalInbox, useOAFormAttachmentUrl, useReviewOAFormSubmission } from "@/lib/api"
@@ -17,8 +16,14 @@ type AiaOAApprovalInboxItem = {
   formTitle: string
   submittedAt: number
   answers: Record<string, unknown>
+  formFields: Array<{
+    id: string
+    label: string
+    type: string
+  }>
   reviewStatus: OAReviewStatus
-  workflowStatus?: "pending" | "approved" | "rejected"
+  workflowStatus?: "pending" | "needs_changes" | "approved" | "rejected"
+  workflowVersion: number
   currentApprovalStep?: number
   taskId: string
   taskStatus: "pending" | "approved" | "rejected" | "skipped"
@@ -42,7 +47,7 @@ function AttachmentLink({ submissionId, file }: { submissionId: string; file: OA
   const url = useOAFormAttachmentUrl({ submissionId, storageId: file.storageId })
   if (!url) return <span>{file.fileName}</span>
   return (
-    <a href={url as string} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline underline-offset-4">
+    <a href={url as string} target="_blank" rel="noreferrer" className="aia-link inline-flex items-center gap-1 text-[hsl(var(--aia-red))]">
       {file.fileName}<ExternalLink className="h-3 w-3" aria-hidden="true" />
     </a>
   )
@@ -55,16 +60,32 @@ function AnswerValue({ submissionId, value }: { submissionId: string; value: unk
   return <>{formatAnswer(value)}</>
 }
 
-function AnswerPreview({ submissionId, answers }: { submissionId: string; answers: Record<string, unknown> }) {
-  const entries = Object.entries(answers || {})
-  if (entries.length === 0) return <p className="text-sm text-slate-500">申请中没有可显示的字段。</p>
+function AnswerPreview({
+  submissionId,
+  answers,
+  formFields,
+}: {
+  submissionId: string
+  answers: Record<string, unknown>
+  formFields: AiaOAApprovalInboxItem["formFields"]
+}) {
+  const knownIds = new Set(formFields.map((field) => field.id))
+  const entries = [
+    ...formFields
+      .filter((field) => Object.prototype.hasOwnProperty.call(answers || {}, field.id))
+      .map((field) => ({ key: field.id, label: field.label, value: answers[field.id] })),
+    ...Object.entries(answers || {})
+      .filter(([key]) => !knownIds.has(key))
+      .map(([key, value]) => ({ key, label: `历史字段（${key}）`, value })),
+  ]
+  if (entries.length === 0) return <p className="aia-text-muted text-sm">申请中没有可显示的字段。</p>
 
   return (
-    <dl className="grid gap-3 sm:grid-cols-2">
-      {entries.map(([key, value]) => (
-        <div key={key} className="rounded-md border border-slate-200 bg-white px-3 py-2">
-          <dt className="text-xs font-medium text-slate-500">{key}</dt>
-          <dd className="mt-1 break-words text-sm text-slate-800"><AnswerValue submissionId={submissionId} value={value} /></dd>
+    <dl className="grid gap-2 sm:grid-cols-2">
+      {entries.map(({ key, label, value }) => (
+        <div key={key} className="border aia-border-rule px-3 py-2">
+          <dt className="aia-text-muted text-xs font-medium">{label}</dt>
+          <dd className="mt-1 break-words text-sm text-[hsl(var(--aia-ink))]"><AnswerValue submissionId={submissionId} value={value} /></dd>
         </div>
       ))}
     </dl>
@@ -82,11 +103,12 @@ function formatAnswer(value: unknown): string {
   return "已提交"
 }
 
-type ReviewAction = "approve" | "reject"
+type ReviewAction = "approve" | "reject" | "request_changes"
 
 const actionPresentation: Record<ReviewAction, { label: string; icon: typeof Check; variant: "default" | "outline" | "destructive" }> = {
   approve: { label: "通过", icon: Check, variant: "default" },
   reject: { label: "不通过", icon: X, variant: "destructive" },
+  request_changes: { label: "要求补充", icon: RotateCcw, variant: "outline" },
 }
 
 /** Reviewer inbox. The server is the authority for whether this session may see or act on any item. */
@@ -108,91 +130,132 @@ function AiaOAApprovalInboxAuthenticated() {
   const inbox = useOAApprovalInbox() as AiaOAApprovalInboxItem[] | undefined
   const review = useReviewOAFormSubmission()
   const [notes, setNotes] = useState<Record<string, string>>({})
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set())
   const [message, setMessage] = useState<string | null>(null)
 
   async function handleReview(taskId: string, action: ReviewAction) {
-    setBusyId(taskId)
+    if (busyIds.has(taskId)) return
+    setBusyIds((current) => new Set(current).add(taskId))
     setMessage(null)
     try {
       const comment = notes[taskId]?.trim()
-      await review({ taskId, action, ...(comment ? { comment } : {}) })
-      setMessage("审批结果已提交。")
+      if (action === "request_changes" && !comment) {
+        setMessage("要求补充材料时必须填写处理意见。")
+        return
+      }
+      const item = inbox?.find((candidate) => candidate.taskId === taskId)
+      if (!item) {
+        setMessage("该审批事项已更新，请刷新后重试。")
+        return
+      }
+      const result = await review({
+        taskId,
+        action,
+        idempotencyKey: crypto.randomUUID(),
+        expectedVersion: item.workflowVersion,
+        ...(comment ? { comment } : {}),
+      })
+      if (!result.updated) {
+        const failureMessages: Record<string, string> = {
+          stale_version: "该事项已被更新，请重新加载后再处理。",
+          task_not_pending: "该事项已被处理，无需重复提交。",
+          task_not_current: "该事项已进入其他审批步骤，请重新加载。",
+          workflow_not_pending: "该流程已结束，无需重复处理。",
+          idempotency_conflict: "审批请求标识冲突，请重新操作。",
+          already_handled: "该审批请求已处理。",
+        }
+        setMessage(failureMessages[result.reason] || "审批状态已变化，本次操作未写入。")
+        return
+      }
+      setNotes((current) => ({ ...current, [taskId]: "" }))
+      setMessage(result.reason === "awaiting_other_approvers"
+        ? "你的审批结果已提交，正在等待本级其他审批人。"
+        : "审批结果已提交。")
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "审批未成功完成，请稍后重试。")
     } finally {
-      setBusyId(null)
+      setBusyIds((current) => {
+        const next = new Set(current)
+        next.delete(taskId)
+        return next
+      })
     }
   }
 
   if (inbox === undefined) {
-    return <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600" role="status">正在加载审批事项…</p>
-  }
-
-  if (inbox.length === 0) {
     return (
-      <Card><CardContent className="py-10 text-center text-sm text-slate-600">
-        <FileCheck2 className="mx-auto mb-3 h-6 w-6 text-slate-400" aria-hidden="true" />
-        当前没有待处理事项，或你的账户尚未被授予相关审批权限。
-      </CardContent></Card>
+      <p role="status" className="aia-text-muted py-6 text-sm">
+        正在加载审批事项…
+      </p>
     )
   }
 
+  if (inbox.length === 0) {
+    return <p className="aia-text-muted py-6 text-sm">当前没有待处理事项，或你的账户尚未被授予相关审批权限。</p>
+  }
+
   return (
-    <div className="space-y-4">
-      {message ? <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700" role="status">{message}</p> : null}
-      {inbox.map((item) => (
-        <article key={item.taskId} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" aria-label={`OA 审批事项 ${item.formTitle || item.formSlug || item._id}`}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-primary">{item.formTitle || item.formSlug || "OA 事项"}</p>
-              <p className="mt-1 text-sm text-slate-600">提交于 {formatAiaOATime(item.submittedAt)}</p>
-              {item.approvalStep ? (
-                <p className="mt-1 text-xs text-slate-500">
-                  当前步骤：第 {item.approvalStep.index + 1} 级 · {item.approvalStep.title} · {item.approvalStep.completion === "all" ? "全体审批人通过" : "任一审批人处理"}
-                </p>
-              ) : null}
+    <div>
+      {message ? <p role="status" className="aia-text-muted py-3 text-sm">{message}</p> : null}
+      <div className="divide-y divide-[hsl(var(--aia-rule))]">
+        {inbox.map((item) => (
+          <article key={item.taskId} className="py-5" aria-label={`OA 审批事项 ${item.formTitle || item.formSlug || item._id}`}>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="min-w-0 flex-1 font-medium text-[hsl(var(--aia-ink))]">
+                {item.formTitle || item.formSlug || "OA 事项"}
+                <span className="aia-text-muted ml-2 text-xs">提交于 {formatAiaOATime(item.submittedAt)}</span>
+                {item.approvalStep ? (
+                  <span className="aia-text-muted ml-2 text-xs">
+                    第 {item.approvalStep.index + 1} 级 · {item.approvalStep.title} · {item.approvalStep.completion === "all" ? "全体审批人通过" : "任一审批人处理"}
+                  </span>
+                ) : null}
+              </p>
+              <AiaOAReviewStatusBadge status={item.reviewStatus} />
             </div>
-            <AiaOAReviewStatusBadge status={item.reviewStatus} />
-          </div>
 
-          <details className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <summary className="cursor-pointer text-sm font-medium text-slate-800">查看提交内容</summary>
-            <div className="mt-4"><AnswerPreview submissionId={item._id} answers={item.answers || {}} /></div>
-          </details>
+            <details className="mt-3 border aia-border-rule px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium text-[hsl(var(--aia-ink))]">查看提交内容</summary>
+              <div className="mt-3">
+                <AnswerPreview submissionId={item._id} answers={item.answers || {}} formFields={item.formFields || []} />
+              </div>
+            </details>
 
-          <div className="mt-5">
-            <label htmlFor={`aia-oa-note-${item.taskId}`} className="text-sm font-medium text-slate-800">处理意见（可选）</label>
-            <Textarea
-              id={`aia-oa-note-${item.taskId}`}
-              value={notes[item.taskId] || ""}
-              onChange={(event) => setNotes((current) => ({ ...current, [item.taskId]: event.target.value }))}
-              placeholder="必要时说明审批依据或需补充的内容"
-              className="mt-2"
-            />
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(Object.keys(actionPresentation) as ReviewAction[]).map((action) => {
-              const presentation = actionPresentation[action]
-              const Icon = presentation.icon
-              return (
-                <Button
-                  key={action}
-                  type="button"
-                  variant={presentation.variant}
-                  size="sm"
-                  disabled={busyId === item.taskId}
-                  onClick={() => void handleReview(item.taskId, action)}
-                >
-                  <Icon className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  {presentation.label}
-                </Button>
-              )
-            })}
-          </div>
-        </article>
-      ))}
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div className="min-w-56 flex-1">
+                <label htmlFor={`aia-oa-note-${item.taskId}`} className="aia-text-muted text-xs font-medium">处理意见（可选）</label>
+                <Textarea
+                  id={`aia-oa-note-${item.taskId}`}
+                  value={notes[item.taskId] || ""}
+                  onChange={(event) => setNotes((current) => ({ ...current, [item.taskId]: event.target.value }))}
+                  placeholder="必要时说明审批依据或需补充的内容"
+                  className="mt-1 min-h-9"
+                  disabled={busyIds.has(item.taskId)}
+                />
+              </div>
+              <div className="flex gap-2">
+                {(Object.keys(actionPresentation) as ReviewAction[]).map((action) => {
+                  const presentation = actionPresentation[action]
+                  const Icon = presentation.icon
+                  return (
+                    <Button
+                      key={action}
+                      type="button"
+                      variant={presentation.variant}
+                      size="sm"
+                      className="min-h-11"
+                      disabled={busyIds.has(item.taskId)}
+                      onClick={() => void handleReview(item.taskId, action)}
+                    >
+                      <Icon className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      {presentation.label}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
     </div>
   )
 }

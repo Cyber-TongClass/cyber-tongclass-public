@@ -251,7 +251,7 @@ export default function UserFormPage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <Button variant="ghost" size="icon" onClick={() => router.push("/admin/users")}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-2xl font-extrabold">用户不存在</h1>
@@ -268,7 +268,7 @@ export default function UserFormPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+        <Button variant="ghost" size="icon" onClick={() => router.push("/admin/users")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -569,7 +569,7 @@ export default function UserFormPage() {
         </Card>
 
         <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
+          <Button type="button" variant="outline" onClick={() => router.push("/admin/users")}>
             取消
           </Button>
           <Button type="submit" className="bg-blue-900 hover:bg-blue-800">

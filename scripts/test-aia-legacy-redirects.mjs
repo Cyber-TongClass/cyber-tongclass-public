@@ -48,3 +48,21 @@ test("private product and API routes are never redirected into Tong Class", asyn
     )
   }
 })
+
+test("the merged Tong Class forms list redirects into the unified OA workspace", async () => {
+  const redirects = await config.redirects()
+  const merged = redirects.find(({ source }) => source === "/tong-class/intranet/forms")
+
+  assert.ok(merged, "next.config.js must redirect /tong-class/intranet/forms")
+  assert.equal(merged.destination, "/services/oa")
+  assert.equal(merged.permanent, false, "the OA merge redirect stays temporary (307)")
+  assert.ok(
+    redirects.indexOf(merged) >= expectedRedirects.length,
+    "the OA merge redirect must not disturb the pinned legacy redirect order",
+  )
+
+  const fallback = await import("node:fs").then(({ readFileSync }) =>
+    readFileSync("src/app/tong-class/intranet/forms/page.tsx", "utf8"),
+  )
+  assert.match(fallback, /redirect\(["']\/services\/oa["']\)/)
+})

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useUsers } from "@/lib/api"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { RESEARCH_DIRECTIONS, getResearchDirectionLabel } from "@/lib/research-directions"
 import { compareCohorts, getCohortClassLabel, getCohortLabel, getYearCohortOptions, parseCohortValue } from "@/lib/cohort"
 
@@ -75,13 +76,15 @@ function getUserDirections(user: PublicMember) {
 }
 
 export default function MembersPage() {
+  const { currentUser } = useAuth()
+  const isGraduate = currentUser?.identityType === "graduate"
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedOrg, setSelectedOrg] = React.useState<string>("all")
   const [selectedCohort, setSelectedCohort] = React.useState<string>("all")
   const [selectedTag, setSelectedTag] = React.useState<string>("all")
 
   // Fetch users from Convex
-  const usersData = useUsers({ limit: 1000, classMembersOnly: true })
+  const usersData = useUsers({ limit: 1000, identityType: isGraduate ? "graduate" : undefined })
   const usersFromConvex = usersData || []
   const users = usersFromConvex as PublicMember[]
 
@@ -143,11 +146,11 @@ export default function MembersPage() {
           <div className="absolute left-4 sm:left-6 lg:left-8 top-1/2 -translate-y-1/2 text-[5rem] md:text-[8rem] lg:text-[10rem] font-extrabold uppercase tracking-[0.15em] text-white/5 select-none pointer-events-none whitespace-nowrap leading-none" aria-hidden="true">MEMBERS</div>
           <div className="mb-4">
             <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight">
-              班级成员
+              {isGraduate ? "研究生成员" : "班级成员"}
             </h1>
           </div>
           <p className="text-lg text-white/70 max-w-2xl relative">
-            北京大学与清华大学通用人工智能实验班成员主页，涵盖学生和往届毕业生的研究方向、学术成果等。
+            {isGraduate ? "人工智能研究院研究生成员主页，涵盖研究方向与学术成果等。" : "北京大学与清华大学通用人工智能实验班成员主页，涵盖学生和往届毕业生的研究方向、学术成果等。"}
           </p>
         </div>
       </section>

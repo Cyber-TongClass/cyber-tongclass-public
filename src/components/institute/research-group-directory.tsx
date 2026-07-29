@@ -1,6 +1,8 @@
 import Link from "next/link"
-import { ArrowRight, Network } from "lucide-react"
+import { ArrowUpRight, Network } from "lucide-react"
+
 import type { PublicResearchGroup } from "@/components/institute/demo-directory-data"
+import { AiaSectionHeading } from "@/components/institute/editorial/section-heading"
 
 type ResearchGroupDirectoryProps = {
   groups: readonly PublicResearchGroup[]
@@ -20,15 +22,14 @@ export function ResearchGroupDirectory({
     .toSorted((left, right) => left.sortOrder - right.sortOrder)
 
   return (
-    <section aria-labelledby="research-group-directory-title" className="bg-white py-16 sm:py-20">
+    <section aria-labelledby="research-group-directory-title" className="border-b aia-border-rule py-16 sm:py-20">
       <div className="container-custom">
-        <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Research groups</p>
-          <h2 id="research-group-directory-title" className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-            {heading}
-          </h2>
-          <p className="mt-4 text-base leading-7 text-slate-600 sm:text-lg">{description}</p>
-        </div>
+        <AiaSectionHeading
+          kicker="研究团队 · Groups"
+          title={heading}
+          description={description}
+          headingId="research-group-directory-title"
+        />
 
         {visibleGroups.length > 0 ? (
           <ul className="mt-10 grid gap-5 md:grid-cols-2" aria-label="研究团队公开目录">
@@ -36,34 +37,46 @@ export function ResearchGroupDirectory({
               <li key={group.slug}>
                 <Link
                   href={`/groups/${group.slug}`}
-                  className="group flex h-full flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  className="aia-focus group flex h-full flex-col border aia-border-rule p-6 transition-colors hover:border-[hsl(var(--aia-red))]"
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-sky-50 text-primary">
-                      <Network className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    {group.isDemo ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">演示数据</span> : null}
+                    <Network
+                      className="h-5 w-5 text-[hsl(var(--aia-muted))] transition-colors group-hover:text-[hsl(var(--aia-red))]"
+                      aria-hidden="true"
+                    />
+                    {group.isDemo ? (
+                      <span className="aia-mono border border-dashed aia-border-rule px-2 py-1 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-[hsl(var(--aia-muted))]">
+                        演示数据
+                      </span>
+                    ) : null}
                   </div>
-                  <h3 className="mt-5 text-xl font-extrabold tracking-tight text-slate-900">{group.nameZh}</h3>
-                  <p className="mt-1 text-sm font-medium text-slate-500">{group.nameEn}</p>
-                  <p className="mt-4 flex-1 text-sm leading-6 text-slate-600">{group.summary}</p>
+                  <h3 className="aia-serif mt-5 text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
+                    {group.nameZh}
+                  </h3>
+                  <p className="aia-mono mt-1 text-xs text-[hsl(var(--aia-muted))]">{group.nameEn}</p>
+                  <p className="aia-text-muted mt-4 flex-1 text-sm leading-6">{group.summary}</p>
                   <div className="mt-5 flex flex-wrap gap-2" aria-label="研究主题">
                     {group.researchAreas.map((area) => (
-                      <span key={area} className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-primary">
+                      <span
+                        key={area}
+                        className="aia-mono aia-bg-tag px-2 py-1 text-[0.7rem] font-medium tracking-[0.08em] text-[hsl(var(--aia-ink))]"
+                      >
                         {area}
                       </span>
                     ))}
                   </div>
-                  <span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary">
+                  <span className="aia-kicker mt-6 inline-flex items-center gap-1.5">
                     查看团队公开资料
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
                   </span>
                 </Link>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-10 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm leading-6 text-slate-600">{emptyMessage}</p>
+          <p className="aia-text-muted mt-10 border border-dashed aia-border-rule p-6 text-sm leading-6">
+            {emptyMessage}
+          </p>
         )}
       </div>
     </section>

@@ -40,11 +40,11 @@ test("directory cards label demos and use only injected public data", () => {
   assert.match(groups, /visibility\s*===\s*["']public["']/)
 })
 
-test("person profile gates Coffee Talk by public teacher flag without an id-bearing URL", () => {
+test("person profile gates Coffee Talk and preselects the public teacher without exposing an account ID", () => {
   const profile = source("src/components/institute/person-profile.tsx")
 
   assert.match(profile, /person\.kind\s*===\s*["']teacher["']\s*&&\s*person\.coffeeTalkOpen/)
-  assert.match(profile, /href=["']\/services\/coffee-talk["']/)
+  assert.match(profile, /withReturnTo\(`\/services\/coffee-talk\/apply\?teacher=\$\{encodeURIComponent\(person\.slug\)\}`/)
   assert.doesNotMatch(profile, /teacherId|teacher_id|targetTeacher|accountUserId/)
 })
 

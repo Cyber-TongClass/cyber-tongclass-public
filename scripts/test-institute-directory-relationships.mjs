@@ -107,7 +107,7 @@ test("public directory resolves relationships only through active public members
   const directorySource = readFileSync("convex/instituteDirectory.ts", "utf8")
   const publicDirectorySource = directorySource.slice(
     directorySource.indexOf("function isPublicActiveMembership"),
-    directorySource.indexOf("A super-admin-only selector for explicit directory-to-account links"),
+    directorySource.indexOf("export const getMyPublicProfileDestination"),
   )
 
   assert.match(publicDirectorySource, /\.query\("researchGroupMemberships"\)/)

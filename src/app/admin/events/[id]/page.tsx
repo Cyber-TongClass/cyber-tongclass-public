@@ -35,6 +35,7 @@ export default function EditEventPage() {
     type: "学术",
     description: "",
     url: "",
+    audiences: ["undergrad", "graduate"] as Array<"undergrad" | "graduate">,
   })
 
   const eventData = useEventById(isCreateMode ? undefined : (eventId as string))
@@ -61,6 +62,7 @@ export default function EditEventPage() {
         type: colorToType[target.color] || "学术",
         description: target.description || "",
         url: target.url || "",
+        audiences: target.audiences || ["undergrad", "graduate"],
       })
     }
     setLoading(false)
@@ -78,6 +80,7 @@ export default function EditEventPage() {
         description: formData.description,
         url: formData.url,
         color: typeToColor[formData.type] || "#0F4C81",
+        audiences: formData.audiences,
       })
     } else if (eventData) {
       await updateEventMutation({
@@ -89,6 +92,7 @@ export default function EditEventPage() {
         description: formData.description,
         url: formData.url,
         color: typeToColor[formData.type] || eventData.color,
+        audiences: formData.audiences,
       })
     }
 
@@ -107,7 +111,7 @@ export default function EditEventPage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <Button variant="ghost" size="icon" onClick={() => router.push("/admin/events")}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-2xl font-extrabold">活动不存在</h1>
@@ -124,7 +128,7 @@ export default function EditEventPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+        <Button variant="ghost" size="icon" onClick={() => router.push("/admin/events")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -201,6 +205,17 @@ export default function EditEventPage() {
               </div>
             </div>
             <div className="space-y-2">
+              <Label>可见人群</Label>
+              <div className="flex gap-4 text-sm">
+                {(["undergrad", "graduate"] as const).map((audience) => (
+                  <label key={audience} className="flex items-center gap-2">
+                    <input type="checkbox" checked={formData.audiences.includes(audience)} onChange={() => setFormData((prev) => ({ ...prev, audiences: prev.audiences.includes(audience) ? prev.audiences.filter((item) => item !== audience) : [...prev.audiences, audience] }))} />
+                    {audience === "undergrad" ? "本科生" : "研究生"}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="description">活动描述（Markdown）</Label>
               <MarkdownSplitEditor
                 id="description"
@@ -214,7 +229,7 @@ export default function EditEventPage() {
         </Card>
 
         <div className="flex justify-end gap-4 mt-6">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
+          <Button type="button" variant="outline" onClick={() => router.push("/admin/events")}>
             取消
           </Button>
           <Button type="submit" className="bg-blue-900 hover:bg-blue-800">

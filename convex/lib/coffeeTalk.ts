@@ -1,6 +1,7 @@
 export const coffeeTalkStatuses = [
   "submitted",
   "under_review",
+  "needs_information",
   "accepted",
   "declined",
   "withdrawn",
@@ -28,6 +29,8 @@ export const coffeeTalkActions = [
   "complete",
   "reassign",
   "correct",
+  "request_information",
+  "supplement",
 ] as const
 
 export type CoffeeTalkAction = (typeof coffeeTalkActions)[number]
@@ -78,6 +81,9 @@ function permittedTransition(
   }
 
   if (actorKind === "applicant") {
+    if (status === "needs_information" && action === "supplement") {
+      return "under_review"
+    }
     if (action === "withdraw") {
       return "withdrawn"
     }
@@ -93,6 +99,9 @@ function permittedTransition(
     }
     if (status === "under_review" && action === "decline") {
       return "declined"
+    }
+    if (status === "under_review" && action === "request_information") {
+      return "needs_information"
     }
     if (status === "accepted" && action === "complete") {
       return "completed"

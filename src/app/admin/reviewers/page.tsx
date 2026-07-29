@@ -288,9 +288,11 @@ export default function AdminReviewersPage() {
                             checked={draft.enabled}
                             onChange={(event) => patchDraft(reviewer, { enabled: event.target.checked })}
                           />
-                          <Badge className={draft.enabled ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-700"}>
-                            {draft.enabled ? "启用" : "停用"}
-                          </Badge>
+                          {draft.enabled ? (
+                            <Badge className="bg-green-100 text-green-800">启用</Badge>
+                          ) : (
+                            <Badge className="bg-slate-100 text-slate-700">停用</Badge>
+                          )}
                         </label>
                       </TableCell>
                       <TableCell className="text-slate-500">{formatDate(reviewer.lastLoginAt)}</TableCell>

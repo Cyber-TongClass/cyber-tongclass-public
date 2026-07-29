@@ -24,7 +24,7 @@ test("AIA people and group directory routes render only safe live public project
   }
 })
 
-test("live directory clients use canonical hooks, disclose demo fallbacks, and keep private fields out", () => {
+test("live directory clients use canonical hooks, keep empty live data honest, and keep private fields out", () => {
   const clients = [
     ["src/components/institute/live-people-directory.tsx", "usePublicInstitutePeople", "people"],
     ["src/components/institute/live-person-profile.tsx", "usePublicInstitutePerson", "person"],
@@ -48,8 +48,10 @@ test("live directory clients use canonical hooks, disclose demo fallbacks, and k
 
   assert.match(people, /people\.length\s*===\s*0/)
   assert.match(groups, /groups\.length\s*===\s*0/)
-  assert.match(people, /演示数据/)
-  assert.match(groups, /演示数据/)
+  assert.doesNotMatch(people, /演示数据|demoPeople/)
+  assert.doesNotMatch(groups, /演示数据|demoResearchGroups/)
+  assert.match(people, /当前尚未发布公开人员资料/)
+  assert.match(groups, /当前尚未发布公开研究团队资料/)
   assert.match(person, /未找到公开人员资料/)
   assert.match(group, /未找到公开团队资料/)
 })

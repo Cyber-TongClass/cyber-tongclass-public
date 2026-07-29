@@ -104,12 +104,17 @@ const ensureSubmissionAuthor = async (ctx: any, args: { mainSessionToken?: strin
   if (existingByEmail && (!existingByMain || existingByEmail._id !== existingByMain._id)) {
     throw new Error("该通班邮箱已绑定其他 TechDay 账号")
   }
+  if (
+    existingByMain?.status === "pending"
+    && mainUser.role !== "admin"
+    && mainUser.role !== "super_admin"
+  ) {
+    throw new Error("你的 TechDay 身份仍在审核中，暂时不能切换为作者身份")
+  }
 
   const role = mainUser.role === "admin" || mainUser.role === "super_admin"
     ? "admin"
-    : existingByMain?.status === "pending"
-      ? "author"
-      : existingByMain?.role || "author"
+    : existingByMain?.role || "author"
   const patch = {
     ...identityFromMainUser(mainUser, now),
     role,
@@ -428,6 +433,11 @@ export const adminUpdate = mutation({
   },
   handler: async (ctx, args) => {
     requireAdmin(await resolvePrincipal(ctx, args))
+    const submission = await ctx.db.get(args.id)
+    if (!submission) throw new Error("投稿不存在")
+    if (args.reviewStatus === "approved" && !submission.posterStorageId) {
+      throw new Error("Poster PDF 尚未上传，不能通过审核")
+    }
     const patch: any = { updatedAt: Date.now() }
     if (args.reviewStatus) {
       patch.reviewStatus = args.reviewStatus

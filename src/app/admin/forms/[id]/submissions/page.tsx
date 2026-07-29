@@ -147,7 +147,13 @@ export default function AdminFormSubmissionsPage() {
                     const rows = parseOAResultBatchText(batchText, form.resultFields || [])
                     if (rows.length === 0) throw new Error("没有可导入的结果行")
                     const result = await batchUpdate({ formId: form._id, rows })
-                    setBatchMessage(`已更新 ${(result as any)?.updated ?? rows.length} 条结果`)
+                    const updated = (result as any)?.updated ?? rows.length
+                    const skippedWorkflow = (result as any)?.skippedWorkflow ?? 0
+                    setBatchMessage(
+                      skippedWorkflow > 0
+                        ? `已更新 ${updated} 条结果；另有 ${skippedWorkflow} 条工作流提交未改动，请到审批处理台处理。`
+                        : `已更新 ${updated} 条结果`,
+                    )
                   } catch (error) {
                     setBatchMessage(error instanceof Error ? error.message : "导入失败")
                   } finally {

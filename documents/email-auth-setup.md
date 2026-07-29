@@ -16,6 +16,7 @@
 ### Cloudflare Turnstile
 - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
 - `TURNSTILE_SECRET`
+- `EMAIL_VERIFICATION_SERVICE_TOKEN` — 同时配置在 Next.js 与 Convex 环境中的随机服务端密钥（至少 32 个字符），用于保护邮箱验证与密码重置 mutation。
 
 ### Verification token behavior
 - `EMAIL_SIGNING_KEY` (required for password reset proof signing)

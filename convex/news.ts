@@ -1,5 +1,17 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserBySession } from "./reviewer/lib"
+import { requireContentAdmin } from "./lib/contentAuthorization"
+
+function publicNewsDto(news: any) {
+  const {
+    authorId: _authorId,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    ...publicFields
+  } = news
+  return publicFields
+}
 
 // Get all published news with pagination
 export const list = query({
@@ -16,18 +28,20 @@ export const list = query({
     const allNews = await query.order("desc").collect()
     const skip = args.skip || 0
     const limit = args.limit || 50
-    return allNews.slice(skip, skip + limit)
+    return allNews.slice(skip, skip + limit).map(publicNewsDto)
   },
 })
 
 // Get all news including unpublished (admin only)
 export const listAll = query({
   args: {
+    sessionToken: v.string(),
     skip: v.optional(v.number()),
     limit: v.optional(v.number()),
     category: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     let query = ctx.db.query("news")
     if (args.category) {
       query = query.filter((q) => q.eq(q.field("category"), args.category))
@@ -41,16 +55,22 @@ export const listAll = query({
 
 // Get a single news by ID
 export const getById = query({
-  args: { id: v.id("news") },
+  args: { id: v.id("news"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const news = await ctx.db.get(args.id)
-    return news
+    if (news && !news.isPublished) {
+      if (!args.sessionToken) return null
+      requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+      return news
+    }
+    return news ? publicNewsDto(news) : null
   },
 })
 
 // Create a new news
 export const create = mutation({
   args: {
+    sessionToken: v.string(),
     title: v.string(),
     content: v.string(),
     sourceUrl: v.optional(v.string()),
@@ -63,16 +83,9 @@ export const create = mutation({
     isPublished: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const actor = requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const { title, content, category } = args
-    let authorId = args.authorId
-
-    if (!authorId) {
-      const fallbackUser = await ctx.db.query("users").first()
-      if (!fallbackUser) {
-        throw new Error("No user found to set as news author")
-      }
-      authorId = fallbackUser._id
-    }
+    const authorId = args.authorId || actor._id
 
     const newsId = await ctx.db.insert("news", {
       title,
@@ -95,6 +108,7 @@ export const create = mutation({
 // Update a news
 export const update = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("news"),
     title: v.optional(v.string()),
     content: v.optional(v.string()),
@@ -107,7 +121,8 @@ export const update = mutation({
     isPublished: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { id, ...updates } = args
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const { id, sessionToken: _sessionToken, ...updates } = args
     const news = await ctx.db.get(id)
     if (!news) {
       throw new Error("News not found")
@@ -125,8 +140,9 @@ export const update = mutation({
 
 // Delete a news
 export const remove = mutation({
-  args: { id: v.id("news") },
+  args: { id: v.id("news"), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const news = await ctx.db.get(args.id)
     if (!news) {
       throw new Error("News not found")

@@ -75,6 +75,7 @@ const oaUserScope = v.object({
   identityTypes: v.optional(v.array(oaUserIdentityType)),
   roles: v.optional(v.array(oaUserRole)),
   userIds: v.optional(v.array(v.id("users"))),
+  researchGroupIds: v.optional(v.array(v.id("researchGroups"))),
 })
 
 const oaApprovalStep = v.object({
@@ -88,6 +89,7 @@ const oaApprovalStep = v.object({
 
 const oaWorkflowStatus = v.union(
   v.literal("pending"),
+  v.literal("needs_changes"),
   v.literal("approved"),
   v.literal("rejected"),
 )
@@ -97,6 +99,7 @@ const oaApprovalTaskStatus = v.union(
   v.literal("approved"),
   v.literal("rejected"),
   v.literal("skipped"),
+  v.literal("changes_requested"),
 )
 
 const oaApprovalEventAction = v.union(
@@ -107,6 +110,9 @@ const oaApprovalEventAction = v.union(
   v.literal("step_completed"),
   v.literal("workflow_approved"),
   v.literal("workflow_rejected"),
+  v.literal("changes_requested"),
+  v.literal("workflow_changes_requested"),
+  v.literal("resubmitted"),
 )
 
 // Coffee Talk is intentionally a lightweight application workflow, not a
@@ -115,6 +121,7 @@ const oaApprovalEventAction = v.union(
 const coffeeTalkStatus = v.union(
   v.literal("submitted"),
   v.literal("under_review"),
+  v.literal("needs_information"),
   v.literal("accepted"),
   v.literal("declined"),
   v.literal("withdrawn"),
@@ -132,6 +139,8 @@ const coffeeTalkEventAction = v.union(
   v.literal("complete"),
   v.literal("reassign"),
   v.literal("correct"),
+  v.literal("request_information"),
+  v.literal("supplement"),
 )
 
 export default defineSchema({
@@ -150,6 +159,10 @@ export default defineSchema({
       v.literal("graduate"),
       v.literal("teacher"),
       v.literal("other"),
+    )),
+    accountStatus: v.optional(v.union(
+      v.literal("active"),
+      v.literal("disabled"),
     )),
     organization: v.union(v.literal("pku"), v.literal("thu")),
     cohort: v.union(v.number(), v.literal("mascot")),
@@ -191,6 +204,22 @@ export default defineSchema({
     .index("by_studentId", ["studentId"])
     .index("by_role", ["role"])
     .index("by_organization", ["organization", "cohort"]),
+
+  // Account capabilities are explicit, reusable grants. A missing row uses the
+  // capability's documented default; an explicit disabled row preserves a
+  // super administrator's revocation through repeated provisioning.
+  accountCapabilities: defineTable({
+    userId: v.id("users"),
+    capability: v.union(
+      v.literal("manage_research_group_members"),
+      v.literal("coordinate_coffee_talk"),
+    ),
+    enabled: v.boolean(),
+    grantedAt: v.number(),
+    updatedAt: v.number(),
+    changedByUserId: v.optional(v.id("users")),
+  })
+    .index("by_user_capability", ["userId", "capability"]),
 
   // Publications table
   publications: defineTable({
@@ -373,6 +402,19 @@ export default defineSchema({
     .index("by_group_order", ["researchGroupId", "sortOrder"])
     .index("by_person_order", ["personId", "sortOrder"]),
 
+  // This private account-level assignment drives internal group scoping. It is
+  // deliberately separate from the public-directory membership table above;
+  // one student account can belong to at most one research group.
+  studentResearchGroupAssignments: defineTable({
+    studentUserId: v.id("users"),
+    researchGroupId: v.id("researchGroups"),
+    assignedByUserId: v.id("users"),
+    assignedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_studentUserId", ["studentUserId"])
+    .index("by_researchGroupId", ["researchGroupId"]),
+
   publicationAuthorships: defineTable({
     publicationId: v.id("publications"),
     personId: v.id("institutePeople"),
@@ -427,8 +469,20 @@ export default defineSchema({
     )),
     applicantEmail: v.optional(v.string()),
     topic: v.string(),
+    purpose: v.optional(v.string()),
+    researchBackground: v.optional(v.string()),
+    expectedOutcome: v.optional(v.string()),
+    preferredFormat: v.optional(v.union(
+      v.literal("online"),
+      v.literal("offline"),
+      v.literal("either"),
+    )),
     availability: v.string(),
     notes: v.optional(v.string()),
+    supplementalInformation: v.optional(v.string()),
+    consentToShareProfile: v.optional(v.boolean()),
+    idempotencyKey: v.optional(v.string()),
+    requestPayloadFingerprint: v.optional(v.string()),
     status: coffeeTalkStatus,
     contentFingerprint: v.string(),
     version: v.number(),
@@ -456,6 +510,7 @@ export default defineSchema({
     action: coffeeTalkEventAction,
     fromStatus: v.optional(coffeeTalkStatus),
     toStatus: coffeeTalkStatus,
+    note: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_application_sequence", ["applicationId", "sequenceNo"]),
@@ -471,10 +526,13 @@ export default defineSchema({
     body: v.string(),
     resourceType: v.union(v.literal("coffee_talk"), v.literal("oa_workflow")),
     resourceId: v.union(v.id("coffeeTalkApplications"), v.id("oaFormSubmissions")),
+    naturalKey: v.optional(v.string()),
     readAt: v.optional(v.number()),
+    archivedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
-    .index("by_user_createdAt", ["userId", "createdAt"]),
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    .index("by_naturalKey", ["naturalKey"]),
 
   // Events table
   events: defineTable({
@@ -487,6 +545,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     url: v.optional(v.string()),
     color: v.string(),
+    audiences: v.optional(v.array(v.union(v.literal("undergrad"), v.literal("graduate")))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -594,7 +653,17 @@ export default defineSchema({
     paperPdfFileName: v.optional(v.string()),
     paperPdfMimeType: v.optional(v.string()),
     paperPdfSize: v.optional(v.number()),
-    status: v.literal("submitted"),
+    status: v.union(
+      v.literal("submitted"),
+      v.literal("reviewing"),
+      v.literal("needs_changes"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("withdrawn"),
+    ),
+    reviewNote: v.optional(v.string()),
+    reviewerName: v.optional(v.string()),
+    reviewedAt: v.optional(v.number()),
     submittedAt: v.number(),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
@@ -666,6 +735,7 @@ export default defineSchema({
     studentId: v.string(),
     submitterEmail: v.optional(v.string()),
     answers: v.any(),
+    formSnapshot: v.optional(v.any()),
     reviewStatus: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"), v.literal("needs_changes")),
     adminNote: v.optional(v.string()),
     reviewerId: v.optional(v.id("users")),
@@ -678,6 +748,9 @@ export default defineSchema({
     approvalStepsSnapshot: v.optional(v.array(oaApprovalStep)),
     workflowStartedAt: v.optional(v.number()),
     workflowCompletedAt: v.optional(v.number()),
+    workflowVersion: v.optional(v.number()),
+    submissionIdempotencyKey: v.optional(v.string()),
+    submissionRequestFingerprint: v.optional(v.string()),
     submittedAt: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -686,6 +759,7 @@ export default defineSchema({
     .index("by_form_status_createdAt", ["formId", "reviewStatus", "createdAt"])
     .index("by_submitter_createdAt", ["submitterId", "createdAt"])
     .index("by_form_submitter_createdAt", ["formId", "submitterId", "createdAt"])
+    .index("by_submitter_idempotency", ["submitterId", "submissionIdempotencyKey"])
     .index("by_form_studentId", ["formId", "studentId"]),
 
   // A task is the authorization snapshot for one recipient at one ordered
@@ -698,8 +772,12 @@ export default defineSchema({
     stepId: v.string(),
     userId: v.id("users"),
     status: oaApprovalTaskStatus,
+    workflowVersion: v.optional(v.number()),
     actedAt: v.optional(v.number()),
     comment: v.optional(v.string()),
+    actionIdempotencyKey: v.optional(v.string()),
+    actionRequestFingerprint: v.optional(v.string()),
+    actionResult: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -726,6 +804,10 @@ export default defineSchema({
     displayName: v.string(),
     passwordHash: v.string(),
     salt: v.string(),
+    passwordAlgorithm: v.optional(v.literal("pbkdf2-sha256")),
+    passwordIterations: v.optional(v.number()),
+    failedLoginAttempts: v.optional(v.number()),
+    lockedUntil: v.optional(v.number()),
     enabled: v.boolean(),
     permissions: v.array(v.string()),
     createdBy: v.id("users"),
@@ -784,6 +866,10 @@ export default defineSchema({
     userId: v.id("users"),
     passwordHash: v.string(),
     salt: v.optional(v.string()),
+    passwordAlgorithm: v.optional(v.literal("pbkdf2-sha256")),
+    passwordIterations: v.optional(v.number()),
+    failedLoginAttempts: v.optional(v.number()),
+    lockedUntil: v.optional(v.number()),
   })
     .index("by_userId", ["userId"]),
 
@@ -809,6 +895,7 @@ export default defineSchema({
     createdAt: v.number(),
     expiresAt: v.number(),
     usedAt: v.optional(v.number()),
+    resetCompletedAt: v.optional(v.number()),
   })
     .index("by_tokenHash", ["tokenHash"])
     .index("by_sentTo", ["sentTo"])

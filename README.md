@@ -54,9 +54,9 @@ This README focuses on a basic development guide, and the requirements for front
   ```bash
   npx convex codegen
   npm run build
-  npm run start
+  node scripts/start-standalone.mjs
   ```
-  Only pull request production-ready code that has been tested in a production-like environment (i.e., with `npm run build` and `npm run start`), and ensure that all new features are visually polished, responsive, and accessible. 
+  Because this repository builds with `output: "standalone"`, production-like preview must stage static assets and run `.next/standalone/server.js` rather than `next start`. The wrapper above performs both steps. Only pull request production-ready code that has been tested this way, and ensure that all new features are visually polished, responsive, and accessible.
 ## 2. Goals for frontend aesthetics
 - Make the site feel polished, academic, and modern while remaining lightweight and accessible.
 - Key deliverables for a publish-ready theme:
@@ -181,4 +181,3 @@ npm run dev
 
 ## 20. How to contact the backend
 - Read `documents/api.md` to discover Convex functions, query/mutation names, and payload shapes. This is the canonical reference when you need to call or extend backend functionality.
-

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Archive, Circle, MailOpen } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { withReturnTo } from "@/lib/safe-local-path"
 import { cn } from "@/lib/utils"
 
 export type NotificationVisualState = "unread" | "read" | "archived"
@@ -97,7 +98,7 @@ export function NotificationRow({
     >
       {safeHref ? (
         <Link
-          href={safeHref}
+          href={withReturnTo(safeHref, "/notifications")}
           className="flex min-w-0 flex-1 gap-3 rounded-md text-left outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           onClick={() => onOpen?.(notification)}
         >
@@ -121,7 +122,7 @@ export function NotificationRow({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-11 w-11"
             onClick={() => onMarkRead(notification)}
             aria-label={`将“${notification.title}”标为已读`}
           >
@@ -133,7 +134,7 @@ export function NotificationRow({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-11 w-11"
             onClick={() => onArchive(notification)}
             aria-label={`归档“${notification.title}”`}
           >

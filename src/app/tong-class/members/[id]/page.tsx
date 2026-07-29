@@ -12,6 +12,7 @@ import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import { getResearchDirectionLabel } from "@/lib/research-directions"
 import type { Publication, UserLink } from "@/types"
 import { getCohortClassLabel } from "@/lib/cohort"
+import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 
 export default function MemberDetailPage() {
   const params = useParams<{ id: string }>()
@@ -50,10 +51,10 @@ export default function MemberDetailPage() {
   return (
     <div className="container-custom py-16 md:py-24">
       <Button variant="ghost" asChild className="mb-6 -ml-3 gap-2">
-        <Link href="/tong-class/members">
+        <SafeReturnLink fallback="/tong-class/members">
           <ArrowLeft className="h-4 w-4" />
           Back to Members
-        </Link>
+        </SafeReturnLink>
       </Button>
 
       <div className="grid lg:grid-cols-3 gap-8">

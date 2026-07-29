@@ -1,13 +1,17 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserBySession } from "./reviewer/lib"
+import { requireContentAdmin, requireTongClassMember } from "./lib/contentAuthorization"
 
 // Get all courses with review statistics
 export const list = query({
   args: {
     skip: v.optional(v.number()),
     limit: v.optional(v.number()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const allCourses = (await ctx.db.query("courses").order("desc").collect()).filter(
       (course) => course.isActive !== false
     )
@@ -19,8 +23,9 @@ export const list = query({
 
 // Get a single course by ID
 export const getById = query({
-  args: { id: v.id("courses") },
+  args: { id: v.id("courses"), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const course = await ctx.db.get(args.id)
     return course?.isActive === false ? null : course
   },
@@ -28,8 +33,9 @@ export const getById = query({
 
 // Get a single course by name
 export const getByName = query({
-  args: { name: v.string() },
+  args: { name: v.string(), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const courses = await ctx.db
       .query("courses")
       .filter((q) => q.eq(q.field("name"), args.name))
@@ -41,10 +47,12 @@ export const getByName = query({
 // Create a new course
 export const create = mutation({
   args: {
+    sessionToken: v.string(),
     name: v.string(),
     isTongClassCourse: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const normalizedName = args.name.trim()
     if (!normalizedName) {
       throw new Error("Course name is required")
@@ -76,12 +84,14 @@ export const create = mutation({
 // Update a course
 export const update = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("courses"),
     name: v.optional(v.string()),
     isTongClassCourse: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { id, ...updates } = args
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const { id, sessionToken: _sessionToken, ...updates } = args
     const course = await ctx.db.get(id)
 
     if (!course) {
@@ -116,11 +126,13 @@ export const update = mutation({
 // Update course review statistics
 export const updateReviewStats = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("courses"),
     reviewCount: v.number(),
     averageRating: v.number(),
   },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const course = await ctx.db.get(args.id)
 
     if (!course) {
@@ -138,8 +150,9 @@ export const updateReviewStats = mutation({
 
 // Delete a course
 export const remove = mutation({
-  args: { id: v.id("courses") },
+  args: { id: v.id("courses"), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
     const course = await ctx.db.get(args.id)
 
     if (!course) {
@@ -165,7 +178,9 @@ export const remove = mutation({
 
 // Get courses count
 export const count = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const courses = await ctx.db.query("courses").collect()
     return courses.filter((course) => course.isActive !== false).length
   },
@@ -173,8 +188,9 @@ export const count = query({
 
 // Search courses by name
 export const search = query({
-  args: { query: v.string() },
+  args: { query: v.string(), sessionToken: v.string() },
   handler: async (ctx, args) => {
+    requireTongClassMember(await getUserBySession(ctx, args.sessionToken))
     const all = (await ctx.db.query("courses").collect()).filter((course) => course.isActive !== false)
     const q = args.query.trim().toLowerCase()
     if (!q) return []

@@ -329,7 +329,7 @@ export default function AdminPublicationsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link href={`/publications/${publication._id}`}>
+                            <Link href={`/tong-class/publications/${publication._id}`}>
                               <Eye className="h-4 w-4 mr-2" />
                               查看
                             </Link>

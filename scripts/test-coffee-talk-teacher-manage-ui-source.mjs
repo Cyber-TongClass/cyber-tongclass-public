@@ -24,7 +24,11 @@ test("teacher Coffee Talk management is session-aware and only invokes server-pr
   assert.match(client, /accept/)
   assert.match(client, /decline/)
   assert.match(client, /complete/)
-  assert.doesNotMatch(client, /request_information/)
+  assert.match(client, /request_information/)
+  assert.match(client, /note/)
   assert.doesNotMatch(client, /from\s+["'][^"']*convex[^"']*["']/i)
-  assert.doesNotMatch(client, /\.email\b/)
+  // 账户派生资料契约（见 test-coffee-talk-profile-derived-details-source.mjs）：
+  // 服务端仅向绑定教师下发 contact.email，客户端不得从 applicant 记录取邮箱。
+  assert.match(client, /application\.contact\.email/)
+  assert.doesNotMatch(client, /applicant\.email|applicantContact/)
 })

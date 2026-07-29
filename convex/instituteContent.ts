@@ -22,7 +22,7 @@ import type {
 import { resolveUserIdentityType } from "./lib/userIdentity"
 
 const DEFAULT_PUBLIC_LIMIT = 24
-const MAX_PUBLIC_LIMIT = 100
+const MAX_PUBLIC_LIMIT = 500
 
 const contentTypes = new Set(["publication", "news"])
 const contentTargetTypes = new Set(["person", "researchGroup"])

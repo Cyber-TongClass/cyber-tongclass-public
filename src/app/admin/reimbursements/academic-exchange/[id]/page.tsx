@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { FormEvent, useEffect, useMemo, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Save, Trash2 } from "lucide-react"
+import { ArrowLeft, ExternalLink, Save, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,10 +15,13 @@ import { ReimbursementExpenseItems, type ReimbursementExpenseRow } from "@/compo
 import { useAuth } from "@/lib/hooks/use-auth"
 import {
   useAdminAcademicExchangeApplication,
+  useAcademicExchangePaperPdfUrl,
   useDeleteAdminAcademicExchangeApplication,
   useUpdateAdminAcademicExchangeApplication,
 } from "@/lib/api"
 import { formatCurrency, formatDate } from "@/lib/academic-exchange"
+import { validateAcademicExchangeProjectTime } from "@/lib/academic-exchange-project-time"
+import { useUnsavedChangesWarning } from "@/lib/hooks/use-unsaved-changes-warning"
 import type { AcademicExchangeSupportApplication } from "@/types"
 
 const newExpenseRow = (patch?: Partial<ReimbursementExpenseRow>): ReimbursementExpenseRow => ({
@@ -47,6 +50,7 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
   const router = useRouter()
   const { isSuperAdmin, isLoading } = useAuth()
   const application = useAdminAcademicExchangeApplication(params.id, Boolean(isSuperAdmin)) as AcademicExchangeSupportApplication | null | undefined
+  const uploadedPaperPdfUrl = useAcademicExchangePaperPdfUrl(isSuperAdmin ? params.id : null) as string | null | undefined
   const updateApplication = useUpdateAdminAcademicExchangeApplication()
   const deleteApplication = useDeleteAdminAcademicExchangeApplication()
   const { confirm, ConfirmDialog } = useConfirmDialog()
@@ -79,14 +83,18 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
     paperPdfSize: "",
   })
   const [expenseRows, setExpenseRows] = useState<ReimbursementExpenseRow[]>([newExpenseRow()])
+  const [savedSnapshot, setSavedSnapshot] = useState("")
   const [message, setMessage] = useState("")
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const currentSnapshot = JSON.stringify({ form, expenseRows })
+  const hasUnsavedChanges = Boolean(loadedId && savedSnapshot && currentSnapshot !== savedSnapshot)
+  useUnsavedChangesWarning(hasUnsavedChanges)
 
   useEffect(() => {
     if (!application || loadedId === application._id) return
     setLoadedId(application._id)
-    setForm({
+    const nextForm = {
       applicantName: application.applicantName || "",
       studentId: application.studentId || "",
       email: application.email || "",
@@ -111,8 +119,8 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
       paperPdfFileName: application.paperPdfFileName || "",
       paperPdfMimeType: application.paperPdfMimeType || "",
       paperPdfSize: application.paperPdfSize ? String(application.paperPdfSize) : "",
-    })
-    setExpenseRows(
+    }
+    const nextExpenseRows =
       application.expenseItems.length
         ? application.expenseItems.map((item) => newExpenseRow({
           item: item.item,
@@ -120,7 +128,9 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
           note: item.note || "",
         }))
         : [newExpenseRow()]
-    )
+    setForm(nextForm)
+    setExpenseRows(nextExpenseRows)
+    setSavedSnapshot(JSON.stringify({ form: nextForm, expenseRows: nextExpenseRows }))
   }, [application, loadedId])
 
   const totalAmount = useMemo(() => {
@@ -150,8 +160,13 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
       }))
       .filter((row) => row.item || row.amount || row.note)
 
-    if (!expenseItems.length || expenseItems.some((row) => !row.item || !Number.isFinite(row.amount) || row.amount < 0)) {
-      setMessage("请完整填写申请金额明细，金额需为非负数字。")
+    if (!expenseItems.length || expenseItems.some((row) => !row.item || !Number.isFinite(row.amount) || row.amount <= 0)) {
+      setMessage("请完整填写申请金额明细，每项金额必须大于 0。")
+      return
+    }
+    const projectTimeError = validateAcademicExchangeProjectTime(form.projectTime)
+    if (projectTimeError) {
+      setMessage(projectTimeError)
       return
     }
 
@@ -194,6 +209,7 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
         paperPdfSize,
       })
       setMessage("申请记录已保存。")
+      setSavedSnapshot(currentSnapshot)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存失败")
     } finally {
@@ -276,11 +292,12 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
       <div>
         <h1 className="text-3xl font-extrabold text-gray-900">编辑学术交流支持申请</h1>
         <p className="mt-1 text-sm text-slate-500">
-          提交时间：{formatDate(application.submittedAt)}。超级管理员可修正已保存记录；本页不提供 PDF 下载和批量导出。
+          提交时间：{formatDate(application.submittedAt)}。超级管理员可修正已保存记录并查看申请附件。
         </p>
       </div>
 
       {message ? <p className="rounded-md border bg-white px-4 py-3 text-sm text-slate-600">{message}</p> : null}
+      {hasUnsavedChanges ? <p className="text-sm font-medium text-amber-700" role="status">有未保存的更改</p> : null}
 
       <form className="space-y-6" onSubmit={handleSave}>
         <Card>
@@ -330,7 +347,7 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
             </div>
             <div className="grid gap-2">
               <Label>项目时间</Label>
-              <Input value={form.projectTime} onChange={(event) => updateForm("projectTime", event.target.value)} required />
+              <Input value={form.projectTime} onChange={(event) => updateForm("projectTime", event.target.value)} placeholder="如 2026-08-01 至 2026-08-18" required />
             </div>
             <div className="grid gap-2">
               <Label>申请时间</Label>
@@ -396,6 +413,17 @@ export default function AdminAcademicExchangeApplicationDetailPage() {
             <div className="grid gap-2 md:col-span-3">
               <Label>论文 PDF 链接</Label>
               <Input type="url" value={form.paperPdfUrl} onChange={(event) => updateForm("paperPdfUrl", event.target.value)} />
+              {uploadedPaperPdfUrl ? (
+                <a href={uploadedPaperPdfUrl} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-sm text-primary underline underline-offset-4">
+                  下载已上传的论文 PDF
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : form.paperPdfUrl ? (
+                <a href={form.paperPdfUrl} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-sm text-primary underline underline-offset-4">
+                  打开外部论文 PDF
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
             </div>
             <div className="grid gap-2">
               <Label>上传文件名</Label>

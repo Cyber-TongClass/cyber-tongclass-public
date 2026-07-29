@@ -50,7 +50,7 @@ export function toAcademicExchangeAccessArgs(credentials: ReviewerAccessCredenti
     : { mainSessionToken: credentials.mainSessionToken }
 }
 
-export function reviewerAccessErrorStatus(error: unknown, fallbackStatus: 401 | 500 = 401) {
+export function reviewerAccessErrorStatus(error: unknown, fallbackStatus: 400 | 401 | 500 = 401) {
   return error instanceof ReviewerAccessRequestError ? error.status : fallbackStatus
 }
 

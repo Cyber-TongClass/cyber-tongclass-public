@@ -1,11 +1,14 @@
 "use client"
 
 import { useParams } from "next/navigation"
+import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 import { TechDayShell } from "@/components/techday/techday-shell"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import { useTechDayActorArgs, useTechDayPostBySlug } from "@/lib/api"
+import { Button } from "@/components/ui/button"
 
 export default function TechDayNewsDetailPage() {
   const params = useParams<{ slug: string }>()
@@ -14,6 +17,7 @@ export default function TechDayNewsDetailPage() {
 
   return (
     <TechDayShell title={post?.title || "TechDay 公告"} description={post?.summary}>
+      <Button asChild variant="ghost"><Link href="/techday/news"><ArrowLeft className="mr-2 h-4 w-4" />返回公告列表</Link></Button>
       {post === undefined ? <p className="text-sm text-slate-600">Loading...</p> : null}
       {post === null ? <p className="text-sm text-slate-600">公告不存在。</p> : null}
       {post ? (

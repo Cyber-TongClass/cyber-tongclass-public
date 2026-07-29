@@ -662,7 +662,7 @@ export default function CreativeChallenge2026Page() {
                             "flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors",
                             selectedBountyTask === task
                               ? "border-amber-300 bg-amber-50 text-amber-900"
-                              : "border-transparent bg-white text-slate-700 hover:border-amber-200 hover:bg-amber-50"
+                              : "border-transparent bg-white text-amber-950 hover:border-amber-200 hover:bg-amber-50"
                           )}
                         >
                           <ArrowRight className="h-4 w-4 text-amber-600" />

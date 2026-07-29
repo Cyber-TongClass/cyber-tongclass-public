@@ -17,7 +17,7 @@ export function MemberOnlyGuard({
   description?: string
 }) {
   const pathname = usePathname()
-  const { isAuthenticated, isLoading } = useAuth()
+  const { currentUser, isAuthenticated, isAdmin, isLoading } = useAuth()
 
   if (isLoading) {
     return (
@@ -41,6 +41,29 @@ export function MemberOnlyGuard({
             <p className="text-sm text-slate-600">{description}</p>
             <Button asChild className="w-full">
               <Link href={`/login?next=${encodeURIComponent(pathname || "/")}`}>前往登录</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (currentUser?.isClassMember !== true && !isAdmin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              仅限通班成员
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-600">
+              当前账户已登录，但尚未被标记为通班成员。如身份信息有误，请联系管理员核验。
+            </p>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/portal/list">返回内网</Link>
             </Button>
           </CardContent>
         </Card>

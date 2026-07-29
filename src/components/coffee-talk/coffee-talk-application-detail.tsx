@@ -1,7 +1,6 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { ClipboardList } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -53,8 +52,8 @@ export interface CoffeeTalkApplicationDetailProps {
 function DetailField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-sm font-medium text-slate-700">{label}</dt>
-      <dd className="mt-1 text-sm leading-6 text-slate-950">{children}</dd>
+      <dt className="aia-mono text-xs uppercase tracking-[0.14em] text-[hsl(var(--aia-muted))]">{label}</dt>
+      <dd className="mt-1.5 text-sm leading-6 text-[hsl(var(--aia-ink))]">{children}</dd>
     </div>
   )
 }
@@ -66,18 +65,18 @@ export function CoffeeTalkApplicationDetail({
   const mayShowApplicantEmail = application.status === "accepted" || application.status === "completed"
 
   return (
-    <article className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="coffee-talk-application-title">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <article className="space-y-10">
+      <section aria-labelledby="coffee-talk-application-title">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-primary">Coffee Talk 申请</p>
-            <h1 id="coffee-talk-application-title" className="mt-1 text-2xl font-semibold text-slate-950">{application.title}</h1>
-            <p className="mt-2 text-sm text-slate-600">更新于 {application.updatedAtLabel}</p>
+            <p className="aia-kicker">Coffee Talk 申请</p>
+            <h1 id="coffee-talk-application-title" className="aia-serif mt-2 text-2xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">{application.title}</h1>
+            <p className="aia-text-muted mt-2 text-sm">更新于 {application.updatedAtLabel}</p>
           </div>
-          <CoffeeTalkStatusBadge status={application.status} />
+          <CoffeeTalkStatusBadge status={application.status} className="ml-auto" />
         </div>
 
-        <dl className="mt-6 grid gap-5 border-t border-slate-100 pt-5 sm:grid-cols-2">
+        <dl className="mt-6 grid gap-5 border-t aia-border-rule pt-6 sm:grid-cols-2">
           {application.applicantContact?.displayName ? (
             <DetailField label="申请人">{application.applicantContact.displayName}</DetailField>
           ) : null}
@@ -98,8 +97,8 @@ export function CoffeeTalkApplicationDetail({
         </dl>
 
         {application.allowedActions.length > 0 ? (
-          <div className="mt-6 border-t border-slate-100 pt-5">
-            <h2 className="text-sm font-semibold text-slate-950">可执行操作</h2>
+          <div className="mt-6 border-t aia-border-rule pt-5">
+            <h2 className="aia-mono text-xs uppercase tracking-[0.14em] text-[hsl(var(--aia-muted))]">可执行操作</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {application.allowedActions.map((action) => (
                 <Button
@@ -121,12 +120,9 @@ export function CoffeeTalkApplicationDetail({
         ) : null}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 sm:p-6" aria-labelledby="coffee-talk-history-heading">
-        <div className="flex items-center gap-2">
-          <ClipboardList className="h-5 w-5 text-primary" aria-hidden="true" />
-          <h2 id="coffee-talk-history-heading" className="text-lg font-semibold text-slate-950">状态历史</h2>
-        </div>
-        <div className="mt-4">
+      <section aria-labelledby="coffee-talk-history-heading">
+        <h2 id="coffee-talk-history-heading" className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">状态历史</h2>
+        <div className="mt-4 border-t aia-border-rule pt-5">
           <CoffeeTalkHistory events={application.history} />
         </div>
       </section>

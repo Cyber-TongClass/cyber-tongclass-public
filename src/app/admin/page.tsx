@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Users, FileText, Calendar, Star, BarChart3, BookOpen, MessageSquare, TableProperties, ClipboardList, Trophy, LayoutGrid } from "lucide-react"
 import Link from "next/link"
-import { useAdminUsers, useNews, useEvents, useCourseListWithReviews, usePendingReviews } from "@/lib/api"
+import { useAdminUsers, useNews, useAdminEvents, useCourseListWithReviews, usePendingReviews } from "@/lib/api"
 
 type Activity = {
   key: string
@@ -39,7 +39,7 @@ export default function AdminDashboard() {
   // Fetch data from Convex
   const usersData = useAdminUsers({ limit: 1000 })
   const newsData = useNews()
-  const eventsData = useEvents()
+  const eventsData = useAdminEvents()
   const coursesData = useCourseListWithReviews()
   const pendingReviewsData = usePendingReviews()
 

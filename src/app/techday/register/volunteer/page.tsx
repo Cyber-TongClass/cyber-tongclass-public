@@ -160,7 +160,7 @@ export default function TechDayVolunteerRegisterPage() {
                   <button
                     key={name}
                     type="button"
-                    className={`rounded-md border px-3 py-1 text-sm ${selectedOrgNames.includes(name) ? "border-primary bg-primary text-white" : "bg-white text-slate-700"}`}
+                    className={`rounded-md border px-3 py-1 text-sm ${selectedOrgNames.includes(name) ? "border-primary bg-primary text-white" : "bg-white text-primary"}`}
                     onClick={() => toggleOrg(name)}
                   >
                     {name}
@@ -176,7 +176,7 @@ export default function TechDayVolunteerRegisterPage() {
                   <button
                     key={slot}
                     type="button"
-                    className={`rounded-md border px-3 py-1 text-sm ${selectedSlots.includes(slot) ? "border-emerald-600 bg-emerald-600 text-white" : "bg-white text-slate-700"}`}
+                    className={`rounded-md border px-3 py-1 text-sm ${selectedSlots.includes(slot) ? "border-emerald-600 bg-emerald-600 text-white" : "bg-white text-emerald-900"}`}
                     onClick={() => toggleSlot(slot)}
                   >
                     {slot}

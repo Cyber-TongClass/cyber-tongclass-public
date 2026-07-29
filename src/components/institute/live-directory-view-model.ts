@@ -1,14 +1,19 @@
 import type {
   PublicInstitutePerson,
   PublicInstitutePersonReference,
+  PublicInstituteResearch,
+  PublicInstituteUpdate,
   PublicResearchGroup as PublicInstituteResearchGroup,
   PublicResearchGroupMember,
   PublicResearchGroupMembershipRole,
 } from "@/types/institute"
 import type {
+  PublicDirectoryUpdate,
   PublicDirectoryPerson,
+  PublicResearchOutput,
   PublicResearchGroup as DirectoryResearchGroup,
 } from "@/components/institute/demo-directory-data"
+import { withReturnTo } from "@/lib/safe-local-path"
 
 export type DirectoryResearchGroupMember = {
   person: PublicDirectoryPerson
@@ -67,6 +72,7 @@ export function toDirectoryPerson(person: PublicInstitutePerson): PublicDirector
     nameEn: person.nameEn,
     kind: person.kind,
     title: person.titleZh || person.titleEn || (person.kind === "teacher" ? "研究院教师" : "研究生"),
+    photoUrl: person.photoUrl,
     bio: person.bioZh || person.bioEn || "暂无公开简介。",
     researchAreas: person.researchAreas,
     groupSlugs: (person.researchGroupMemberships ?? [])
@@ -97,5 +103,40 @@ export function toDirectoryResearchGroup(
     sortOrder: 0,
     isDemo: group.isDemo,
     visibility: "public",
+  }
+}
+
+export function toDirectoryResearchOutput(
+  item: PublicInstituteResearch,
+  returnTo: string,
+): PublicResearchOutput {
+  return {
+    id: item.id,
+    title: item.title,
+    kind: item.category || "研究成果",
+    summary: item.abstract || `${item.authors.join("、")} · ${item.venue}`,
+    year: item.year,
+    contributorSlugs: (item.people || []).map((person) => person.slug),
+    groupSlugs: (item.researchGroups || []).map((group) => group.slug),
+    isDemo: false,
+    href: withReturnTo(`/tong-class/publications/${item.id}`, returnTo),
+  }
+}
+
+export function toDirectoryUpdate(
+  item: PublicInstituteUpdate,
+  returnTo: string,
+): PublicDirectoryUpdate {
+  return {
+    id: item.id,
+    title: item.title,
+    summary: item.content,
+    dateLabel: new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium" }).format(new Date(item.publishedAt)),
+    relatedPersonSlugs: (item.people || []).map((person) => person.slug),
+    relatedGroupSlugs: (item.researchGroups || []).map((group) => group.slug),
+    isDemo: false,
+    href: item.sourceUrl
+      ? undefined
+      : withReturnTo(`/tong-class/news/${item.id}`, returnTo),
   }
 }

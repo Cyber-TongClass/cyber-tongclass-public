@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { Archive, Download, Eye, Search } from "lucide-react"
+import { Archive, ArrowLeft, Download, Eye, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,15 @@ import { formatCurrency, formatDate } from "@/lib/academic-exchange"
 import { getAcademicExchangePaperPdfLabel } from "@/lib/academic-exchange-pdf-source"
 import { reviewerAccessHeaders, useReviewerAccess, type ReviewerAccess } from "@/app/reviewer/reviewer-access-context"
 import type { AcademicExchangeSupportApplication } from "@/types"
+
+const STATUS_LABELS: Record<AcademicExchangeSupportApplication["status"], string> = {
+  submitted: "待审核",
+  reviewing: "审核中",
+  needs_changes: "待补充",
+  approved: "已通过",
+  rejected: "已驳回",
+  withdrawn: "已撤回",
+}
 
 function getDownloadFileName(response: Response, fallback: string) {
   const disposition = response.headers.get("content-disposition") || ""
@@ -223,10 +232,11 @@ export default function ReviewerAcademicExchangePage() {
 
   return (
     <div className="space-y-6">
+      <Button asChild variant="ghost" className="w-fit"><Link href="/reviewer/reimbursements"><ArrowLeft className="mr-2 h-4 w-4" />返回报销评审</Link></Button>
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-950">学术交流支持申请</h1>
-          <p className="mt-1 text-sm text-slate-500">只读查看同学已提交的学术交流支持申请，并按需下载单份申请 PDF 或批量下载多份申请。</p>
+          <p className="mt-1 text-sm text-slate-500">查看并处理同学提交的学术交流支持申请，也可下载单份申请 PDF 或批量导出。</p>
         </div>
         <Button type="button" onClick={handleBatchExport} disabled={batchExporting || selectedCount === 0}>
           <Archive className="mr-2 h-4 w-4" />
@@ -295,6 +305,7 @@ export default function ReviewerAcademicExchangePage() {
                 <TableHead>交流地点</TableHead>
                 <TableHead>申请金额</TableHead>
                 <TableHead>论文 PDF</TableHead>
+                <TableHead>状态</TableHead>
                 <TableHead>提交时间</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -302,11 +313,11 @@ export default function ReviewerAcademicExchangePage() {
             <TableBody>
               {applications === null ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-24 text-center text-slate-500">Loading...</TableCell>
+                  <TableCell colSpan={11} className="h-24 text-center text-slate-500">Loading...</TableCell>
                 </TableRow>
               ) : filteredApplications.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-24 text-center text-slate-500">暂无申请记录</TableCell>
+                  <TableCell colSpan={11} className="h-24 text-center text-slate-500">暂无申请记录</TableCell>
                 </TableRow>
               ) : (
                 filteredApplications.map((application) => (
@@ -326,6 +337,7 @@ export default function ReviewerAcademicExchangePage() {
                     <TableCell>{application.exchangeLocation}</TableCell>
                     <TableCell>{formatCurrency(application.totalAmount)}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{getAcademicExchangePaperPdfLabel(application) || "-"}</TableCell>
+                    <TableCell>{STATUS_LABELS[application.status]}</TableCell>
                     <TableCell>{formatDate(application.submittedAt)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

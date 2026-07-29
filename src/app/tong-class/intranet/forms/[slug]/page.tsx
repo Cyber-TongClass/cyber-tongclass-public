@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { ArrowLeft, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -125,6 +125,7 @@ export default function IntranetFormDetailPage() {
   const form = usePublishedOAFormBySlug(params.slug) as OAForm | null | undefined
   const submissions = useMyOAFormSubmissions(form?._id || null) as OAFormSubmission[] | undefined
   const submitForm = useSubmitOAForm()
+  const submissionIdempotencyKeyRef = useRef<string | null>(null)
   const collecting = form ? isOAFormCollecting(form) : false
   const canEditSubmissions = Boolean(form?.allowSubmissionEdits && collecting)
 
@@ -158,7 +159,12 @@ export default function IntranetFormDetailPage() {
             form={form}
             heading="新建提交"
             onSubmit={async (answers) => {
-              await submitForm({ formId: form._id, answers })
+              submissionIdempotencyKeyRef.current ||= crypto.randomUUID()
+              await submitForm({
+                formId: form._id,
+                answers,
+                idempotencyKey: submissionIdempotencyKeyRef.current,
+              })
               window.location.reload()
             }}
             submitLabel="提交填报"

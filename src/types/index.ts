@@ -118,7 +118,10 @@ export interface AcademicExchangeSupportApplication {
   paperPdfFileName?: string
   paperPdfMimeType?: string
   paperPdfSize?: number
-  status: "submitted"
+  status: "submitted" | "reviewing" | "needs_changes" | "approved" | "rejected" | "withdrawn"
+  reviewNote?: string
+  reviewerName?: string
+  reviewedAt?: number
   submittedAt: number
   createdAt: number
   updatedAt?: number
@@ -188,6 +191,15 @@ export interface OAForm {
   updatedAt: number
 }
 
+export interface OAFormSnapshot {
+  title: string
+  description?: string
+  fields: OAFormField[]
+  allowSubmissionEdits?: boolean
+  resultFields?: OAResultField[]
+  resultsVisible?: boolean
+}
+
 export interface OAFileAnswer {
   storageId: string
   fileName: string
@@ -210,6 +222,15 @@ export interface OAFormSubmission {
   reviewerName?: string
   reviewedAt?: number
   resultValues?: Record<string, unknown>
+  allowSubmissionEdits?: boolean
+  formSnapshot?: OAFormSnapshot
+  formTitle?: string
+  workflowStatus?: "pending" | "needs_changes" | "approved" | "rejected"
+  workflowVersion?: number
+  currentApprovalStep?: number
+  approvalStepsSnapshot?: Array<{ id: string; title: string; completion?: "any" | "all" }>
+  workflowStartedAt?: number
+  workflowCompletedAt?: number
   submittedAt: number
   createdAt: number
   updatedAt: number
@@ -332,6 +353,7 @@ export interface Event {
   description?: string // Markdown
   url?: string
   color: string // For calendar display
+  audiences?: Array<"undergrad" | "graduate">
   createdAt: number
   updatedAt: number
 }

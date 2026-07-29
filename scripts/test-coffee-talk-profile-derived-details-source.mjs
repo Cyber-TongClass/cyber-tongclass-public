@@ -50,8 +50,10 @@ test("Coffee Talk application fields are read-only account data", () => {
   assert.doesNotMatch(api, /export type CoffeeTalkApplicationInput = \{[\s\S]*?applicantName:/)
 })
 
-test("Coffee Talk history renders current applicant details instead of snapshots", () => {
+test("Coffee Talk history renders immutable submitted applicant snapshots with a legacy fallback", () => {
   assert.match(coffeeTalk, /getCurrentApplicantProfile\(ctx, application\)/)
+  assert.match(coffeeTalk, /applicantName: applicantProfile\.applicantName/)
+  assert.match(coffeeTalk, /applicantEmail: applicantProfile\.email/)
   assert.match(coffeeTalk, /applicant: applicant/)
   assert.match(myClient, /申请资料：/)
   assert.match(myClient, /application\.applicant\.applicantName/)

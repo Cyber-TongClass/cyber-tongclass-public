@@ -649,7 +649,7 @@ export default function AdminTechDaySettingsPage() {
                               <button
                                 key={orgName}
                                 type="button"
-                                className={`rounded-md border px-2 py-1 text-xs ${assigned ? "border-primary bg-primary text-white" : preferred ? "border-blue-200 bg-blue-50 text-blue-700" : "bg-white text-slate-600"}`}
+                                className={`rounded-md border px-2 py-1 text-xs ${assigned ? "border-primary bg-primary text-white" : preferred ? "border-blue-200 bg-blue-50 text-blue-700" : "bg-white text-primary"}`}
                                 onClick={() => toggleAssignedOrg(user, orgName)}
                               >
                                 {orgName}

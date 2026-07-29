@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ExternalLink } from "lucide-react"
+import { ArrowUpRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -41,50 +41,54 @@ export function CoffeeTalkApplicationList({
   onAction,
 }: CoffeeTalkApplicationListProps) {
   if (applications.length === 0) {
-    return <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-600">{emptyMessage}</p>
+    return <p className="aia-text-muted py-6 text-sm">{emptyMessage}</p>
   }
 
   return (
-    <ul className="space-y-3" aria-label="Coffee Talk 申请列表">
+    <ul className="divide-y divide-[hsl(var(--aia-rule))] border-t aia-border-rule" aria-label="Coffee Talk 申请列表">
       {applications.map((application) => {
         const safeHref = isRelativeApplicationHref(application.href) ? application.href : undefined
 
         return (
-          <li key={application.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-semibold text-slate-950">{application.title}</h3>
-                  <CoffeeTalkStatusBadge status={application.status} />
-                </div>
-                {application.participantLabel ? <p className="mt-2 text-sm text-slate-600">{application.participantLabel}</p> : null}
-                <p className="mt-2 text-xs text-slate-500">更新于 {application.updatedAtLabel}</p>
-              </div>
-              {safeHref ? (
-                <Link
-                  href={safeHref}
-                  className="inline-flex min-h-9 shrink-0 items-center gap-1 self-start rounded-md px-3 text-sm font-medium text-primary hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                >
-                  查看详情
-                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                </Link>
-              ) : null}
+          <li key={application.id} className="py-4">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="aia-serif text-lg font-semibold leading-snug text-[hsl(var(--aia-ink))]">
+                {application.title}
+              </h3>
+              <CoffeeTalkStatusBadge status={application.status} />
+              <span className="aia-mono ml-auto text-xs text-[hsl(var(--aia-muted))]">
+                更新于 {application.updatedAtLabel}
+              </span>
             </div>
+            {application.participantLabel ? (
+              <p className="aia-text-muted mt-1.5 text-sm leading-6">{application.participantLabel}</p>
+            ) : null}
 
-            {application.allowedActions.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4" aria-label="可执行操作">
-                {application.allowedActions.map((action) => (
-                  <Button
-                    key={action.id}
-                    type="button"
-                    size="sm"
-                    variant={action.tone ?? "outline"}
-                    disabled={!onAction}
-                    onClick={() => onAction?.(application, action)}
-                  >
-                    {action.label}
-                  </Button>
-                ))}
+            {safeHref || application.allowedActions.length > 0 ? (
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                {safeHref ? (
+                  <Link href={safeHref} className="aia-link inline-flex items-center gap-1 text-sm">
+                    查看详情
+                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
+                ) : null}
+                {application.allowedActions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2" aria-label="可执行操作">
+                    {application.allowedActions.map((action) => (
+                      <Button
+                        key={action.id}
+                        type="button"
+                        size="sm"
+                        variant={action.tone ?? "outline"}
+                        className="min-h-11"
+                        disabled={!onAction}
+                        onClick={() => onAction?.(application, action)}
+                      >
+                        {action.label}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </li>

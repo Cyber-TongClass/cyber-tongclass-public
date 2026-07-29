@@ -50,6 +50,8 @@ const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("acad
 const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
 const getAcademicExchangeApplicationRef = makeFunctionReference<"query">("academicExchange:getApplication")
 const createAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:createApplication")
+const updateAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:updateApplication")
+const withdrawAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:withdrawApplication")
 const generateAcademicExchangeUploadUrlRef = makeFunctionReference<"mutation">("academicExchange:generateUploadUrl")
 const getAcademicExchangePaperPdfUrlRef = makeFunctionReference<"query">("academicExchange:getPaperPdfUrl")
 const listAdminAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplicationsForSuperAdmin")
@@ -73,10 +75,13 @@ const generateOAFormUploadUrlRef = makeFunctionReference<"mutation">("oaForms:ge
 const submitOAFormRef = makeFunctionReference<"mutation">("oaForms:submit")
 const updateOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:updateSubmission")
 const listMyOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:listMine")
+const listMyOAApprovalHistoryRef = makeFunctionReference<"query">("oaForms:listMineApprovalHistory")
 const listMyOAApprovalInboxRef = makeFunctionReference<"query">("oaForms:listMyApprovalInbox")
+const getMyOAApprovalTaskRef = makeFunctionReference<"query">("oaForms:getMyApprovalTask")
 const actOnOAApprovalTaskRef = makeFunctionReference<"mutation">("oaForms:actOnApprovalTask")
 const listMyAiaNotificationsRef = makeFunctionReference<"query">("oaForms:listMyNotifications")
 const markMyAiaNotificationReadRef = makeFunctionReference<"mutation">("oaForms:markMyNotificationRead")
+const archiveMyAiaNotificationRef = makeFunctionReference<"mutation">("oaForms:archiveMyNotification")
 const markAllMyAiaNotificationsReadRef = makeFunctionReference<"mutation">("oaForms:markAllMyNotificationsRead")
 const adminListOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:adminListSubmissions")
 const adminReviewOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:adminReviewSubmission")
@@ -92,10 +97,17 @@ const upsertTeacherReviewerBindingRef = makeFunctionReference<"mutation">("revie
 const clearTeacherReviewerBindingRef = makeFunctionReference<"mutation">("reviewerAuth:clearTeacherBinding")
 const listPublicInstitutePeopleRef = makeFunctionReference<"query">("instituteDirectory:listPublicPeople")
 const getPublicInstitutePersonRef = makeFunctionReference<"query">("instituteDirectory:getPublicPerson")
+const getMyPublicProfileDestinationRef = makeFunctionReference<"query">("instituteDirectory:getMyPublicProfileDestination")
 const listPublicResearchGroupsRef = makeFunctionReference<"query">("instituteDirectory:listPublicResearchGroups")
 const getPublicResearchGroupRef = makeFunctionReference<"query">("instituteDirectory:getPublicResearchGroup")
+const listResearchGroupScopeOptionsRef = makeFunctionReference<"query">("instituteDirectory:listResearchGroupScopeOptions")
+const listTeacherGroupRosterRef = makeFunctionReference<"query">("instituteDirectory:listTeacherGroupRoster")
+const assignTeacherGroupStudentRef = makeFunctionReference<"mutation">("instituteDirectory:assignTeacherGroupStudent")
+const removeTeacherGroupStudentRef = makeFunctionReference<"mutation">("instituteDirectory:removeTeacherGroupStudent")
 const listInstituteAccountBindingCandidatesRef = makeFunctionReference<"query">("instituteDirectory:listAccountBindingCandidates")
 const bindInstitutePersonAccountRef = makeFunctionReference<"mutation">("instituteDirectory:bindPersonAccount")
+const setAccountCapabilityRef = makeFunctionReference<"mutation">("instituteDirectory:setAccountCapability")
+const syncExistingTeacherCoffeeTalkProfilesRef = makeFunctionReference<"mutation">("instituteDirectory:syncExistingTeacherCoffeeTalkProfiles")
 const listPublicInstituteResearchRef = makeFunctionReference<"query">("instituteContent:listPublicInstituteResearch")
 const listPublicInstituteUpdatesRef = makeFunctionReference<"query">("instituteContent:listPublicInstituteUpdates")
 const getPublicInstituteResearchByIdRef = makeFunctionReference<"query">("instituteContent:getPublicInstituteResearchById")
@@ -103,6 +115,9 @@ const getPublicInstituteUpdateByIdRef = makeFunctionReference<"query">("institut
 const submitCoffeeTalkApplicationRef = makeFunctionReference<"mutation">("coffeeTalk:submitApplication")
 const listMyCoffeeTalkApplicationsRef = makeFunctionReference<"query">("coffeeTalk:listMine")
 const listTeacherCoffeeTalkApplicationsRef = makeFunctionReference<"query">("coffeeTalk:listForTeacher")
+const getCoffeeTalkManageAccessRef = makeFunctionReference<"query">("coffeeTalk:getManageAccess")
+const getMyCoffeeTalkTeacherAvailabilityRef = makeFunctionReference<"query">("coffeeTalk:getMyTeacherAvailability")
+const setCoffeeTalkTeacherAvailabilityRef = makeFunctionReference<"mutation">("coffeeTalk:setTeacherAvailability")
 const actOnCoffeeTalkApplicationRef = makeFunctionReference<"mutation">("coffeeTalk:actOnApplication")
 const listCoffeeTalkNotificationsRef = makeFunctionReference<"query">("coffeeTalk:listNotifications")
 const markCoffeeTalkNotificationReadRef = makeFunctionReference<"mutation">("coffeeTalk:markNotificationRead")
@@ -255,6 +270,7 @@ type UserListArgs = {
   skip?: number | boolean
   limit?: number
   classMembersOnly?: boolean
+  identityType?: "undergrad" | "graduate"
 }
 
 function normalizeUserListArgs(args?: UserListArgs) {
@@ -414,7 +430,8 @@ export function useSimpleLogin() {
 }
 
 export function useUsersCount(args?: { organization?: "pku" | "thu"; classMembersOnly?: boolean }) {
-  return useQuery(api.users.count, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.users.count, sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip")
 }
 
 // ==================== AIA 公开目录与 Coffee Talk ====================
@@ -433,6 +450,14 @@ export function usePublicInstitutePerson(slug?: string | null) {
   return useQuery(getPublicInstitutePersonRef, slug ? { slug } : "skip")
 }
 
+export function useMyPublicProfileDestination() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getMyPublicProfileDestinationRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  ) as { href: string; label: string } | null | undefined
+}
+
 export function usePublicResearchGroups(args?: {
   researchArea?: string
   query?: string
@@ -443,6 +468,35 @@ export function usePublicResearchGroups(args?: {
 
 export function usePublicResearchGroup(slug?: string | null) {
   return useQuery(getPublicResearchGroupRef, slug ? { slug } : "skip")
+}
+
+export function useResearchGroupScopeOptions() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listResearchGroupScopeOptionsRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+/** Teacher-only roster for groups whose leader profile is bound to the current account. */
+export function useTeacherGroupRoster() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listTeacherGroupRosterRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+export function useAssignTeacherGroupStudent() {
+  const assign = useMutation(assignTeacherGroupStudentRef)
+  return useCallback((args: { researchGroupId: string; studentUserId: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return assign({ sessionToken, ...args } as any)
+  }, [assign])
+}
+
+export function useRemoveTeacherGroupStudent() {
+  const remove = useMutation(removeTeacherGroupStudentRef)
+  return useCallback((studentUserId: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ sessionToken, studentUserId } as any)
+  }, [remove])
 }
 
 export function usePublicInstituteResearch(args?: {
@@ -500,10 +554,35 @@ export function useBindInstitutePersonAccount() {
   }, [bind])
 }
 
+export function useSetAccountCapability() {
+  const setCapability = useMutation(setAccountCapabilityRef)
+  return useCallback((args: { userId: string; capability: "manage_research_group_members"; enabled: boolean }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setCapability({ ...args, sessionToken, userId: args.userId as any } as any)
+  }, [setCapability])
+}
+
+/** Super-admin-only, standalone backfill for teacher accounts created before automatic provisioning. */
+export function useSyncExistingTeacherCoffeeTalkProfiles() {
+  const sync = useMutation(syncExistingTeacherCoffeeTalkProfilesRef)
+  return useCallback(() => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return sync({ sessionToken } as any)
+  }, [sync])
+}
+
 export type CoffeeTalkApplicationInput = {
   teacherSlug: string
   topic: string
+  purpose: string
+  researchBackground: string
+  expectedOutcome: string
+  preferredFormat: "online" | "offline" | "either"
   availability: string
+  consentToShareProfile: boolean
+  idempotencyKey: string
   notes?: string
 }
 
@@ -532,13 +611,39 @@ export function useTeacherCoffeeTalkApplications() {
   )
 }
 
+export function useCoffeeTalkManageAccess() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getCoffeeTalkManageAccessRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  )
+}
+
+export function useMyCoffeeTalkTeacherAvailability() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getMyCoffeeTalkTeacherAvailabilityRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  )
+}
+
+export function useSetCoffeeTalkTeacherAvailability() {
+  const setAvailability = useMutation(setCoffeeTalkTeacherAvailabilityRef)
+  return useCallback((args: { open: boolean; teacherSlug?: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setAvailability({ sessionToken, ...args } as any)
+  }, [setAvailability])
+}
+
 export function useActOnCoffeeTalkApplication() {
   const act = useMutation(actOnCoffeeTalkApplicationRef)
   return useCallback((args: {
     applicationId: string
     expectedVersion: number
-    action: "start_review" | "accept" | "decline" | "withdraw" | "cancel" | "complete" | "reassign" | "correct"
+    action: "start_review" | "accept" | "decline" | "withdraw" | "cancel" | "complete" | "reassign" | "correct" | "request_information" | "supplement"
     teacherSlug?: string
+    note?: string
   }) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
@@ -575,13 +680,13 @@ export function useMarkAllCoffeeTalkNotificationsRead() {
 }
 
 /** Unified recipient-authorized AIA inbox (Coffee Talk and OA workflow). */
-export function useAiaNotifications(options?: { enabled?: boolean }) {
+export function useAiaNotifications(options?: { enabled?: boolean; limit?: number }) {
   const sessionToken = useTongClassSessionToken()
   return useQuery(
     listMyAiaNotificationsRef,
     options?.enabled === false
       ? "skip"
-      : sessionToken ? ({ sessionToken } as any) : "skip",
+      : sessionToken ? ({ sessionToken, ...(options?.limit ? { limit: options.limit } : {}) } as any) : "skip",
   )
 }
 
@@ -592,6 +697,15 @@ export function useMarkAiaNotificationRead() {
     if (!sessionToken) throw new Error("请先登录")
     return markRead({ sessionToken, notificationId: notificationId as any } as any)
   }, [markRead])
+}
+
+export function useArchiveAiaNotification() {
+  const archive = useMutation(archiveMyAiaNotificationRef)
+  return useCallback((notificationId: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return archive({ sessionToken, notificationId: notificationId as any } as any)
+  }, [archive])
 }
 
 export function useMarkAllAiaNotificationsRead() {
@@ -610,24 +724,40 @@ export function useNews(args?: { category?: string; skip?: number; limit?: numbe
 }
 
 export function useAllNews(args?: { category?: string; skip?: number; limit?: number }) {
-  return useQuery(api.news.listAll, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.news.listAll, sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip")
 }
 
 export function useNewsById(id?: string | null) {
-  return useQuery(api.news.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.news.getById, id ? ({ id: id as any, ...(sessionToken ? { sessionToken } : {}) } as any) : "skip")
 }
 
 export function useCreateNews() {
-  return useMutation(api.news.create)
+  const create = useMutation(api.news.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateNews() {
-  return useMutation(api.news.update)
+  const update = useMutation(api.news.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useDeleteNews() {
   const remove = useMutation(api.news.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function useNewsCount(args?: { category?: string }) {
@@ -767,63 +897,104 @@ export function useDeleteFeedbackEntry() {
 // ==================== 活动相关 ====================
 
 export function useEvents(args?: { fromDate?: string; toDate?: string; skip?: number; limit?: number }) {
-  return useQuery(api.events.list, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.events.list, { ...(args || {}), ...(sessionToken ? { sessionToken } : {}) } as any)
 }
 
 export function useEventById(id?: string | null) {
-  return useQuery(api.events.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.events.getById, id ? ({ id: id as any, ...(sessionToken ? { sessionToken } : {}) } as any) : "skip")
+}
+
+export function useAdminEvents(args?: { skip?: number; limit?: number }) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.events.adminList, sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip")
 }
 
 export function useCreateEvent() {
-  return useMutation(api.events.create)
+  const create = useMutation(api.events.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateEvent() {
-  return useMutation(api.events.update)
+  const update = useMutation(api.events.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useDeleteEvent() {
   const remove = useMutation(api.events.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function useEventsCount() {
-  return useQuery(api.events.count)
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.events.count, sessionToken ? { sessionToken } : {})
 }
 
 // ==================== 出版物相关 ====================
 
 export function usePublications(args?: { category?: string; year?: number; skip?: number; limit?: number }) {
-  return useQuery(api.publications.list, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.publications.list, { ...(args || {}), ...(sessionToken ? { sessionToken } : {}) })
 }
 
 export function usePublicationsByUser(userId?: string | null) {
-  return useQuery(api.publications.listByUser, userId ? ({ userId: userId as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.publications.listByUser, userId && sessionToken ? ({ userId: userId as any, sessionToken } as any) : "skip")
 }
 
 export function usePublicationById(id?: string | null) {
-  return useQuery(api.publications.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.publications.getById, id ? ({ id: id as any, ...(sessionToken ? { sessionToken } : {}) } as any) : "skip")
 }
 
 export function useCreatePublication() {
-  return useMutation(api.publications.create)
+  const create = useMutation(api.publications.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdatePublication() {
-  return useMutation(api.publications.update)
+  const update = useMutation(api.publications.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useDeletePublication() {
   const remove = useMutation(api.publications.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function usePublicationsCount(args?: { category?: string; year?: number }) {
-  return useQuery(api.publications.count, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.publications.count, { ...(args || {}), ...(sessionToken ? { sessionToken } : {}) })
 }
 
 export function useSearchPublications(query: string) {
-  return useQuery(api.publications.search, query ? { query } : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.publications.search, query ? { query, ...(sessionToken ? { sessionToken } : {}) } : "skip")
 }
 
 // ==================== 学术交流支持申请 ====================
@@ -862,6 +1033,24 @@ export function useCreateAcademicExchangeApplication() {
     if (!sessionToken) throw new Error("请先登录")
     return create({ ...args, sessionToken } as any)
   }, [create])
+}
+
+export function useUpdateAcademicExchangeApplication() {
+  const update = useMutation(updateAcademicExchangeApplicationRef)
+  return useCallback((args: Record<string, unknown> & { id: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, id: args.id as any, sessionToken } as any)
+  }, [update])
+}
+
+export function useWithdrawAcademicExchangeApplication() {
+  const withdraw = useMutation(withdrawAcademicExchangeApplicationRef)
+  return useCallback((id: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return withdraw({ sessionToken, id: id as any } as any)
+  }, [withdraw])
 }
 
 export function useGenerateAcademicExchangeUploadUrl() {
@@ -1025,7 +1214,7 @@ export function useGenerateOAFormUploadUrl() {
 
 export function useSubmitOAForm() {
   const submit = useMutation(submitOAFormRef)
-  return useCallback((args: { formId: string; answers: Record<string, unknown> }) => {
+  return useCallback((args: { formId: string; answers: Record<string, unknown>; idempotencyKey: string }) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
     return submit({ ...args, sessionToken, formId: args.formId as any } as any)
@@ -1034,7 +1223,7 @@ export function useSubmitOAForm() {
 
 export function useUpdateOAFormSubmission() {
   const update = useMutation(updateOAFormSubmissionRef)
-  return useCallback((args: { id: string; answers: Record<string, unknown> }) => {
+  return useCallback((args: { id: string; answers: Record<string, unknown>; expectedVersion?: number }) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
     return update({ ...args, sessionToken, id: args.id as any } as any)
@@ -1049,6 +1238,15 @@ export function useMyOAFormSubmissions(formId?: string | null) {
   )
 }
 
+/** Approval audit entries for a submission owned by the current user. */
+export function useMyOAApprovalHistory(submissionId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listMyOAApprovalHistoryRef,
+    sessionToken && submissionId ? ({ sessionToken, submissionId: submissionId as any } as any) : "skip",
+  )
+}
+
 /** Pending workflow tasks assigned to the current authenticated institute account. */
 export function useOAApprovalInbox() {
   const sessionToken = useTongClassSessionToken()
@@ -1058,13 +1256,23 @@ export function useOAApprovalInbox() {
   )
 }
 
+export function useOAApprovalTask(taskId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getMyOAApprovalTaskRef,
+    sessionToken && taskId ? ({ sessionToken, taskId: taskId as any } as any) : "skip",
+  )
+}
+
 /** Acts on a persisted task ID; callers never submit a role, scope, or recipient. */
 export function useReviewOAFormSubmission() {
   const act = useMutation(actOnOAApprovalTaskRef)
   return useCallback((args: {
     taskId: string
-    action: "approve" | "reject"
+    action: "approve" | "reject" | "request_changes"
     comment?: string
+    expectedVersion: number
+    idempotencyKey: string
   }) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
@@ -1072,7 +1280,9 @@ export function useReviewOAFormSubmission() {
       sessionToken,
       taskId: args.taskId as any,
       action: args.action,
+      idempotencyKey: args.idempotencyKey,
       ...(args.comment ? { comment: args.comment } : {}),
+      expectedVersion: args.expectedVersion,
     } as any)
   }, [act])
 }
@@ -1228,29 +1438,56 @@ export function useUpdatePublicationVenue() {
 
 // ==================== 课程相关 ====================
 
-export function useCourses(args?: { skip?: number; limit?: number }) {
-  return useQuery(api.courses.list, args || {})
+export function useCourses(args?: { skip?: number; limit?: number; enabled?: boolean }) {
+  const sessionToken = useTongClassSessionToken()
+  const { enabled = true, ...queryArgs } = args || {}
+  return useQuery(
+    api.courses.list,
+    sessionToken && enabled ? ({ ...queryArgs, sessionToken } as any) : "skip"
+  )
 }
 
 export function useCourseById(id?: string | null) {
-  return useQuery(api.courses.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.courses.getById,
+    id && sessionToken ? ({ id: id as any, sessionToken } as any) : "skip"
+  )
 }
 
 export function useCourseByName(name?: string | null) {
-  return useQuery(api.courses.getByName, name ? { name } : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.courses.getByName,
+    name && sessionToken ? ({ name, sessionToken } as any) : "skip"
+  )
 }
 
 export function useCreateCourse() {
-  return useMutation(api.courses.create)
+  const create = useMutation(api.courses.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateCourse() {
-  return useMutation(api.courses.update)
+  const update = useMutation(api.courses.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useDeleteCourse() {
   const remove = useMutation(api.courses.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 // ==================== 课程评价相关 ====================
@@ -1271,7 +1508,7 @@ export function useCourseReviews(args?: string | {
 
   return useQuery(
     api.courseReviews.listByCourse,
-    normalized?.courseName ? ({ ...normalized, sessionToken: sessionToken || undefined } as any) : "skip"
+    normalized?.courseName && sessionToken ? ({ ...normalized, sessionToken } as any) : "skip"
   )
 }
 
@@ -1280,56 +1517,114 @@ export function useAllCourseReviews(args?: {
   status?: "pending" | "approved" | "rejected"
 }) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(api.courseReviews.listByCourseAll, { ...(args || {}), sessionToken: sessionToken || undefined } as any)
+  return useQuery(
+    api.courseReviews.listByCourseAll,
+    sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip"
+  )
 }
 
 export function usePendingReviews(args?: { skip?: number; limit?: number }) {
-  return useQuery(api.courseReviews.listPending, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.courseReviews.listPending,
+    sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip"
+  )
 }
 
 export function useCourseListWithReviews() {
-  return useQuery(api.courseReviews.listCourses)
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.courseReviews.listCourses,
+    sessionToken ? ({ sessionToken } as any) : "skip"
+  )
 }
 
 export function useCreateCourseReview() {
-  return useMutation(api.courseReviews.create)
+  const create = useMutation(api.courseReviews.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateCourseReview() {
-  return useMutation(api.courseReviews.update)
+  const update = useMutation(api.courseReviews.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useEditReviewTag() {
-  return useMutation(api.courseReviews.editTag)
+  const edit = useMutation(api.courseReviews.editTag)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return edit({ ...args, sessionToken } as any)
+  }, [edit])
 }
 
 export function useApproveCourseReview() {
-  return useMutation(api.courseReviews.approve)
+  const approve = useMutation(api.courseReviews.approve)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return approve({ ...args, sessionToken } as any)
+  }, [approve])
 }
 
 export function useRejectCourseReview() {
-  return useMutation(api.courseReviews.reject)
+  const reject = useMutation(api.courseReviews.reject)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return reject({ ...args, sessionToken } as any)
+  }, [reject])
 }
 
 export function useDeleteCourseReview() {
   const remove = useMutation(api.courseReviews.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function useAssignReviewsByTags() {
-  return useMutation(api.courseReviews.assignByTags)
+  const assign = useMutation(api.courseReviews.assignByTags)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return assign({ ...args, sessionToken } as any)
+  }, [assign])
 }
 
 export function useReviewTags() {
-  return useQuery(api.courseReviews.listTags)
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.courseReviews.listTags,
+    sessionToken ? ({ sessionToken } as any) : "skip"
+  )
 }
 
 export function useSetReviewTagColor() {
-  return useMutation(api.courseReviews.setTagColor)
+  const setColor = useMutation(api.courseReviews.setTagColor)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setColor({ ...args, sessionToken } as any)
+  }, [setColor])
 }
 
 export function useCommonReviewTags() {
-  return useQuery(api.courseReviews.commonTags)
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.courseReviews.commonTags,
+    sessionToken ? ({ sessionToken } as any) : "skip"
+  )
 }
 
 export function useVoteCourseReview() {

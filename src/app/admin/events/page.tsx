@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye, MapPin, Clock } from "lucide-react"
-import { useEvents, useDeleteEvent } from "@/lib/api"
+import { useAdminEvents, useDeleteEvent } from "@/lib/api"
 import type { Event } from "@/types"
 
 const colorToType: Record<string, string> = {
@@ -52,7 +52,7 @@ const statusColors: Record<string, string> = {
 export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
-  const eventsData = useEvents()
+  const eventsData = useAdminEvents()
   const deleteEventMutation = useDeleteEvent()
   const events: Event[] = useMemo(() => eventsData || [], [eventsData])
   const { confirm, ConfirmDialog } = useConfirmDialog()
@@ -179,7 +179,7 @@ export default function EventsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link href={`/events/${event._id}`}>
+                            <Link href={`/tong-class/events/${event._id}`}>
                               <Eye className="h-4 w-4 mr-2" />
                               查看
                             </Link>

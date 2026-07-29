@@ -90,13 +90,14 @@ test("contextual shell sources avoid raw Convex usage", () => {
   }
 })
 
-test("AIA navigation exposes an accessible mobile menu without a search route", () => {
+test("AIA navigation exposes an accessible mobile menu and discoverable search route", () => {
   const source = readFileSync("src/components/layout/aia-navbar.tsx", "utf8")
 
   assert.match(source, /aria-label=.*AIA.*导航菜单/)
   assert.match(source, /aria-expanded/)
   assert.match(source, /onKeyDown/)
-  assert.doesNotMatch(source, /["']\/search/)
+  assert.match(source, /href=["']\/search["']/)
+  assert.match(source, /aria-label=["']站内搜索["']/)
 })
 
 test("Tong Class navigation uses canonical undergraduate path helpers", () => {

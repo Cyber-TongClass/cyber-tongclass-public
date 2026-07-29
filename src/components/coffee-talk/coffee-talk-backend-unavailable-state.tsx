@@ -14,18 +14,16 @@ export function CoffeeTalkBackendUnavailableState({
 }: CoffeeTalkBackendUnavailableStateProps) {
   return (
     <section
-      className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center shadow-sm sm:p-8"
+      className="mx-auto max-w-2xl border border-dashed aia-border-rule px-6 py-10 text-center sm:px-10"
       role="status"
       aria-labelledby="coffee-talk-unavailable-title"
     >
-      <AlertCircle className="mx-auto h-9 w-9 text-amber-700" aria-hidden="true" />
-      <h1 id="coffee-talk-unavailable-title" className="mt-4 text-2xl font-semibold text-slate-950">{title}</h1>
-      <p className="mt-3 leading-7 text-slate-700">{message}</p>
-      <Link
-        href={returnHref}
-        className="mt-6 inline-flex min-h-10 items-center rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-      >
-        返回 Coffee Talk 说明页
+      <p className="aia-kicker justify-center">Coffee Talk</p>
+      <AlertCircle className="mx-auto mt-4 h-7 w-7 text-[hsl(var(--aia-red))]" aria-hidden="true" />
+      <h1 id="coffee-talk-unavailable-title" className="aia-serif mt-4 text-2xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">{title}</h1>
+      <p className="aia-text-muted mt-3 leading-7">{message}</p>
+      <Link href={returnHref} className="aia-link mt-6 inline-block text-sm">
+        ← 返回 Coffee Talk 说明页
       </Link>
     </section>
   )

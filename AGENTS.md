@@ -44,7 +44,7 @@ npm run dev                     # Next.js dev server at :3000
 |---------|---------|
 | `npm run lint` | ESLint (`next` config), `--max-warnings=0` |
 | `npm run build` | Runs `npx convex codegen` then `next build` |
-| `npm run start` | Production server (after build) |
+| `node scripts/start-standalone.mjs` | Stage assets and run the production-like standalone server (after build) |
 
 - TypeScript errors are **ignored in production builds** (`next.config.js: ignoreBuildErrors: true`). Lint is the primary quality gate.
 - There are **no tests** in this repo.
@@ -77,7 +77,7 @@ documents/api.md — Backend API reference (Convex functions, endpoints, env var
 - Fonts: `Inter` (body sans), `Playfair Display` (headings serif), `JetBrains Mono` (code).
 - Dark mode: `next-themes` with `class` strategy.
 - Icons: `lucide-react` (already in dependencies).
-- Math rendering: MathJax CDN (configured in root layout).
+- Math rendering: route-scoped KaTeX in `src/components/markdown/markdown-renderer.tsx`; do not add a global math runtime.
 
 ## CI/CD
 

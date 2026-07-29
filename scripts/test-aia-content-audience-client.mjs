@@ -93,12 +93,12 @@ test("audience tabs render exact accessible labels, unique counts, and pressed s
   }))
 
   assert.equal((markup.match(/<button/g) ?? []).length, 3)
-  assert.match(markup, /aria-label="All"[^>]*aria-pressed="false"/)
-  assert.match(markup, /aria-label="Undergrad"[^>]*aria-pressed="false"/)
-  assert.match(markup, /aria-label="Grad"[^>]*aria-pressed="true"/)
-  assert.match(markup, />All<\/span><span[^>]*>4<\/span>/)
-  assert.match(markup, />Undergrad<\/span><span[^>]*>2<\/span>/)
-  assert.match(markup, />Grad<\/span><span[^>]*>2<\/span>/)
+  assert.match(markup, /aria-label="全部"[^>]*aria-pressed="false"/)
+  assert.match(markup, /aria-label="本科生"[^>]*aria-pressed="false"/)
+  assert.match(markup, /aria-label="研究生"[^>]*aria-pressed="true"/)
+  assert.match(markup, />全部<\/span><span[^>]*>4<\/span>/)
+  assert.match(markup, />本科生<\/span><span[^>]*>2<\/span>/)
+  assert.match(markup, />研究生<\/span><span[^>]*>2<\/span>/)
 })
 
 test("audience tabs are controlled buttons that report the selected filter", () => {
