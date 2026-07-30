@@ -6,7 +6,7 @@ test("AIA navigation renders the authenticated account avatar instead of an acco
   const source = readFileSync("src/components/layout/aia-navbar.tsx", "utf8")
 
   assert.match(source, /from\s+["']@\/lib\/hooks\/use-auth["']/)
-  assert.match(source, /const\s+\{\s*currentUser,\s*isAuthenticated,\s*isAdmin,\s*logout\s*\}\s*=\s*useAuth\(\)/)
+  assert.match(source, /const\s+\{\s*currentUser,\s*isAuthenticated,\s*isLoading,\s*isAdmin,\s*logout\s*\}\s*=\s*useAuth\(\)/)
   assert.match(source, /const\s+loginHref\s*=\s*[\s\S]*?\/login\?next=/)
   assert.match(source, /const\s+currentUserPhoto\s*=\s*currentUser\?\.realPhoto\s*\|\|\s*currentUser\?\.avatar/)
   assert.match(source, /isAuthenticated\s*&&\s*currentUser\s*\?/)

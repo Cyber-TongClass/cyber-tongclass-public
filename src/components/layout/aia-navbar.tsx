@@ -30,7 +30,7 @@ const isActivePath = (pathname: string, href: string) =>
 
 export function AiaNavbar() {
   const pathname = usePathname() || "/"
-  const { currentUser, isAuthenticated, isAdmin, logout } = useAuth()
+  const { currentUser, isAuthenticated, isLoading, isAdmin, logout } = useAuth()
   const profileDestination = useMyPublicProfileDestination()
   const notifications = useAiaNotifications({ enabled: isAuthenticated })
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -192,7 +192,7 @@ export function AiaNavbar() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : showLoginAction ? (
+          ) : !isLoading && showLoginAction ? (
             <Link
               href={loginHref}
               className="aia-focus inline-flex items-center gap-2 border aia-border-rule px-3.5 py-2 text-sm font-medium tracking-wide text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]"
@@ -289,7 +289,7 @@ export function AiaNavbar() {
                   退出登录
                 </button>
               </div>
-            ) : showLoginAction ? (
+            ) : !isLoading && showLoginAction ? (
               <Link
                 href={loginHref}
                 onClick={closeMobileMenu}
