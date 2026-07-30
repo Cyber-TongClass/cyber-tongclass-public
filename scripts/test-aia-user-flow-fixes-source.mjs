@@ -39,15 +39,15 @@ test("personal profile destinations are resolved server-side and omitted when un
   }
 })
 
-test("Coffee Talk entries use the same verified-student eligibility rule as submission", () => {
+test("Coffee Talk portal modules use the same verified-student eligibility rule as submission", () => {
   const entry = read("src/components/coffee-talk/coffee-talk-entry-list.tsx")
   const portal = read("src/components/portal/portal-client.tsx")
 
-  for (const source of [entry, portal]) {
-    assert.match(source, /isEmailVerified === true/)
-    assert.match(source, /identityType === "undergrad"/)
-    assert.match(source, /identityType === "graduate"/)
-  }
+  assert.match(portal, /isEmailVerified === true/)
+  assert.match(portal, /identityType === "undergrad"/)
+  assert.match(portal, /identityType === "graduate"/)
+  assert.match(entry, /href="\/services\/coffee-talk\/apply"/)
+  assert.match(entry, /href="\/services\/coffee-talk\/my"/)
 })
 
 test("detail pages use safe source-aware return links", () => {
