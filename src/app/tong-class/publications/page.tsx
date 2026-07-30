@@ -2,8 +2,8 @@
 
 import * as React from "react"
 
+import { TongClassPublicationArchive } from "@/components/content/tong-class-publication-archive"
 import {
-  PublicationArchive,
   type PublicationArchiveItem,
 } from "@/components/content/publication-archive"
 import { usePublications } from "@/lib/api"
@@ -43,7 +43,7 @@ export default function PublicationsPage() {
         </div>
       </section>
 
-      <PublicationArchive
+      <TongClassPublicationArchive
         items={publications}
         detailHref={(item) => `/tong-class/publications/${item.id}`}
       />
