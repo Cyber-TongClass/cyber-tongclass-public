@@ -2,8 +2,8 @@
 
 import * as React from "react"
 
+import { TongClassNewsTimeline } from "@/components/content/tong-class-news-timeline"
 import {
-  NewsTimeline,
   type NewsTimelineItem,
 } from "@/components/content/news-timeline"
 import { useNews } from "@/lib/api"
@@ -44,7 +44,7 @@ export default function NewsPage() {
         </div>
       </section>
 
-      <NewsTimeline items={items} detailHref={(item) => `/tong-class/news/${item.id}`} />
+      <TongClassNewsTimeline items={items} detailHref={(item) => `/tong-class/news/${item.id}`} />
     </div>
   )
 }
