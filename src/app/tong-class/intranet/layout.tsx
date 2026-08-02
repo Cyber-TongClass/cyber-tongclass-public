@@ -14,6 +14,7 @@ export default function IntranetLayout({
     <MemberOnlyGuard
       title="内网模块需登录后访问"
       description="请先使用学号登录后再访问内网内容和内部资源。"
+      allowedIdentityTypes={["graduate"]}
     >
       {children}
     </MemberOnlyGuard>

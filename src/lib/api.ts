@@ -7,7 +7,11 @@ import { api } from "../../convex/_generated/api"
 import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { toOAFormUpsertPayload } from "@/lib/oa-forms"
+import { normalizeOAUserScope, toOAFormUpsertPayload, type OAUserScope } from "@/lib/oa-forms"
+import type {
+  ManagedResearchGroupProfile,
+  ManagedResearchGroupRoster,
+} from "@/types/institute"
 
 type IdLike =
   | string
@@ -70,13 +74,29 @@ const adminListOAFormsRef = makeFunctionReference<"query">("oaForms:adminList")
 const adminGetOAFormRef = makeFunctionReference<"query">("oaForms:adminGet")
 const adminUpsertOAFormRef = makeFunctionReference<"mutation">("oaForms:adminUpsert")
 const adminSetOAFormStatusRef = makeFunctionReference<"mutation">("oaForms:adminSetStatus")
+const adminSetOAFormPinnedRef = makeFunctionReference<"mutation">("oaForms:adminSetPinned")
 const adminRemoveOAFormRef = makeFunctionReference<"mutation">("oaForms:adminRemove")
+const teacherListOAFormsRef = makeFunctionReference<"query">("oaForms:teacherList")
+const teacherGetOAFormRef = makeFunctionReference<"query">("oaForms:teacherGet")
+const teacherUpsertOAFormRef = makeFunctionReference<"mutation">("oaForms:teacherUpsert")
+const teacherSetOAFormStatusRef = makeFunctionReference<"mutation">("oaForms:teacherSetStatus")
+const teacherRemoveOAFormRef = makeFunctionReference<"mutation">("oaForms:teacherRemove")
+const teacherListOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:teacherListSubmissions")
+const manageListOAFormsRef = makeFunctionReference<"query">("oaForms:manageList")
+const editorVisibleOAFormsRef = makeFunctionReference<"query">("oaForms:listEditorVisibleTargets")
+const manageGetOAFormRef = makeFunctionReference<"query">("oaForms:manageGet")
+const manageUpsertOAFormRef = makeFunctionReference<"mutation">("oaForms:manageUpsert")
+const manageSetOAFormStatusRef = makeFunctionReference<"mutation">("oaForms:manageSetStatus")
+const manageSetOAFormPinnedRef = makeFunctionReference<"mutation">("oaForms:manageSetPinned")
+const manageRemoveOAFormRef = makeFunctionReference<"mutation">("oaForms:manageRemove")
+const manageListOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:manageListSubmissions")
 const generateOAFormUploadUrlRef = makeFunctionReference<"mutation">("oaForms:generateUploadUrl")
 const submitOAFormRef = makeFunctionReference<"mutation">("oaForms:submit")
 const updateOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:updateSubmission")
 const listMyOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:listMine")
 const listMyOAApprovalHistoryRef = makeFunctionReference<"query">("oaForms:listMineApprovalHistory")
 const listMyOAApprovalInboxRef = makeFunctionReference<"query">("oaForms:listMyApprovalInbox")
+const ensureMyReimbursementApprovalTasksRef = makeFunctionReference<"mutation">("oaForms:ensureMyReimbursementApprovalTasks")
 const getMyOAApprovalTaskRef = makeFunctionReference<"query">("oaForms:getMyApprovalTask")
 const actOnOAApprovalTaskRef = makeFunctionReference<"mutation">("oaForms:actOnApprovalTask")
 const listMyAiaNotificationsRef = makeFunctionReference<"query">("oaForms:listMyNotifications")
@@ -102,8 +122,22 @@ const listPublicResearchGroupsRef = makeFunctionReference<"query">("instituteDir
 const getPublicResearchGroupRef = makeFunctionReference<"query">("instituteDirectory:getPublicResearchGroup")
 const listResearchGroupScopeOptionsRef = makeFunctionReference<"query">("instituteDirectory:listResearchGroupScopeOptions")
 const listTeacherGroupRosterRef = makeFunctionReference<"query">("instituteDirectory:listTeacherGroupRoster")
-const assignTeacherGroupStudentRef = makeFunctionReference<"mutation">("instituteDirectory:assignTeacherGroupStudent")
-const removeTeacherGroupStudentRef = makeFunctionReference<"mutation">("instituteDirectory:removeTeacherGroupStudent")
+const assignTeacherGroupMemberRef = makeFunctionReference<"mutation">("instituteDirectory:assignTeacherGroupMember")
+const removeTeacherGroupMemberRef = makeFunctionReference<"mutation">("instituteDirectory:removeTeacherGroupMember")
+const setTeacherGroupMemberSubtitleRef = makeFunctionReference<"mutation">("instituteDirectory:setTeacherGroupMemberSubtitle")
+const updateTeacherGroupProfileRef = makeFunctionReference<"mutation">("instituteDirectory:updateTeacherGroupProfile")
+const setTeacherGroupMemberOrderRef = makeFunctionReference<"mutation">("instituteDirectory:setTeacherGroupMemberOrder")
+const setTeacherGroupPublicationVisibilityRef = makeFunctionReference<"mutation">("instituteDirectory:setTeacherGroupPublicationVisibility")
+const setTeacherGroupVisibilityRef = makeFunctionReference<"mutation">("instituteDirectory:setTeacherGroupVisibility")
+const listUserGroupsRef = makeFunctionReference<"query">("userGroups:listUserGroups")
+const listUserGroupScopeOptionsRef = makeFunctionReference<"query">("userGroups:listUserGroupScopeOptions")
+const listUserPickOptionsRef = makeFunctionReference<"query">("userGroups:listUserPickOptions")
+const searchManageableScopeOptionsRef = makeFunctionReference<"query">("oaScopeOptions:searchManageableScopeOptions")
+const createUserGroupRef = makeFunctionReference<"mutation">("userGroups:createUserGroup")
+const updateUserGroupRef = makeFunctionReference<"mutation">("userGroups:updateUserGroup")
+const deleteUserGroupRef = makeFunctionReference<"mutation">("userGroups:deleteUserGroup")
+const addUserGroupMemberRef = makeFunctionReference<"mutation">("userGroups:addUserGroupMember")
+const removeUserGroupMemberRef = makeFunctionReference<"mutation">("userGroups:removeUserGroupMember")
 const listInstituteAccountBindingCandidatesRef = makeFunctionReference<"query">("instituteDirectory:listAccountBindingCandidates")
 const bindInstitutePersonAccountRef = makeFunctionReference<"mutation">("instituteDirectory:bindPersonAccount")
 const setAccountCapabilityRef = makeFunctionReference<"mutation">("instituteDirectory:setAccountCapability")
@@ -475,28 +509,179 @@ export function useResearchGroupScopeOptions() {
   return useQuery(listResearchGroupScopeOptionsRef, sessionToken ? ({ sessionToken } as any) : "skip")
 }
 
-/** Teacher-only roster for groups whose leader profile is bound to the current account. */
-export function useTeacherGroupRoster() {
+/** Managed roster for a teacher's own group or a super-admin-selected group. */
+export function useTeacherGroupRoster(groupId?: string) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(listTeacherGroupRosterRef, sessionToken ? ({ sessionToken } as any) : "skip")
+  return useQuery(
+    listTeacherGroupRosterRef,
+    sessionToken
+      ? ({
+          sessionToken,
+          ...(groupId ? { groupId: groupId as any } : {}),
+        } as any)
+      : "skip",
+  ) as ManagedResearchGroupRoster | undefined
 }
 
-export function useAssignTeacherGroupStudent() {
-  const assign = useMutation(assignTeacherGroupStudentRef)
-  return useCallback((args: { researchGroupId: string; studentUserId: string }) => {
+export function useAssignTeacherGroupMember() {
+  const assign = useMutation(assignTeacherGroupMemberRef)
+  return useCallback((args: { groupId?: string; userId: string; subtitle?: string }) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
-    return assign({ sessionToken, ...args } as any)
+    return assign({
+      sessionToken,
+      ...args,
+      ...(args.groupId ? { groupId: args.groupId as any } : {}),
+    } as any)
   }, [assign])
 }
 
-export function useRemoveTeacherGroupStudent() {
-  const remove = useMutation(removeTeacherGroupStudentRef)
-  return useCallback((studentUserId: string) => {
+export function useRemoveTeacherGroupMember() {
+  const remove = useMutation(removeTeacherGroupMemberRef)
+  return useCallback((args: string | { groupId?: string; userId: string }) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
-    return remove({ sessionToken, studentUserId } as any)
+    const input = typeof args === "string" ? { userId: args } : args
+    return remove({
+      sessionToken,
+      ...input,
+      ...(input.groupId ? { groupId: input.groupId as any } : {}),
+    } as any)
   }, [remove])
+}
+
+export function useSetTeacherGroupMemberSubtitle() {
+  const setSubtitle = useMutation(setTeacherGroupMemberSubtitleRef)
+  return useCallback((args: { groupId?: string; userId: string; subtitle?: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setSubtitle({
+      sessionToken,
+      ...args,
+      ...(args.groupId ? { groupId: args.groupId as any } : {}),
+    } as any)
+  }, [setSubtitle])
+}
+
+export function useUpdateTeacherGroupProfile() {
+  const updateProfile = useMutation(updateTeacherGroupProfileRef)
+  return useCallback((args: { groupId?: string; profile: ManagedResearchGroupProfile }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return updateProfile({
+      sessionToken,
+      ...args,
+      ...(args.groupId ? { groupId: args.groupId as any } : {}),
+    } as any)
+  }, [updateProfile])
+}
+
+export function useSetTeacherGroupMemberOrder() {
+  const setOrder = useMutation(setTeacherGroupMemberOrderRef)
+  return useCallback((args: { groupId?: string; orderedUserIds: string[] }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setOrder({
+      sessionToken,
+      ...args,
+      ...(args.groupId ? { groupId: args.groupId as any } : {}),
+      orderedUserIds: args.orderedUserIds as any,
+    } as any)
+  }, [setOrder])
+}
+
+export function useSetTeacherGroupPublicationVisibility() {
+  const setVisibility = useMutation(setTeacherGroupPublicationVisibilityRef)
+  return useCallback((args: {
+    groupId?: string
+    publicationId: string
+    visible: boolean
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setVisibility({
+      sessionToken,
+      ...args,
+      ...(args.groupId ? { groupId: args.groupId as any } : {}),
+      publicationId: args.publicationId as any,
+    } as any)
+  }, [setVisibility])
+}
+
+export function useSetTeacherGroupVisibility() {
+  const setVisibility = useMutation(setTeacherGroupVisibilityRef)
+  return useCallback((visibility: "public" | "hidden") => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setVisibility({ sessionToken, visibility } as any)
+  }, [setVisibility])
+}
+
+/** Super-admin organization management: user groups with members and the account list. */
+export function useUserGroups() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listUserGroupsRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+/** Group names and sizes for scope pickers; available to any signed-in account. */
+export function useUserGroupScopeOptions() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listUserGroupScopeOptionsRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+/** Directory-level account list for adding individuals to a scope; any signed-in account. */
+export function useUserPickOptions() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listUserPickOptionsRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+export type ManageableScopePurpose = "form_audience" | "workflow_approver" | "notification"
+
+/** One actor-filtered, bounded source for every OA audience/recipient picker. */
+export function useManageableScopeOptions(
+  purpose: ManageableScopePurpose,
+  query?: string,
+  selectedScope?: OAUserScope,
+) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    searchManageableScopeOptionsRef,
+    sessionToken ? ({
+      sessionToken,
+      purpose,
+      query: query?.trim() || undefined,
+      selectedScope: normalizeOAUserScope(selectedScope),
+    } as any) : "skip",
+  )
+}
+
+function useUserGroupMutation<TArgs extends Record<string, unknown>>(ref: typeof createUserGroupRef) {
+  const run = useMutation(ref)
+  return useCallback((args: TArgs) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return run({ sessionToken, ...args } as any)
+  }, [run])
+}
+
+export function useCreateUserGroup() {
+  return useUserGroupMutation<{ name: string; description?: string }>(createUserGroupRef)
+}
+
+export function useUpdateUserGroup() {
+  return useUserGroupMutation<{ groupId: string; name: string; description?: string }>(updateUserGroupRef)
+}
+
+export function useDeleteUserGroup() {
+  return useUserGroupMutation<{ groupId: string }>(deleteUserGroupRef)
+}
+
+export function useAddUserGroupMember() {
+  return useUserGroupMutation<{ groupId: string; userId: string }>(addUserGroupMemberRef)
+}
+
+export function useRemoveUserGroupMember() {
+  return useUserGroupMutation<{ groupId: string; userId: string }>(removeUserGroupMemberRef)
 }
 
 export function usePublicInstituteResearch(args?: {
@@ -516,10 +701,12 @@ export function usePublicInstituteUpdates(args?: {
   personSlug?: string
   limit?: number
 }) {
+  const sessionToken = useTongClassSessionToken()
   const queryArgs = useMemo(() => {
     const { groupSlug, ...rest } = args || {}
-    return groupSlug ? { ...rest, researchGroupSlug: groupSlug } : rest
-  }, [args])
+    const base = groupSlug ? { ...rest, researchGroupSlug: groupSlug } : rest
+    return sessionToken ? ({ ...base, sessionToken } as any) : base
+  }, [args, sessionToken])
   return useQuery(listPublicInstituteUpdatesRef, queryArgs)
 }
 
@@ -528,7 +715,11 @@ export function usePublicInstituteResearchById(id?: string | null) {
 }
 
 export function usePublicInstituteUpdateById(id?: string | null) {
-  return useQuery(getPublicInstituteUpdateByIdRef, id ? { id } : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getPublicInstituteUpdateByIdRef,
+    id ? (sessionToken ? ({ id, sessionToken } as any) : { id }) : "skip",
+  )
 }
 
 /** Super-admin-only metadata for explicit Institute person-to-account links. */
@@ -720,12 +911,14 @@ export function useMarkAllAiaNotificationsRead() {
 // ==================== 新闻相关 ====================
 
 export function useNews(args?: { category?: string; skip?: number; limit?: number }) {
-  return useQuery(api.news.list, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.news.list, { ...(args || {}), ...(sessionToken ? { sessionToken } : {}) } as any)
 }
 
-export function useAllNews(args?: { category?: string; skip?: number; limit?: number }) {
+export function useAllNews(args?: { category?: string; skip?: number; limit?: number; disabled?: boolean }) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(api.news.listAll, sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip")
+  const { disabled, ...queryArgs } = args || {}
+  return useQuery(api.news.listAll, sessionToken && !disabled ? ({ ...queryArgs, sessionToken } as any) : "skip") as any
 }
 
 export function useNewsById(id?: string | null) {
@@ -761,7 +954,8 @@ export function useDeleteNews() {
 }
 
 export function useNewsCount(args?: { category?: string }) {
-  return useQuery(api.news.count, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.news.count, { ...(args || {}), ...(sessionToken ? { sessionToken } : {}) } as any)
 }
 
 // ==================== 内网相关 ====================
@@ -906,9 +1100,18 @@ export function useEventById(id?: string | null) {
   return useQuery(api.events.getById, id ? ({ id: id as any, ...(sessionToken ? { sessionToken } : {}) } as any) : "skip")
 }
 
-export function useAdminEvents(args?: { skip?: number; limit?: number }) {
+export function useAdminEvents(args?: { skip?: number; limit?: number; disabled?: boolean }) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(api.events.adminList, sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip")
+  const { disabled, ...queryArgs } = args || {}
+  return useQuery(api.events.adminList, sessionToken && !disabled ? ({ ...queryArgs, sessionToken } as any) : "skip")
+}
+
+export function useAdminEventById(id?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.events.adminGetById,
+    sessionToken && id ? ({ id: id as any, sessionToken } as any) : "skip",
+  )
 }
 
 export function useCreateEvent() {
@@ -1028,7 +1231,7 @@ export function useAcademicExchangeApplication(id?: string | null) {
 
 export function useCreateAcademicExchangeApplication() {
   const create = useMutation(createAcademicExchangeApplicationRef)
-  return useCallback((args: Record<string, unknown>) => {
+  return useCallback((args: Record<string, unknown> & { idempotencyKey: string }) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
     return create({ ...args, sessionToken } as any)
@@ -1203,6 +1406,130 @@ export function useAdminRemoveOAForm() {
   }, [remove])
 }
 
+export function useAdminSetOAFormPinned() {
+  const setPinned = useMutation(adminSetOAFormPinnedRef)
+  return useCallback((args: { id: string; pinned: boolean }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setPinned({ ...args, sessionToken, id: args.id as any } as any)
+  }, [setPinned])
+}
+
+/** Canonical form-management surface for owner teachers and all-seeing super administrators. */
+export function useManageOAForms() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(manageListOAFormsRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+/** Target forms the current form editor is authorized to reference. */
+export function useEditorVisibleOAForms() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(editorVisibleOAFormsRef, sessionToken ? ({ sessionToken } as any) : "skip") as
+    | Array<{ id: string; title: string; status: "draft" | "published" | "archived"; kind: "form" | "reimbursement" }>
+    | undefined
+}
+
+export function useManageOAForm(id?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(manageGetOAFormRef, sessionToken && id ? ({ sessionToken, id: id as any } as any) : "skip")
+}
+
+export function useManageUpsertOAForm() {
+  const upsert = useMutation(manageUpsertOAFormRef)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return upsert({ ...toOAFormUpsertPayload(args), sessionToken } as any)
+  }, [upsert])
+}
+
+export function useManageSetOAFormStatus() {
+  const setStatus = useMutation(manageSetOAFormStatusRef)
+  return useCallback((args: { id: string; status: "draft" | "published" | "archived" }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setStatus({ ...args, sessionToken, id: args.id as any } as any)
+  }, [setStatus])
+}
+
+export function useManageSetOAFormPinned() {
+  const setPinned = useMutation(manageSetOAFormPinnedRef)
+  return useCallback((args: { id: string; pinned: boolean }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setPinned({ ...args, sessionToken, id: args.id as any } as any)
+  }, [setPinned])
+}
+
+export function useManageRemoveOAForm() {
+  const remove = useMutation(manageRemoveOAFormRef)
+  return useCallback((args: { id: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...args, sessionToken, id: args.id as any } as any)
+  }, [remove])
+}
+
+export function useManageOAFormSubmissions(args?: {
+  formId?: string | null
+  status?: "pending" | "approved" | "rejected" | "needs_changes"
+  search?: string
+}) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    manageListOAFormSubmissionsRef,
+    sessionToken && args?.formId
+      ? ({ sessionToken, ...args, formId: args.formId as any } as any)
+      : "skip",
+  )
+}
+
+/** Teacher-owned form publishing: each teacher only ever sees their own forms. */
+export function useTeacherOAForms() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherListOAFormsRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+export function useTeacherOAForm(id?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherGetOAFormRef, sessionToken && id ? ({ sessionToken, id: id as any } as any) : "skip")
+}
+
+export function useTeacherUpsertOAForm() {
+  const upsert = useMutation(teacherUpsertOAFormRef)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return upsert({ ...toOAFormUpsertPayload(args), sessionToken } as any)
+  }, [upsert])
+}
+
+export function useTeacherSetOAFormStatus() {
+  const setStatus = useMutation(teacherSetOAFormStatusRef)
+  return useCallback((args: { id: string; status: "draft" | "published" | "archived" }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setStatus({ ...args, sessionToken, id: args.id as any } as any)
+  }, [setStatus])
+}
+
+export function useTeacherRemoveOAForm() {
+  const remove = useMutation(teacherRemoveOAFormRef)
+  return useCallback((args: { id: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...args, sessionToken, id: args.id as any } as any)
+  }, [remove])
+}
+
+export function useTeacherOAFormSubmissions(args?: { formId?: string | null; status?: "pending" | "approved" | "rejected" | "needs_changes"; search?: string }) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    teacherListOAFormSubmissionsRef,
+    sessionToken && args?.formId ? ({ sessionToken, ...args, formId: args.formId as any } as any) : "skip"
+  )
+}
+
 export function useGenerateOAFormUploadUrl() {
   const generate = useMutation(generateOAFormUploadUrlRef)
   return useCallback((args?: { fileName?: string; mimeType?: string }) => {
@@ -1254,6 +1581,15 @@ export function useOAApprovalInbox() {
     listMyOAApprovalInboxRef,
     sessionToken ? ({ sessionToken } as any) : "skip",
   )
+}
+
+export function useEnsureMyReimbursementApprovalTasks() {
+  const ensure = useMutation(ensureMyReimbursementApprovalTasksRef)
+  return useCallback(() => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return ensure({ sessionToken } as any)
+  }, [ensure])
 }
 
 export function useOAApprovalTask(taskId?: string | null) {
@@ -2014,4 +2350,191 @@ export function useCC2026RemoveRegistration() {
     if (!sessionToken) throw new Error("请先登录")
     return remove({ id, sessionToken } as any)
   }, [remove])
+}
+
+// ---------------------------------------------------------------------------
+// Permission-granted content publication (新闻 / 活动 创建与审核)
+// ---------------------------------------------------------------------------
+
+const contentReviewListPermissionsRef = makeFunctionReference<"query">("contentReview:listPermissions")
+const contentReviewSetPermissionRef = makeFunctionReference<"mutation">("contentReview:setPermission")
+const contentReviewSetPermissionsForScopeRef = makeFunctionReference<"mutation">("contentReview:setPermissionsForScope")
+const contentReviewRemovePermissionRef = makeFunctionReference<"mutation">("contentReview:removePermission")
+const contentReviewMyPermissionsRef = makeFunctionReference<"query">("contentReview:myPermissions")
+const contentReviewSubmitRef = makeFunctionReference<"mutation">("contentReview:submit")
+const contentReviewReviewQueueRef = makeFunctionReference<"query">("contentReview:reviewQueue")
+const contentReviewMySubmissionsRef = makeFunctionReference<"query">("contentReview:mySubmissions")
+const contentReviewSubmissionDetailRef = makeFunctionReference<"query">("contentReview:getSubmissionDetail")
+const contentReviewReviewRef = makeFunctionReference<"mutation">("contentReview:review")
+
+export type ContentReviewCategory = "news" | "events"
+export type ContentPermissionCategory = ContentReviewCategory | "reimbursement"
+export type ContentReviewStatus = "pending" | "approved" | "rejected"
+
+export type ContentPermissionEntry = {
+  userId: string
+  username: string
+  name: string
+  identityType: string
+  canCreate: boolean
+  canManage: boolean
+  updatedAt: number
+}
+
+export type ContentSubmissionPayload = {
+  content?: string
+  sourceUrl?: string
+  coverImageUrl?: string
+  newsCategory?: string
+  date?: string
+  time?: string
+  endDate?: string
+  endTime?: string
+  location?: string
+  description?: string
+  url?: string
+  color?: string
+}
+
+export type ContentSubmission = {
+  _id: string
+  category: ContentReviewCategory
+  title: string
+  payload: ContentSubmissionPayload
+  targetScope?: Record<string, unknown>
+  createdBy: string
+  creatorName: string
+  status: ContentReviewStatus
+  reviewedBy?: string
+  reviewerName?: string
+  reviewComment?: string
+  reviewedAt?: number
+  publishedContentId?: string
+  tasks?: Array<{
+    _id: string
+    isMine: boolean
+    reviewerName: string
+    status: "pending" | "approved" | "rejected" | "skipped"
+    comment?: string
+    decidedAt?: number
+  }>
+  myTaskId?: string
+  canReview?: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/** Super admin: permission rows for one category. */
+export function useContentPermissions(category: ContentPermissionCategory) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    contentReviewListPermissionsRef,
+    sessionToken ? ({ sessionToken, category } as any) : "skip",
+  ) as ContentPermissionEntry[] | undefined
+}
+
+export function useSetContentPermission() {
+  const setPermission = useMutation(contentReviewSetPermissionRef)
+  return useCallback((args: { category: ContentPermissionCategory; userId: string; canCreate: boolean; canManage: boolean }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setPermission({ ...args, sessionToken, userId: args.userId as any } as any)
+  }, [setPermission])
+}
+
+/** Sends the unexpanded scope to the server, which resolves authorized members. */
+export function useSetContentPermissionsForScope() {
+  const setPermissionsForScope = useMutation(contentReviewSetPermissionsForScopeRef)
+  return useCallback((args: {
+    category: ContentPermissionCategory
+    scope: OAUserScope
+    canCreate: boolean
+    canManage: boolean
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setPermissionsForScope({ ...args, sessionToken } as any)
+  }, [setPermissionsForScope])
+}
+
+export function useRemoveContentPermission() {
+  const removePermission = useMutation(contentReviewRemovePermissionRef)
+  return useCallback((args: { category: ContentPermissionCategory; userId: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return removePermission({ ...args, sessionToken, userId: args.userId as any } as any)
+  }, [removePermission])
+}
+
+/** Signed-in account's rights across all categories (drives the portal section). */
+export function useMyContentPermissions() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    contentReviewMyPermissionsRef,
+    sessionToken ? ({ sessionToken } as any) : "skip",
+  ) as Record<ContentPermissionCategory, { canCreate: boolean; canManage: boolean }> | undefined
+}
+
+export function useSubmitContentForReview() {
+  const submit = useMutation(contentReviewSubmitRef)
+  return useCallback((args: {
+    category: ContentReviewCategory
+    title: string
+    payload: ContentSubmissionPayload
+    targetScope: Record<string, unknown>
+    idempotencyKey: string
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return submit({ ...args, sessionToken } as any)
+  }, [submit])
+}
+
+export function useContentReviewQueue(category: ContentReviewCategory, status?: ContentReviewStatus) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    contentReviewReviewQueueRef,
+    sessionToken ? ({ sessionToken, category, ...(status ? { status } : {}) } as any) : "skip",
+  ) as ContentSubmission[] | undefined
+}
+
+export function useMyContentSubmissions(category: ContentReviewCategory) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    contentReviewMySubmissionsRef,
+    sessionToken ? ({ sessionToken, category } as any) : "skip",
+  ) as ContentSubmission[] | undefined
+}
+
+/**
+ * Fetches one submission through the server's creator/reviewer relationship
+ * authorization. `null` deliberately covers missing, mismatched and
+ * inaccessible IDs without exposing which case occurred.
+ */
+export function useContentSubmissionDetail(category: ContentReviewCategory, id: string) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    contentReviewSubmissionDetailRef,
+    sessionToken ? ({ sessionToken, id: id as any, category } as any) : "skip",
+  ) as ContentSubmission | null | undefined
+}
+
+export function useReviewContentSubmission() {
+  const review = useMutation(contentReviewReviewRef)
+  return useCallback((args: {
+    taskId?: string
+    id?: string
+    decision: "approved" | "rejected"
+    comment?: string
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    if (!args.taskId && !args.id) throw new Error("审核任务标识不能为空")
+    return review({
+      ...args,
+      sessionToken,
+      ...(args.taskId ? { taskId: args.taskId as any } : {}),
+      ...(args.id ? { id: args.id as any } : {}),
+    } as any)
+  }, [review])
 }

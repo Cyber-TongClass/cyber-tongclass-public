@@ -95,6 +95,10 @@ export function toDirectoryResearchGroup(
     summary,
     description: group.descriptionZh || group.descriptionEn || summary,
     researchAreas: group.researchAreas,
+    publicLinks: group.publicLinks.map((link) => ({
+      label: link.label,
+      href: link.href,
+    })),
     leaderSlug: group.leader?.slug || "",
     // Memberships originate from explicit, public relationship rows. No
     // account fields or name-based matching reaches this presentation layer.
@@ -121,6 +125,27 @@ export function toDirectoryResearchOutput(
     isDemo: false,
     href: withReturnTo(`/tong-class/publications/${item.id}`, returnTo),
   }
+}
+
+type PublicResearchOutputWithVisibility = PublicInstituteResearch & {
+  effectiveVisibility?: "public" | "hidden" | boolean
+}
+
+/**
+ * The public endpoint already applies group visibility overrides. Keeping this
+ * final boundary defensive prevents a mistakenly over-broad DTO from reaching
+ * the public profile while remaining backward compatible with the narrow DTO.
+ */
+export function toEffectivePublicDirectoryResearchOutputs(
+  items: readonly PublicResearchOutputWithVisibility[],
+  returnTo: string,
+): PublicResearchOutput[] {
+  return items
+    .filter((item) => (
+      item.effectiveVisibility !== "hidden"
+      && item.effectiveVisibility !== false
+    ))
+    .map((item) => toDirectoryResearchOutput(item, returnTo))
 }
 
 export function toDirectoryUpdate(

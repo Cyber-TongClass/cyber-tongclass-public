@@ -4,10 +4,9 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ClipboardList, FilePlus2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createDefaultOAFormDraft, getOAWorkflowDraftConfig, normalizeFormSlug, oaFormStatusLabels } from "@/lib/oa-forms"
-import { useAdminOAForms, useAdminRemoveOAForm, useAdminSetOAFormStatus, useAdminUpsertOAForm } from "@/lib/api"
+import { useAdminOAForms, useAdminRemoveOAForm, useAdminSetOAFormPinned, useAdminSetOAFormStatus, useAdminUpsertOAForm } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import type { OAForm, OAFormStatus } from "@/types"
 import { useState } from "react"
@@ -16,18 +15,19 @@ import type { ReactNode } from "react"
 const statusClassNames: Record<OAFormStatus, string> = {
   draft: "text-amber-700",
   published: "text-emerald-700",
-  archived: "text-slate-500",
+  archived: "aia-text-muted",
 }
 
 const actionClassNames = {
-  edit: "text-slate-700 hover:text-slate-950",
-  submissions: "text-blue-700 hover:text-blue-900",
-  copy: "text-indigo-700 hover:text-indigo-900",
+  edit: "text-[hsl(var(--aia-ink))] hover:text-[hsl(var(--aia-red))]",
+  submissions: "text-[hsl(var(--aia-ink))] hover:text-[hsl(var(--aia-red))]",
+  copy: "text-[hsl(var(--aia-ink))] hover:text-[hsl(var(--aia-red))]",
   publish: "text-emerald-700 hover:text-emerald-900",
   unpublish: "text-amber-700 hover:text-amber-900",
-  archive: "text-purple-700 hover:text-purple-900",
-  unarchive: "text-cyan-700 hover:text-cyan-900",
-  delete: "text-red-600 hover:text-red-800",
+  archive: "text-[hsl(var(--aia-ink))] hover:text-[hsl(var(--aia-red))]",
+  unarchive: "text-[hsl(var(--aia-ink))] hover:text-[hsl(var(--aia-red))]",
+  pin: "text-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red-deep))]",
+  delete: "text-[hsl(var(--aia-red-deep))] hover:text-[hsl(var(--aia-red))]",
 } as const
 
 const actionTextClassName = "font-bold underline-offset-4 transition-colors hover:underline"
@@ -69,6 +69,7 @@ function FormsTableSection({
   isLoading,
   onDuplicate,
   onRemove,
+  onTogglePinned,
   onUpdateStatus,
 }: {
   title: string
@@ -77,22 +78,29 @@ function FormsTableSection({
   isLoading: boolean
   onDuplicate: (form: OAForm) => void
   onRemove: (form: OAForm) => void
+  onTogglePinned: (form: OAForm) => void
   onUpdateStatus: (form: OAForm, status: OAFormStatus) => void
 }) {
   return (
-    <Card>
-      <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5" />{title}</CardTitle></CardHeader>
-      <CardContent className="overflow-x-auto">
+    <section aria-label={title}>
+      <h2 className="flex items-center gap-2 border-b aia-border-rule pb-2">
+        <ClipboardList className="h-4 w-4 text-[hsl(var(--aia-red))]" aria-hidden="true" />
+        <span className="aia-serif text-lg font-semibold tracking-tight text-[hsl(var(--aia-ink))]">{title}</span>
+      </h2>
+      <div className="overflow-x-auto pt-4">
         <Table className="min-w-[980px]">
           <TableHeader><TableRow><TableHead>标题</TableHead><TableHead>Slug</TableHead><TableHead>分类</TableHead><TableHead>状态</TableHead><TableHead>更新时间</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={formTableColumnCount} className="text-center text-gray-500">Loading...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={formTableColumnCount} className="text-center aia-text-muted">Loading...</TableCell></TableRow>
             ) : forms.length === 0 ? (
-              <TableRow><TableCell colSpan={formTableColumnCount} className="text-center text-gray-500">{emptyText}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={formTableColumnCount} className="text-center aia-text-muted">{emptyText}</TableCell></TableRow>
             ) : forms.map((form) => (
               <TableRow key={form._id}>
-                <TableCell className="font-medium">{form.title}</TableCell>
+                <TableCell className="font-medium">
+                  {form.pinnedAt ? <span className="aia-mono aia-bg-tag mr-2 px-1.5 py-0.5 text-[11px] tracking-wider text-[hsl(var(--aia-red))]">置顶</span> : null}
+                  {form.title}
+                </TableCell>
                 <TableCell>{form.slug}</TableCell>
                 <TableCell>{form.category}</TableCell>
                 <TableCell><StatusText status={form.status} /></TableCell>
@@ -106,6 +114,9 @@ function FormsTableSection({
                         <Link className={`${actionTextClassName} ${actionClassNames.edit}`} href={`/admin/forms/${form._id}`}>编辑</Link>
                         <Link className={`${actionTextClassName} ${actionClassNames.submissions}`} href={`/admin/forms/${form._id}/submissions`}>提交</Link>
                         <TextAction className={actionClassNames.copy} onClick={() => onDuplicate(form)}>复制</TextAction>
+                        <TextAction className={actionClassNames.pin} onClick={() => onTogglePinned(form)}>
+                          {form.pinnedAt ? "取消置顶" : "置顶"}
+                        </TextAction>
                         {form.status === "published" ? (
                           <>
                             <TextAction className={actionClassNames.unpublish} onClick={() => onUpdateStatus(form, "draft")}>取消发布</TextAction>
@@ -123,8 +134,8 @@ function FormsTableSection({
             ))}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }
 
@@ -134,6 +145,7 @@ export default function AdminFormsPage() {
   const forms = useAdminOAForms({ kind: "form" }) as OAForm[] | undefined
   const upsert = useAdminUpsertOAForm()
   const setStatus = useAdminSetOAFormStatus()
+  const setPinned = useAdminSetOAFormPinned()
   const removeForm = useAdminRemoveOAForm()
   const [message, setMessage] = useState("")
   const activeForms = forms?.filter((form) => form.status !== "archived") || []
@@ -189,6 +201,16 @@ export default function AdminFormsPage() {
     }
   }
 
+  const togglePinned = async (form: OAForm) => {
+    setMessage("")
+    try {
+      await setPinned({ id: form._id, pinned: !form.pinnedAt })
+      setMessage(form.pinnedAt ? "已取消置顶" : "已置顶")
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "置顶操作失败")
+    }
+  }
+
   const remove = async (form: OAForm) => {
     if (!window.confirm(`确定删除“${form.title}”？已有提交的表单不能删除。`)) return
     setMessage("")
@@ -204,12 +226,13 @@ export default function AdminFormsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">OA 表单</h1>
-          <p className="mt-1 text-gray-500">像问卷星一样配置、发布和审核通班内部填报。</p>
+          <p className="aia-kicker">平台管理 · OA</p>
+          <h1 className="aia-serif mt-2 text-3xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">OA 表单</h1>
+          <p className="aia-text-muted mt-1 text-sm">像问卷星一样配置、发布和审核通班内部填报。</p>
         </div>
-        <Button type="button" onClick={() => void createForm()}><FilePlus2 className="mr-2 h-4 w-4" />新建表单</Button>
+        <Button type="button" className="min-h-11 rounded-none bg-[hsl(var(--aia-red))] px-5 hover:bg-[hsl(var(--aia-red-deep))]" onClick={() => void createForm()}><FilePlus2 className="mr-2 h-4 w-4" />新建表单</Button>
       </div>
-      {message ? <p className="rounded-md border bg-white px-4 py-3 text-sm text-slate-600">{message}</p> : null}
+      {message ? <p className="border-y aia-border-rule bg-[hsl(var(--aia-tag))] px-4 py-3 text-sm text-[hsl(var(--aia-ink))]">{message}</p> : null}
 
       <FormsTableSection
         title="表单列表"
@@ -218,6 +241,7 @@ export default function AdminFormsPage() {
         isLoading={forms === undefined}
         onDuplicate={(form) => void duplicateForm(form)}
         onRemove={(form) => void remove(form)}
+        onTogglePinned={(form) => void togglePinned(form)}
         onUpdateStatus={(form, status) => void updateStatus(form, status)}
       />
 
@@ -228,6 +252,7 @@ export default function AdminFormsPage() {
         isLoading={forms === undefined}
         onDuplicate={(form) => void duplicateForm(form)}
         onRemove={(form) => void remove(form)}
+        onTogglePinned={(form) => void togglePinned(form)}
         onUpdateStatus={(form, status) => void updateStatus(form, status)}
       />
     </div>

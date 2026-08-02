@@ -2,6 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------- */
+/* AIA bundled fonts (WOFF2). Declared globally but fetched on demand: a   */
+/* weight file downloads only when a page actually requests it. Tong-class */
+/* pages never reference these families, so they never pay the cost.       */
+/* ---------------------------------------------------------------------- */
+
+/* Latin editorial display serif — Tiempos Headline (trial, Latin-only).   */
+@font-face {
+  font-family: "Tiempos Headline";
+  src: url("/fonts/aia/tiempos-headline-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Tiempos Headline";
+  src: url("/fonts/aia/tiempos-headline-semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Tiempos Headline";
+  src: url("/fonts/aia/tiempos-headline-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* CJK display serif — 方正大标宋简体. Single display face: map every weight */
+/* to the one file so browsers never synthesize faux-bold on top of it.    */
+@font-face {
+  font-family: "FZ DaBiaoSong";
+  src: url("/fonts/aia/fz-dabiaosong.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Body sans — Alibaba PuHuiTi 3.0, subsetted to ASCII + GB2312 (~7.5k).   */
+/* Rare hanzi outside the subset fall back to the system CJK sans.         */
+@font-face {
+  font-family: "Alibaba PuHuiTi 3";
+  src: url("/fonts/aia/alibaba-puhuiti-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alibaba PuHuiTi 3";
+  src: url("/fonts/aia/alibaba-puhuiti-medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alibaba PuHuiTi 3";
+  src: url("/fonts/aia/alibaba-puhuiti-semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alibaba PuHuiTi 3";
+  src: url("/fonts/aia/alibaba-puhuiti-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Kicker / data mono — Geist Mono variable (wght 100–900).                */
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/aia/geist-mono.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -37,9 +116,9 @@
     --aia-rule: 35 14% 85%;
     --aia-muted: 220 9% 42%;
     --aia-tag: 38 22% 93%;
-    --font-aia-sans: "Noto Sans SC";
-    --font-aia-serif: "Songti SC";
-    --font-aia-mono: ui-monospace;
+    --font-aia-sans: "Alibaba PuHuiTi 3";
+    --font-aia-serif: "Tiempos Headline", "FZ DaBiaoSong";
+    --font-aia-mono: "Geist Mono";
   }
 
   .dark {
@@ -126,8 +205,8 @@
 /* ---------------------------------------------------------------------- */
 @layer utilities {
   .aia-scope {
-    font-family: var(--font-aia-sans), Inter, system-ui, -apple-system,
-      "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    font-family: var(--font-aia-sans), "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", Roboto,
       sans-serif;
     color: hsl(var(--aia-ink));
     background-color: hsl(var(--aia-paper));
@@ -135,7 +214,7 @@
 
   .aia-serif {
     font-family: var(--font-aia-serif), "Songti SC", "Noto Serif CJK SC",
-      Georgia, "Times New Roman", serif;
+      "Source Han Serif SC", "SimSun", Georgia, "Times New Roman", serif;
   }
 
   .aia-mono {

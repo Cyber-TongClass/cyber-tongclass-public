@@ -1,35 +1,34 @@
 import type { Metadata } from "next"
-import "@fontsource/noto-sans-sc/400.css"
-import "@fontsource/noto-sans-sc/600.css"
 import "@/styles/globals.css"
 import { ThemeProvider } from "@/components/providers"
 import { AppShell } from "@/components/layout/app-shell"
 import { ConvexAuthClientProvider } from "@/lib/convex-client"
 import { siteUrl } from "@/lib/site-url"
 import { Suspense } from "react"
+import { siteCopy } from "@/config/site-copy"
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: {
-    default: "北京大学人工智能研究院综合服务系统 | Artificial Intelligence Agora",
-    template: "%s | Artificial Intelligence Agora",
+    default: siteCopy.metadata.title,
+    template: siteCopy.metadata.titleTemplate,
   },
-  description: "The Integrated Services Platform of PKU IAI — 北京大学人工智能研究院综合服务系统。",
-  keywords: ["人工智能", "北京大学", "北京大学人工智能研究院", "AIA", "Artificial Intelligence Agora", "PKU IAI"],
-  authors: [{ name: "北京大学人工智能研究院" }],
+  description: siteCopy.metadata.description,
+  keywords: [...siteCopy.metadata.keywords],
+  authors: [{ name: siteCopy.metadata.author }],
   icons: { icon: "/brand/aia/aia-seal.png" },
   openGraph: {
-    title: "北京大学人工智能研究院综合服务系统 | Artificial Intelligence Agora",
-    description: "The Integrated Services Platform of PKU IAI",
+    title: siteCopy.metadata.title,
+    description: siteCopy.metadata.shortDescription,
     url: "/",
-    siteName: "Artificial Intelligence Agora",
+    siteName: siteCopy.metadata.siteName,
     locale: "zh_CN",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Artificial Intelligence Agora | PKU IAI",
-    description: "The Integrated Services Platform of PKU IAI",
+    title: siteCopy.metadata.twitterTitle,
+    description: siteCopy.metadata.shortDescription,
   },
 }
 

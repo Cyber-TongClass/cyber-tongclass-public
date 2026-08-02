@@ -41,7 +41,7 @@ test("legacy Tong Class OA paths remain explicitly available when no AIA target 
   const forms = source("convex/oaForms.ts")
 
   assert.match(forms, /if \(!form\.targetScope\) \{\s*requireMember\(user\)/)
-  assert.match(forms, /const requestedApprovalSteps = normalizeApprovalSteps\(args\.approvalSteps\)/)
+  assert.match(forms, /adaptLegacyOAWorkflow\(form\.approvalSteps \|\| \[\]\)/)
   assert.match(forms, /existingById\?\.approvalSteps/)
 })
 
@@ -50,7 +50,7 @@ test("AIA workflow authorization uses stored current tasks and keeps owner data 
 
   assert.match(forms, /approvalStepsSnapshot: _approvalStepsSnapshot/)
   assert.match(forms, /task\.status === "pending" && task\.stepIndex === submission\.currentApprovalStep/)
-  assert.match(forms, /return await advanceOAWorkflow\(/)
+  assert.match(forms, /const workflowResult = await advanceOAWorkflow\(/)
   assert.match(forms, /args\.reviewStatus === "needs_changes"[\s\S]*?request_changes/)
   assert.match(forms, /try \{\s*user = await getUserBySession\(ctx, args\.sessionToken\)\s*\} catch \{\s*return \[\]/)
 })

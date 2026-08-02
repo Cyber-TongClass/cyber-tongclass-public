@@ -1,13 +1,55 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 import { getUserBySession } from "./reviewer/lib"
-import { requireContentAdmin } from "./lib/contentAuthorization"
+import {
+  requireContentManager,
+  requireSuperAdminForDirectContentCreate,
+} from "./lib/contentAuthorization"
+import { loadOAUserScopeContext, userMatchesOAUserScope } from "./lib/oaWorkflow"
 
 const audienceValidator = v.array(v.union(v.literal("undergrad"), v.literal("graduate")))
 
-function canViewEvent(event: { audiences?: string[] }, actor: any | null) {
+function canViewEvent(event: { audiences?: string[]; targetScope?: any }, actor: any | null, scopeContext?: any) {
+  if (event.targetScope) {
+    // Scoped events are members-only: logged-out visitors never see them.
+    if (!actor || !scopeContext) return false
+    if (!userMatchesOAUserScope(actor, event.targetScope, scopeContext.researchGroupId, scopeContext.userGroupIds)) return false
+  }
   return !event.audiences?.length
     || (actor?.identityType !== undefined && event.audiences.includes(actor.identityType))
+}
+
+async function loadActorWithScopeContext(ctx: any, sessionToken?: string) {
+  if (!sessionToken) return { actor: null, scopeContext: undefined }
+  try {
+    const actor = await getUserBySession(ctx, sessionToken)
+    const scopeContext = await loadOAUserScopeContext(ctx, actor._id)
+    return { actor, scopeContext }
+  } catch {
+    return { actor: null, scopeContext: undefined }
+  }
+}
+
+function publicEventDto(event: any) {
+  return {
+    _id: event._id,
+    title: event.title,
+    date: event.date,
+    time: event.time,
+    endDate: event.endDate,
+    endTime: event.endTime,
+    location: event.location,
+    description: event.description,
+    url: event.url,
+    color: event.color,
+  }
+}
+
+function managerEventDto(event: any) {
+  return {
+    ...publicEventDto(event),
+    audiences: event.audiences,
+  }
 }
 
 // Get all events
@@ -28,11 +70,11 @@ export const list = query({
     if (args.toDate) {
       filtered = filtered.filter((e) => e.date <= args.toDate!)
     }
-    const actor = args.sessionToken ? await getUserBySession(ctx, args.sessionToken) : null
-    filtered = filtered.filter((event) => canViewEvent(event, actor))
+    const { actor, scopeContext } = await loadActorWithScopeContext(ctx, args.sessionToken)
+    filtered = filtered.filter((event) => canViewEvent(event, actor, scopeContext))
     const skip = args.skip || 0
     const limit = args.limit || 50
-    return filtered.slice(skip, skip + limit)
+    return filtered.slice(skip, skip + limit).map(publicEventDto)
   },
 })
 
@@ -42,8 +84,8 @@ export const getById = query({
   handler: async (ctx, args) => {
     const event = await ctx.db.get(args.id)
     if (!event) return null
-    const actor = args.sessionToken ? await getUserBySession(ctx, args.sessionToken) : null
-    return canViewEvent(event, actor) ? event : null
+    const { actor, scopeContext } = await loadActorWithScopeContext(ctx, args.sessionToken)
+    return canViewEvent(event, actor, scopeContext) ? publicEventDto(event) : null
   },
 })
 
@@ -54,10 +96,24 @@ export const adminList = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    await requireContentManager(ctx, actor, "events")
     const rows = await ctx.db.query("events").order("asc").collect()
     const skip = args.skip || 0
-    return rows.slice(skip, skip + (args.limit || 200))
+    return rows.slice(skip, skip + (args.limit || 200)).map(managerEventDto)
+  },
+})
+
+export const adminGetById = query({
+  args: {
+    sessionToken: v.string(),
+    id: v.id("events"),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    await requireContentManager(ctx, actor, "events")
+    const event = await ctx.db.get(args.id)
+    return event ? managerEventDto(event) : null
   },
 })
 
@@ -77,7 +133,9 @@ export const create = mutation({
     audiences: v.optional(audienceValidator),
   },
   handler: async (ctx, args) => {
-    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    requireSuperAdminForDirectContentCreate(
+      await getUserBySession(ctx, args.sessionToken),
+    )
     const eventId = await ctx.db.insert("events", {
       title: args.title,
       date: args.date,
@@ -113,7 +171,8 @@ export const update = mutation({
     audiences: v.optional(audienceValidator),
   },
   handler: async (ctx, args) => {
-    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    await requireContentManager(ctx, actor, "events")
     const { id, sessionToken: _sessionToken, ...updates } = args
     const event = await ctx.db.get(id)
     if (!event) {
@@ -128,7 +187,8 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("events"), sessionToken: v.string() },
   handler: async (ctx, args) => {
-    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    await requireContentManager(ctx, actor, "events")
     const event = await ctx.db.get(args.id)
     if (!event) {
       throw new Error("Event not found")
@@ -142,8 +202,8 @@ export const remove = mutation({
 export const count = query({
   args: { sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const actor = args.sessionToken ? await getUserBySession(ctx, args.sessionToken) : null
+    const { actor, scopeContext } = await loadActorWithScopeContext(ctx, args.sessionToken)
     const events = await ctx.db.query("events").collect()
-    return events.filter((event) => canViewEvent(event, actor)).length
+    return events.filter((event) => canViewEvent(event, actor, scopeContext)).length
   },
 })

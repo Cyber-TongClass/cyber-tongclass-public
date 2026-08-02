@@ -90,7 +90,8 @@ test("only the super-admin account screens submit institute identity and class-m
     assert.match(source, /useAuth\(\)/, `${name} page reads the authenticated role`)
     assert.match(source, /isSuperAdmin/, `${name} page gates institute account controls`)
     assert.match(source, /账号 ID（学号 \/ 工号）/, `${name} page labels the shared account identifier correctly`)
-    assert.match(source, /研究院身份组/, `${name} page exposes the institute identity selector`)
+    assert.match(source, /研究院成员资格组/, `${name} page labels the shared institute membership selector`)
+    assert.match(source, /accountIdentityTypeOptions/, `${name} page renders the shared default membership options`)
     assert.match(source, /通班成员目录/, `${name} page exposes class-directory visibility`)
     assert.match(
       source,

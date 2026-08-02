@@ -1,4 +1,5 @@
 import { getPublicationAuthorName, parsePublicationAuthors } from "@/lib/publication-authors"
+import { parseAcademicExchangePdfContentDisposition } from "@/lib/academic-exchange-brand"
 import type { AcademicExchangeSupportApplication, Publication } from "@/types"
 
 export const academicExchangeMaterials = [
@@ -107,7 +108,9 @@ export async function downloadAcademicExchangePdf(application: AcademicExchangeS
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
-  anchor.download = `通班学术交流支持项目申请表-${application.projectName || application._id}-${application.applicantName || "申请人"}.pdf`
+  anchor.download = parseAcademicExchangePdfContentDisposition(
+    response.headers.get("content-disposition"),
+  ) || "学术交流支持项目申请表.pdf"
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()

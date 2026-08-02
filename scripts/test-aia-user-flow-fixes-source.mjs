@@ -13,7 +13,7 @@ test("login and password recovery preserve a validated next destination", () => 
   assert.match(login, /isAuthenticated/)
   assert.match(login, /forgot-password\?next=/)
   assert.match(login, /safeLocalPath\(searchParams\.get\("next"\)/)
-  assert.match(login, /<h1[^>]*>登录<\/h1>/)
+  assert.match(login, /<h1[^>]*>\s*登录\s*<\/h1>/)
   assert.match(forgot, /safeLocalPath/)
   assert.match(forgot, /next/)
   assert.match(reset, /safeLocalPath/)
@@ -39,13 +39,18 @@ test("personal profile destinations are resolved server-side and omitted when un
   }
 })
 
-test("Coffee Talk portal modules use the same verified-student eligibility rule as submission", () => {
+test("Coffee Talk portal uses one consolidated entry with applicant actions inside", () => {
   const entry = read("src/components/coffee-talk/coffee-talk-entry-list.tsx")
   const portal = read("src/components/portal/portal-client.tsx")
 
-  assert.match(portal, /isEmailVerified === true/)
-  assert.match(portal, /identityType === "undergrad"/)
-  assert.match(portal, /identityType === "graduate"/)
+  const copy = read("src/config/site-copy.ts")
+
+  assert.match(portal, /copy\.modules\.coffeeTalk/)
+  assert.equal((copy.match(/title: "Coffee Talk"/g) ?? []).length, 1)
+  assert.doesNotMatch(portal, /title: "我的 Coffee Talk 申请"/)
+  assert.doesNotMatch(portal, /title: "申请 Coffee Talk"/)
+  assert.doesNotMatch(copy, /title: "我的 Coffee Talk 申请"/)
+  assert.doesNotMatch(copy, /title: "申请 Coffee Talk"/)
   assert.match(entry, /href="\/services\/coffee-talk\/apply"/)
   assert.match(entry, /href="\/services\/coffee-talk\/my"/)
 })

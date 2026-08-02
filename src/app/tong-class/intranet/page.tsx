@@ -11,6 +11,7 @@ import {
 } from "@/lib/intranet-modules"
 import { useCC2026List } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { siteCopy } from "@/config/site-copy"
 
 export default function IntranetPage() {
   const { currentUser } = useAuth()
@@ -40,12 +41,12 @@ export default function IntranetPage() {
     <div className="min-h-screen bg-white">
       <section className="bg-primary relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative">
-          <div className="absolute left-4 sm:left-6 lg:left-8 top-1/2 -translate-y-1/2 text-[5rem] md:text-[8rem] lg:text-[10rem] font-extrabold uppercase tracking-[0.15em] text-white/5 select-none pointer-events-none whitespace-nowrap leading-none" aria-hidden="true">INTRANET</div>
+          <div className="absolute left-4 sm:left-6 lg:left-8 top-1/2 -translate-y-1/2 text-[5rem] md:text-[8rem] lg:text-[10rem] font-extrabold uppercase tracking-[0.15em] text-white/5 select-none pointer-events-none whitespace-nowrap leading-none" aria-hidden="true">{siteCopy.intranet.heroLabel}</div>
           <div className="mb-4">
-            <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight">{isGraduate ? "研究生内网" : "内部网站"}</h1>
+            <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight">{isGraduate ? siteCopy.intranet.graduateTitle : siteCopy.intranet.classTitle}</h1>
           </div>
           <p className="text-lg text-white/70 max-w-2xl relative">
-            {isGraduate ? "面向人工智能研究院研究生的内部工具入口。" : "这是一个仅面向通班成员的内部网站，包含内部论坛、意见反馈、内部工具和协作入口等内容。请不要将此网页的内部资源分享到公开渠道哦～"}
+            {isGraduate ? siteCopy.intranet.graduateDescription : siteCopy.intranet.classDescription}
           </p>
         </div>
       </section>
@@ -66,7 +67,7 @@ export default function IntranetPage() {
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-12 text-center text-sm text-slate-500">
-              暂无可展示的内网模块。
+              {siteCopy.intranet.empty}
             </div>
           )}
         </div>

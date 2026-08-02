@@ -169,3 +169,19 @@ test("canonical public content hooks translate the UI group slug to the server c
     assert.match(block, /researchGroupSlug:\s*groupSlug/)
   }
 })
+
+test("research-group filters and relation DTOs share structured publication resolution", () => {
+  const source = readFileSync("convex/instituteContent.ts", "utf8")
+  assert.match(source, /resolveResearchGroupPublicationCandidates/)
+  const filterStart = source.indexOf("async function contentKeysForResearchGroup")
+  const filterEnd = source.indexOf("\nasync function ", filterStart + 1)
+  const filterBlock = source.slice(filterStart, filterEnd)
+  assert.match(filterBlock, /resolveResearchGroupPublicationCandidates/)
+  assert.match(filterBlock, /effectiveVisibility/)
+
+  const relationStart = source.indexOf("async function getPublicContentRelations")
+  const relationEnd = source.indexOf("\nasync function ", relationStart + 1)
+  const relationBlock = source.slice(relationStart, relationEnd)
+  assert.match(relationBlock, /resolveResearchGroupPublicationCandidates/)
+  assert.match(relationBlock, /effectiveVisibility/)
+})

@@ -27,8 +27,10 @@ test("AIA OA exposes an entry point plus submitter and reviewer routes", () => {
   assert.match(list, /useAuth/)
   assert.match(list, /isAuthenticated/)
   assert.doesNotMatch(list, /useTongClassSessionToken/)
-  assert.match(list, /\/services\/oa\/my/)
-  assert.match(list, /\/services\/oa\/approvals/)
+  assert.match(list, /mine:\s*"oa-my"/)
+  assert.match(list, /approvals:\s*"oa-approvals"/)
+  assert.match(list, /AiaOAMySubmissionsClient/)
+  assert.match(list, /AiaOAApprovalInboxClient/)
 
   const submitter = read("src/components/oa/aia-oa-form-submission-client.tsx")
   assert.match(submitter, /useOAForm/)
@@ -47,13 +49,13 @@ test("AIA OA exposes an entry point plus submitter and reviewer routes", () => {
 
   const detail = read("src/app/services/oa/submissions/[id]/page.tsx")
   assert.match(detail, /formSnapshot/)
-  assert.match(detail, /审批记录/)
+  assert.match(detail, /完整流程/)
   assert.match(detail, /useMyOAApprovalHistory/)
   assert.match(detail, /operatorName/)
 
   const oaForms = read("convex/oaForms.ts")
   assert.match(oaForms, /export const listMineApprovalHistory = query/)
-  assert.match(oaForms, /actorName/)
+  assert.match(oaForms, /describeOAWorkflowScope/)
 
   const approvals = read("src/components/oa/aia-oa-approval-inbox-client.tsx")
   assert.match(approvals, /useOAApprovalInbox/)
@@ -66,6 +68,8 @@ test("AIA OA exposes an entry point plus submitter and reviewer routes", () => {
   assert.doesNotMatch(approvals, /await review\(\{\s*id:/)
   assert.doesNotMatch(approvals, /await review\(\{[^}]*reviewStatus/)
   assert.match(approvals, /request_changes/)
+  assert.match(approvals, /暂缓评审/)
+  assert.match(approvals, /暂缓评审时必须填写处理意见/)
   assert.match(approvals, /expectedVersion/)
   assert.match(detail, /useUpdateOAFormSubmission/)
   assert.match(approvals, /useAuth/)

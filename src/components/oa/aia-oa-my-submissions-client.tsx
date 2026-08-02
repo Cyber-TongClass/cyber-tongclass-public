@@ -1,14 +1,15 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 
-import { AiaOAAuthLoading, AiaOALoginRequired, AiaOAReviewStatusBadge, formatAiaOATime } from "@/components/oa/aia-oa-shared"
+import { AiaOAAuthLoading, AiaOAListOverflowButton, AiaOALoginRequired, AiaOAReviewStatusBadge, formatAiaOATime } from "@/components/oa/aia-oa-shared"
 import { useMyOAFormSubmissions, usePublishedOAForms } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import type { OAForm, OAFormSubmission } from "@/types"
 
 /** Current-account submission history; it deliberately does not render user identifiers or contact details. */
-export function AiaOAMySubmissionsClient() {
+export function AiaOAMySubmissionsClient({ maxVisible }: { maxVisible?: number }) {
   const { isAuthenticated, isLoading } = useAuth()
 
   if (isLoading) {
@@ -19,12 +20,13 @@ export function AiaOAMySubmissionsClient() {
     return <AiaOALoginRequired nextPath="/services/oa/my" action="查看自己的 OA 提交记录" />
   }
 
-  return <AiaOAMySubmissionsAuthenticated />
+  return <AiaOAMySubmissionsAuthenticated maxVisible={maxVisible} />
 }
 
-function AiaOAMySubmissionsAuthenticated() {
+function AiaOAMySubmissionsAuthenticated({ maxVisible }: { maxVisible?: number }) {
   const submissions = useMyOAFormSubmissions() as OAFormSubmission[] | undefined
   const forms = usePublishedOAForms({ includePast: true }) as OAForm[] | undefined
+  const [expanded, setExpanded] = useState(false)
 
   if (submissions === undefined) {
     return (
@@ -51,25 +53,39 @@ function AiaOAMySubmissionsAuthenticated() {
     || "OA 事项"
   )
 
+  const capped = typeof maxVisible === "number" && !expanded && submissions.length > maxVisible
+  const visibleSubmissions = capped ? submissions.slice(0, maxVisible) : submissions
+
   return (
-    <ul className="divide-y divide-[hsl(var(--aia-rule))]">
-      {submissions.map((submission) => (
-        <li key={submission._id}>
-          <Link
-            href={`/services/oa/submissions/${encodeURIComponent(submission._id)}`}
-            className="aia-focus group flex flex-wrap items-baseline gap-x-3 gap-y-1 py-3"
-          >
-            <span className="min-w-0 flex-1 font-medium text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
-              {titleFor(submission)}的第 {ordinalFor(submission)} 次提交
-              <span className="aia-text-muted ml-2 text-xs">提交于 {formatAiaOATime(submission.submittedAt)}</span>
-              {submission.adminNote ? (
-                <span className="aia-text-muted mt-0.5 block text-xs leading-5">处理意见：{submission.adminNote}</span>
-              ) : null}
-            </span>
-            <AiaOAReviewStatusBadge status={submission.reviewStatus} />
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div>
+      <ul className="divide-y divide-[hsl(var(--aia-rule))]">
+        {visibleSubmissions.map((submission) => (
+          <li key={submission._id}>
+            <Link
+              href={`/services/oa/submissions/${encodeURIComponent(submission._id)}`}
+              className="aia-focus group flex flex-wrap items-baseline gap-x-3 gap-y-1 py-3"
+            >
+              <span className="min-w-0 flex-1 font-medium text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
+                {titleFor(submission)}的第 {ordinalFor(submission)} 次提交
+                <span className="aia-text-muted ml-2 text-xs">提交于 {formatAiaOATime(submission.submittedAt)}</span>
+                {submission.adminNote ? (
+                  <span className="aia-text-muted mt-0.5 block text-xs leading-5">处理意见：{submission.adminNote}</span>
+                ) : null}
+              </span>
+              <AiaOAReviewStatusBadge status={submission.reviewStatus} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {typeof maxVisible === "number" && submissions.length > maxVisible ? (
+        <div className="border-t aia-border-rule pt-3">
+          <AiaOAListOverflowButton
+            expanded={expanded}
+            remaining={submissions.length - maxVisible}
+            onToggle={() => setExpanded((current) => !current)}
+          />
+        </div>
+      ) : null}
+    </div>
   )
 }

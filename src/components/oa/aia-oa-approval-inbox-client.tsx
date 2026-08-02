@@ -1,11 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Check, ExternalLink, RotateCcw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { AiaOAAuthLoading, AiaOALoginRequired, AiaOAReviewStatusBadge, formatAiaOATime } from "@/components/oa/aia-oa-shared"
-import { useOAApprovalInbox, useOAFormAttachmentUrl, useReviewOAFormSubmission } from "@/lib/api"
+import { AiaOAAuthLoading, AiaOAListOverflowButton, AiaOALoginRequired, AiaOAReviewStatusBadge, formatAiaOATime } from "@/components/oa/aia-oa-shared"
+import {
+  useEnsureMyReimbursementApprovalTasks,
+  useMyContentPermissions,
+  useOAApprovalInbox,
+  useOAFormAttachmentUrl,
+  useReviewOAFormSubmission,
+} from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import type { OAFileAnswer, OAReviewStatus } from "@/types"
 
@@ -23,8 +29,10 @@ type AiaOAApprovalInboxItem = {
   }>
   reviewStatus: OAReviewStatus
   workflowStatus?: "pending" | "needs_changes" | "approved" | "rejected"
-  workflowVersion: number
+  workflowVersion?: number
   currentApprovalStep?: number
+  nodeId?: string
+  nodeTitle?: string
   taskId: string
   taskStatus: "pending" | "approved" | "rejected" | "skipped"
   taskActedAt?: number
@@ -105,14 +113,19 @@ function formatAnswer(value: unknown): string {
 
 type ReviewAction = "approve" | "reject" | "request_changes"
 
-const actionPresentation: Record<ReviewAction, { label: string; icon: typeof Check; variant: "default" | "outline" | "destructive" }> = {
-  approve: { label: "通过", icon: Check, variant: "default" },
-  reject: { label: "不通过", icon: X, variant: "destructive" },
-  request_changes: { label: "要求补充", icon: RotateCcw, variant: "outline" },
+const actionPresentation: Record<ReviewAction, { label: string; icon: typeof Check; variant: "default" | "outline" | "destructive"; className?: string }> = {
+  approve: { label: "同意", icon: Check, variant: "default" },
+  reject: { label: "拒绝", icon: X, variant: "destructive" },
+  request_changes: {
+    label: "暂缓评审",
+    icon: RotateCcw,
+    variant: "outline",
+    className: "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200",
+  },
 }
 
 /** Reviewer inbox. The server is the authority for whether this session may see or act on any item. */
-export function AiaOAApprovalInboxClient() {
+export function AiaOAApprovalInboxClient({ maxVisible }: { maxVisible?: number }) {
   const { isAuthenticated, isLoading } = useAuth()
 
   if (isLoading) {
@@ -123,15 +136,25 @@ export function AiaOAApprovalInboxClient() {
     return <AiaOALoginRequired nextPath="/services/oa/approvals" action="打开审批处理台" />
   }
 
-  return <AiaOAApprovalInboxAuthenticated />
+  return <AiaOAApprovalInboxAuthenticated maxVisible={maxVisible} />
 }
 
-function AiaOAApprovalInboxAuthenticated() {
+function AiaOAApprovalInboxAuthenticated({ maxVisible }: { maxVisible?: number }) {
   const inbox = useOAApprovalInbox() as AiaOAApprovalInboxItem[] | undefined
+  const permissions = useMyContentPermissions()
+  const ensureReimbursementTasks = useEnsureMyReimbursementApprovalTasks()
   const review = useReviewOAFormSubmission()
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set())
   const [message, setMessage] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    if (permissions?.reimbursement?.canManage !== true) return
+    void ensureReimbursementTasks().catch(() => {
+      // The reactive inbox will retry on the next authenticated mount.
+    })
+  }, [ensureReimbursementTasks, permissions?.reimbursement?.canManage])
 
   async function handleReview(taskId: string, action: ReviewAction) {
     if (busyIds.has(taskId)) return
@@ -140,7 +163,7 @@ function AiaOAApprovalInboxAuthenticated() {
     try {
       const comment = notes[taskId]?.trim()
       if (action === "request_changes" && !comment) {
-        setMessage("要求补充材料时必须填写处理意见。")
+        setMessage("暂缓评审时必须填写处理意见。")
         return
       }
       const item = inbox?.find((candidate) => candidate.taskId === taskId)
@@ -152,7 +175,7 @@ function AiaOAApprovalInboxAuthenticated() {
         taskId,
         action,
         idempotencyKey: crypto.randomUUID(),
-        expectedVersion: item.workflowVersion,
+        expectedVersion: item.workflowVersion ?? 1,
         ...(comment ? { comment } : {}),
       })
       if (!result.updated) {
@@ -194,11 +217,13 @@ function AiaOAApprovalInboxAuthenticated() {
     return <p className="aia-text-muted py-6 text-sm">当前没有待处理事项，或你的账户尚未被授予相关审批权限。</p>
   }
 
+  const visibleItems = typeof maxVisible === "number" && !expanded ? inbox.slice(0, maxVisible) : inbox
+
   return (
     <div>
       {message ? <p role="status" className="aia-text-muted py-3 text-sm">{message}</p> : null}
       <div className="divide-y divide-[hsl(var(--aia-rule))]">
-        {inbox.map((item) => (
+        {visibleItems.map((item) => (
           <article key={item.taskId} className="py-5" aria-label={`OA 审批事项 ${item.formTitle || item.formSlug || item._id}`}>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <p className="min-w-0 flex-1 font-medium text-[hsl(var(--aia-ink))]">
@@ -208,6 +233,8 @@ function AiaOAApprovalInboxAuthenticated() {
                   <span className="aia-text-muted ml-2 text-xs">
                     第 {item.approvalStep.index + 1} 级 · {item.approvalStep.title} · {item.approvalStep.completion === "all" ? "全体审批人通过" : "任一审批人处理"}
                   </span>
+                ) : item.nodeTitle ? (
+                  <span className="aia-text-muted ml-2 text-xs">{item.nodeTitle}</span>
                 ) : null}
               </p>
               <AiaOAReviewStatusBadge status={item.reviewStatus} />
@@ -222,7 +249,9 @@ function AiaOAApprovalInboxAuthenticated() {
 
             <div className="mt-3 flex flex-wrap items-end gap-3">
               <div className="min-w-56 flex-1">
-                <label htmlFor={`aia-oa-note-${item.taskId}`} className="aia-text-muted text-xs font-medium">处理意见（可选）</label>
+                <label htmlFor={`aia-oa-note-${item.taskId}`} className="aia-text-muted text-xs font-medium">
+                  处理意见（暂缓评审时必填）
+                </label>
                 <Textarea
                   id={`aia-oa-note-${item.taskId}`}
                   value={notes[item.taskId] || ""}
@@ -242,7 +271,7 @@ function AiaOAApprovalInboxAuthenticated() {
                       type="button"
                       variant={presentation.variant}
                       size="sm"
-                      className="min-h-11"
+                      className={`min-h-11 ${presentation.className || ""}`}
                       disabled={busyIds.has(item.taskId)}
                       onClick={() => void handleReview(item.taskId, action)}
                     >
@@ -256,6 +285,15 @@ function AiaOAApprovalInboxAuthenticated() {
           </article>
         ))}
       </div>
+      {typeof maxVisible === "number" && inbox.length > maxVisible ? (
+        <div className="border-t aia-border-rule pt-3">
+          <AiaOAListOverflowButton
+            expanded={expanded}
+            remaining={inbox.length - maxVisible}
+            onToggle={() => setExpanded((current) => !current)}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

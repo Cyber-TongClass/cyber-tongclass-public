@@ -27,6 +27,7 @@ export default function InstitutePage() {
             title="服务范围"
             description="当前页面提供研究院公共入口与服务说明；可公开的人员、团队、研究和更新内容将在确认后逐步汇集。"
             headingId="institute-scope-title"
+            showRule={false}
           />
         </div>
       </section>

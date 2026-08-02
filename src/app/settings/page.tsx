@@ -2,28 +2,33 @@
 
 import { useState, useEffect, useRef } from "react"
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { useMyCoffeeTalkTeacherAvailability, useSetCoffeeTalkTeacherAvailability, useUpdatePasswordWithCurrent, useUpdateUser } from "@/lib/api"
 import { PersonalEmailsInput } from "@/components/profile/personal-emails-input"
 import { UserLinksInput } from "@/components/profile/user-links-input"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { getUserLinks, getUserPersonalEmails, sanitizePersonalEmails, sanitizeUserLinks } from "@/lib/user-profile"
 import { RESEARCH_DIRECTIONS } from "@/lib/research-directions"
 import type { UserLink } from "@/types"
-import { User, CheckCircle, XCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle, LogOut, User, X, XCircle } from "lucide-react"
+import { getAccountRoleLabel } from "@/lib/account-role"
 import { getCohortClassLabel } from "@/lib/cohort"
 
 const MarkdownSplitEditor = dynamic(
   () => import("@/components/markdown/markdown-split-editor").then((mod) => mod.MarkdownSplitEditor),
   {
     ssr: false,
-    loading: () => <p className="text-sm text-slate-600">编辑器加载中...</p>,
+    loading: () => <p className="aia-text-muted text-sm">编辑器加载中…</p>,
   }
 )
+
+const inputClass =
+  "aia-focus w-full border aia-border-rule bg-transparent px-3 py-2 text-sm text-[hsl(var(--aia-ink))] placeholder:text-[hsl(var(--aia-muted))] disabled:cursor-not-allowed disabled:opacity-60"
+
+const labelClass =
+  "aia-mono text-xs uppercase tracking-[0.12em] aia-text-muted"
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -110,7 +115,7 @@ export default function SettingsPage() {
     if (!currentUser) return
 
     if (!username.trim()) {
-      const msg = "Username is required"
+      const msg = "请填写用户名"
       setError(msg)
       setSuccessMessage("")
       showToast("error", msg)
@@ -118,7 +123,7 @@ export default function SettingsPage() {
     }
 
     if (!englishName.trim() || !chineseName.trim()) {
-      const msg = "English name and Chinese name are required"
+      const msg = "英文姓名和中文姓名不能为空"
       setError(msg)
       setSuccessMessage("")
       showToast("error", msg)
@@ -146,11 +151,11 @@ export default function SettingsPage() {
         links: sanitizeUserLinks(links),
       })
 
-      setSuccessMessage("Profile updated successfully!")
-      showToast("success", "Profile updated successfully!", 2000)
+      setSuccessMessage("个人资料已更新")
+      showToast("success", "个人资料已更新", 2000)
       setTimeout(() => setSuccessMessage(""), 3000)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to update profile"
+      const msg = err instanceof Error ? err.message : "个人资料更新失败"
       setError(msg)
       showToast("error", msg, 4000)
     } finally {
@@ -171,11 +176,11 @@ export default function SettingsPage() {
         profileMarkdown,
       } as any)
 
-      setSuccessMessage("Profile markdown updated successfully!")
-      showToast("success", "Profile markdown updated successfully!", 2000)
+      setSuccessMessage("详细介绍已更新")
+      showToast("success", "详细介绍已更新", 2000)
       setTimeout(() => setSuccessMessage(""), 3000)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to update profile markdown"
+      const msg = err instanceof Error ? err.message : "详细介绍更新失败"
       setError(msg)
       showToast("error", msg, 4000)
     } finally {
@@ -219,22 +224,22 @@ export default function SettingsPage() {
 
   const handleChangePassword = async () => {
     if (!currentUser) {
-      setError("You must be logged in to change your password")
+      setError("登录后才能修改密码")
       return
     }
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setError("Please fill in all password fields")
+      setError("请填写全部密码字段")
       return
     }
 
     if (newPassword.length < 8) {
-      setError("New password must be at least 8 characters")
+      setError("新密码至少需要 8 个字符")
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Confirm password does not match new password")
+      setError("两次输入的新密码不一致")
       return
     }
 
@@ -251,16 +256,16 @@ export default function SettingsPage() {
       setCurrentPassword("")
       setNewPassword("")
       setConfirmPassword("")
-      const message = "Password updated successfully. Signing you out..."
+      const message = "密码已更新，正在退出登录…"
       setSuccessMessage(message)
       showToast("success", message, 1500)
       window.setTimeout(() => {
         logout("/login?passwordChanged=true")
       }, 1500)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update password"
+      const message = err instanceof Error ? err.message : "密码更新失败"
       if (message === "Current password is incorrect") {
-        setError("Current password is incorrect")
+        setError("当前密码不正确")
         return
       }
       setError(message)
@@ -269,9 +274,9 @@ export default function SettingsPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-slate-600">Loading...</div>
-      </div>
+      <main className="container-custom max-w-3xl py-12 sm:py-16">
+        <p role="status" className="aia-text-muted py-6 text-sm">正在加载账户设置…</p>
+      </main>
     )
   }
 
@@ -280,317 +285,355 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <main className="container-custom max-w-3xl py-10 sm:py-12">
       {showSaveToast && (
-        <div className="fixed top-4 right-4 z-50 pointer-events-none">
+        <div className="pointer-events-none fixed right-4 top-4 z-50 max-w-sm">
           <div
             className={
-              "flex items-center gap-3 px-4 py-2 rounded-md shadow-lg transition-opacity duration-300 font-sans font-bold text-white text-lg " +
-              (saveToastType === "success" ? "bg-green-600" : saveToastType === "error" ? "bg-red-600" : "bg-black/80")
+              "flex items-center gap-3 border aia-border-rule bg-[hsl(var(--aia-warm))] px-4 py-3 text-sm shadow-lg transition-opacity duration-300 " +
+              (saveToastType === "error" ? "text-[hsl(var(--aia-red))]" : "text-[hsl(var(--aia-ink))]")
             }
             style={{ opacity: saveToastOpacity }}
+            role="status"
           >
-            <span className="flex items-center justify-center h-8 w-8 rounded-full bg-white/10">
-              {saveToastType === "success" ? (
-                <CheckCircle className="h-5 w-5 text-white" />
-              ) : saveToastType === "error" ? (
-                <XCircle className="h-5 w-5 text-white" />
-              ) : null}
-            </span>
+            {saveToastType === "success" ? (
+              <CheckCircle className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
+            ) : saveToastType === "error" ? (
+              <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            ) : null}
             <span>{saveToastMessage}</span>
           </div>
         </div>
       )}
-      <div className="max-w-3xl mx-auto space-y-6">
-        <h1 className="text-3xl font-extrabold text-gray-900">Account Settings</h1>
 
-        {successMessage && (
-          <div className="p-3 text-sm text-green-600 bg-green-50 rounded-md">
-            {successMessage}
-          </div>
-        )}
+      <Link href="/portal" className="aia-link aia-focus text-sm font-medium">
+        <ArrowLeft className="mr-1 inline h-4 w-4" aria-hidden="true" />返回内网
+      </Link>
 
-        {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
-            {error}
-          </div>
-        )}
+      <header className="mt-8">
+        <p className="aia-kicker">内网 · 账户</p>
+        <h1 className="aia-serif mt-3 text-3xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">账户设置</h1>
+        <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">
+          管理你的公开资料、研究方向、联系方式与账户安全设置。
+        </p>
+      </header>
 
-        {/* Profile Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Profile Information</CardTitle>
-            <CardDescription>
-              Update your public profile information. Please write public-facing fields in English except Chinese Name.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label>Official Photo</Label>
-              <div className="flex items-center gap-4 rounded-md border border-slate-200/70 bg-slate-100/20 p-4">
-                <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
-                  {currentUser.realPhoto || currentUser.avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={currentUser.realPhoto || currentUser.avatar} alt="Official profile photo" className="h-full w-full object-cover" />
-                  ) : (
-                    <User className="h-8 w-8 text-gray-400" />
-                  )}
-                </div>
-                <p className="text-sm text-slate-600">
-                  Profile photos are managed from official records and cannot be changed here.
-                </p>
+      {successMessage && (
+        <p role="status" className="mt-6 text-sm text-emerald-700">
+          {successMessage}
+        </p>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-6 text-sm text-[hsl(var(--aia-red))]">
+          {error}
+        </p>
+      )}
+
+      <section className="mt-10 border-t aia-border-rule pt-8">
+        <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">基本资料</h2>
+        <p className="aia-text-muted mt-2 text-sm leading-6">
+          更新公开主页上的个人资料。姓名与官方照片由管理员维护。
+        </p>
+
+        <div className="mt-6 space-y-6">
+          <div>
+            <p className={labelClass}>官方照片</p>
+            <div className="mt-2 flex items-center gap-4 border-t aia-border-rule py-4">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full aia-bg-tag">
+                {currentUser.realPhoto || currentUser.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={currentUser.realPhoto || currentUser.avatar} alt="官方头像" className="h-full w-full object-cover" />
+                ) : (
+                  <User className="h-8 w-8 aia-text-muted" aria-hidden="true" />
+                )}
               </div>
+              <p className="aia-text-muted text-sm leading-6">官方照片来自院内档案，无法在此页面修改。</p>
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Organization</Label>
-                <Input value={currentUser.organization === "pku" ? "PKU Tong Class" : "THU Tong Class"} disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>Cohort</Label>
-                <Input value={getCohortClassLabel(currentUser.cohort)} disabled />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="username">Username *</Label>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g., chenyinghan"
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass} htmlFor="organization">组织</label>
+              <input
+                id="organization"
+                value={currentUser.organization === "pku" ? "北京大学通班" : "清华大学通班"}
+                disabled
+                className={`${inputClass} mt-1`}
               />
-              <p className="text-xs text-slate-600">
-                Your public profile URL will be /members/{username || "username"}.
-              </p>
             </div>
+            <div>
+              <label className={labelClass} htmlFor="cohort">年级</label>
+              <input id="cohort" value={getCohortClassLabel(currentUser.cohort)} disabled className={`${inputClass} mt-1`} />
+            </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="englishName">English Name *</Label>
-              <Input
+          <div>
+            <label className={labelClass} htmlFor="username">用户名 *</label>
+            <input
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="例如：chenyinghan"
+              className={`${inputClass} mt-1`}
+            />
+            <p className="aia-text-muted mt-1.5 text-xs leading-5">你的公开主页地址将是 /members/{username || "username"}。</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass} htmlFor="englishName">英文姓名 *</label>
+              <input
                 id="englishName"
                 value={englishName}
                 disabled
-                placeholder="English name on file"
+                placeholder="档案中的英文姓名"
+                className={`${inputClass} mt-1`}
               />
-              <p className="text-xs text-slate-600">Names are managed by administrators.</p>
+              <p className="aia-text-muted mt-1.5 text-xs">姓名由管理员维护。</p>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="chineseName">Chinese Name *</Label>
-              <Input
+            <div>
+              <label className={labelClass} htmlFor="chineseName">中文姓名 *</label>
+              <input
                 id="chineseName"
                 value={chineseName}
                 disabled
-                placeholder="Chinese name on file"
+                placeholder="档案中的中文姓名"
+                className={`${inputClass} mt-1`}
               />
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label>Personal Emails</Label>
-              <PersonalEmailsInput emails={personalEmails} onChange={setPersonalEmails} />
-              <p className="text-xs text-slate-600">
-                Your school email, which includes your student ID, is kept on the account to protect your identity and is not displayed on your public profile. By default, only the personal email addresses you provide are shown publicly. However, if you wish to display your school email, you may add it here.
-              </p>
-            </div>
+          <div>
+            <label className={labelClass} htmlFor="bio">个人简介</label>
+            <textarea
+              id="bio"
+              className={`${inputClass} mt-1 min-h-[100px] resize-y`}
+              placeholder="介绍一下你自己…"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="bio">Bio</Label>
-              <textarea
-                id="bio"
-                className="flex min-h-[100px] w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                placeholder="Tell us about yourself..."
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="profileMarkdown">Profile Markdown</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSaveProfileMarkdown}
-                  disabled={isSavingProfileMarkdown}
-                >
-                  {isSavingProfileMarkdown ? "Saving Markdown..." : "Save Markdown"}
-                </Button>
+          <div>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <label className={labelClass} htmlFor="profileMarkdown">详细介绍</label>
+                <p className="aia-text-muted mt-1 text-xs leading-5">支持 Markdown、代码块与 LaTeX 公式。</p>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSaveProfileMarkdown}
+                disabled={isSavingProfileMarkdown}
+              >
+                {isSavingProfileMarkdown ? "正在保存…" : "单独保存详细介绍"}
+              </Button>
+            </div>
+            <div className="mt-3">
               <MarkdownSplitEditor
                 id="profileMarkdown"
                 value={profileMarkdown}
                 onChange={setProfileMarkdown}
-                placeholder="Write your profile in Markdown (supports code blocks and LaTeX: $E=mc^2$)."
-                sourceLabel="Markdown Source"
-                previewLabel="Rendered Profile"
+                placeholder="使用 Markdown 撰写你的详细介绍（支持代码块与 LaTeX：$E=mc^2$）。"
+                sourceLabel="Markdown 源码"
+                previewLabel="渲染预览"
                 minHeightClassName="min-h-[280px]"
               />
             </div>
+          </div>
+        </div>
+      </section>
 
-            <div className="space-y-2">
-              <Label>Research Interests</Label>
-              <div className="rounded-md border border-slate-200/70 p-3">
-                <p className="mb-3 text-xs text-slate-600">
-                  Select broad research directions for member filtering. Free-form interests can be added below.
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {RESEARCH_DIRECTIONS.map((direction) => (
-                    <label key={direction.value} className="flex items-start gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={researchDirections.includes(direction.value)}
-                        onChange={() => handleToggleDirection(direction.value)}
-                        className="mt-1 rounded"
-                      />
-                      <span>{direction.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add research interest"
-                  value={newInterest}
-                  onChange={(e) => setNewInterest(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddInterest())}
+      <section className="mt-10 border-t aia-border-rule pt-8">
+        <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">研究方向</h2>
+        <p className="aia-text-muted mt-2 text-sm leading-6">
+          选择用于成员筛选的主要研究方向，也可以补充更具体的研究兴趣。
+        </p>
+
+        <fieldset className="mt-6">
+          <legend className={labelClass}>主要方向</legend>
+          <div className="mt-3 grid gap-x-6 gap-y-3 border-t aia-border-rule pt-4 sm:grid-cols-2">
+            {RESEARCH_DIRECTIONS.map((direction) => (
+              <label key={direction.value} className="flex items-start gap-2.5 text-sm text-[hsl(var(--aia-ink))]">
+                <input
+                  type="checkbox"
+                  checked={researchDirections.includes(direction.value)}
+                  onChange={() => handleToggleDirection(direction.value)}
+                  className="aia-focus mt-0.5 h-4 w-4 accent-[hsl(var(--aia-red))]"
                 />
-                <Button type="button" variant="outline" onClick={handleAddInterest}>
-                  Add
-                </Button>
-              </div>
-              {researchInterests.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {researchInterests.map((interest) => (
-                    <span
-                      key={interest}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-primary/10 text-primary rounded-full"
-                    >
-                      {interest}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveInterest(interest)}
-                        className="hover:text-red-500"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+                <span>{direction.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
-            <div className="space-y-2">
-              <Label>Profile Links</Label>
+        <div className="mt-6">
+          <label className={labelClass} htmlFor="newInterest">具体研究兴趣</label>
+          <div className="mt-1 flex gap-2">
+            <input
+              id="newInterest"
+              placeholder="添加研究兴趣"
+              value={newInterest}
+              onChange={(e) => setNewInterest(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddInterest())}
+              className={inputClass}
+            />
+            <Button type="button" variant="outline" onClick={handleAddInterest}>添加</Button>
+          </div>
+          {researchInterests.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {researchInterests.map((interest) => (
+                <span
+                  key={interest}
+                  className="aia-mono inline-flex items-center gap-1.5 aia-bg-tag px-2.5 py-1 text-xs text-[hsl(var(--aia-ink))]"
+                >
+                  {interest}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveInterest(interest)}
+                    className="aia-focus aia-text-muted transition-colors hover:text-[hsl(var(--aia-red))]"
+                    aria-label={`移除研究兴趣：${interest}`}
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="mt-10 border-t aia-border-rule pt-8">
+        <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">联系方式与链接</h2>
+        <p className="aia-text-muted mt-2 text-sm leading-6">设置公开主页中展示的个人邮箱和外部链接。</p>
+
+        <div className="mt-6 space-y-7">
+          <div>
+            <p className={labelClass}>个人邮箱</p>
+            <div className="mt-2">
+              <PersonalEmailsInput emails={personalEmails} onChange={setPersonalEmails} />
+            </div>
+            <p className="aia-text-muted mt-2 text-xs leading-5">
+              含学号的学校邮箱会保留在账户中用于身份验证，默认不会展示在公开主页。你可以在此添加希望公开的个人邮箱；如需公开学校邮箱，也可将其加入列表。
+            </p>
+          </div>
+
+          <div>
+            <p className={labelClass}>个人链接</p>
+            <div className="mt-2">
               <UserLinksInput links={links} onChange={setLinks} />
-              <p className="text-xs text-slate-600">
-                Use preset link types like Homepage, Google Scholar, ORCID, GitHub, X, Xiaohongshu, LinkedIn, or add custom links.
-              </p>
             </div>
-          </CardContent>
-          <CardFooter>
-            <Button
-              onClick={handleSaveProfile}
-              disabled={isSubmitting}
-              className={isSubmitting ? "opacity-70 grayscale" : ""}
-            >
-              {isSubmitting ? "Saving..." : "Save Changes"}
-            </Button>
-          </CardFooter>
-        </Card>
+            <p className="aia-text-muted mt-2 text-xs leading-5">
+              可添加个人主页、Google Scholar、ORCID、GitHub、小红书、LinkedIn 等预设类型，也可添加自定义链接。
+            </p>
+          </div>
 
-        {currentUser.identityType === "teacher" ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Coffee Talk 申请</CardTitle>
-              <CardDescription>默认开放。关闭后，学生将无法在申请表中选择您；已有申请不受影响。</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {coffeeTalkAvailability === undefined ? <p className="text-sm text-slate-600">正在读取开放状态…</p> : coffeeTalkAvailability?.profileMissing ? <p className="text-sm text-red-700">教师档案暂未同步，请联系超级管理员运行教师档案同步。</p> : <p className="text-sm text-slate-700">当前状态：{coffeeTalkAvailability?.open ? "已开放" : "已关闭"}</p>}
-            </CardContent>
-            <CardFooter>
-              <Button type="button" variant={coffeeTalkAvailability?.open ? "outline" : "default"} onClick={handleCoffeeTalkAvailabilityChange} disabled={!coffeeTalkAvailability || coffeeTalkAvailability.profileMissing || isUpdatingCoffeeTalkAvailability}>
-                {isUpdatingCoffeeTalkAvailability ? "更新中…" : coffeeTalkAvailability?.open ? "关闭 Coffee Talk 申请" : "开放 Coffee Talk 申请"}
-              </Button>
-            </CardFooter>
-          </Card>
-        ) : null}
+          <Button
+            onClick={handleSaveProfile}
+            disabled={isSubmitting}
+            className={isSubmitting ? "opacity-70 grayscale" : ""}
+          >
+            {isSubmitting ? "正在保存…" : "保存资料更改"}
+          </Button>
+        </div>
+      </section>
 
-        {/* Password Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Change Password</CardTitle>
-            <CardDescription>
-              Update your password
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">Current Password</Label>
-              <Input
-                id="currentPassword"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button onClick={handleChangePassword}>
-              Change Password
-            </Button>
-          </CardFooter>
-        </Card>
+      <section className="mt-10 border-t aia-border-rule pt-8">
+        <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">修改密码</h2>
+        <p className="aia-text-muted mt-2 text-sm leading-6">更新密码后，系统会自动退出当前账户并返回登录页。</p>
 
-        {/* Account Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-slate-600">Email</span>
-              <span className="font-medium">{currentUser.email}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-slate-600">Username</span>
-              <span className="font-medium">{currentUser.username}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-slate-600">Profile URL</span>
-              <span className="font-medium">/members/{currentUser.username || currentUser._id}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-slate-600">Student ID</span>
-              <span className="font-medium">{currentUser.studentId}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-slate-600">Role</span>
-              <span className="font-medium capitalize">{currentUser.role.replace("_", " ")}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={labelClass} htmlFor="currentPassword">当前密码</label>
+            <input
+              id="currentPassword"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="newPassword">新密码</label>
+            <input
+              id="newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="confirmPassword">确认新密码</label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </div>
+        </div>
+        <Button className="mt-5" onClick={handleChangePassword}>更新密码</Button>
+      </section>
+
+      {currentUser.identityType === "teacher" ? (
+        <section className="mt-10 border-t aia-border-rule pt-8">
+          <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">Coffee Talk 设置</h2>
+          <p className="aia-text-muted mt-2 text-sm leading-6">
+            申请入口默认开放。关闭后，学生将无法在申请表中选择你，已有申请不受影响。
+          </p>
+          <div className="mt-5 border-t aia-border-rule py-4">
+            {coffeeTalkAvailability === undefined ? <p className="aia-text-muted text-sm">正在读取开放状态…</p> : coffeeTalkAvailability?.profileMissing ? <p className="text-sm text-[hsl(var(--aia-red))]">教师档案暂未同步，请联系超级管理员运行教师档案同步。</p> : <p className="text-sm text-[hsl(var(--aia-ink))]">当前状态：{coffeeTalkAvailability?.open ? "已开放" : "已关闭"}</p>}
+          </div>
+          <Button
+            type="button"
+            variant={coffeeTalkAvailability?.open ? "outline" : "default"}
+            onClick={handleCoffeeTalkAvailabilityChange}
+            disabled={!coffeeTalkAvailability || coffeeTalkAvailability.profileMissing || isUpdatingCoffeeTalkAvailability}
+          >
+            {isUpdatingCoffeeTalkAvailability ? "更新中…" : coffeeTalkAvailability?.open ? "关闭 Coffee Talk 申请" : "开放 Coffee Talk 申请"}
+          </Button>
+        </section>
+      ) : null}
+
+      <section className="mt-10 border-t aia-border-rule pt-8">
+        <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">账户操作</h2>
+        <p className="aia-text-muted mt-2 text-sm leading-6">查看当前账户信息，或安全退出内网。</p>
+
+        <dl className="mt-6 border-t aia-border-rule">
+          <div className="flex flex-col gap-1 border-b aia-border-rule py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+            <dt className={labelClass}>邮箱</dt>
+            <dd className="break-all text-sm text-[hsl(var(--aia-ink))]">{currentUser.email}</dd>
+          </div>
+          <div className="flex flex-col gap-1 border-b aia-border-rule py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+            <dt className={labelClass}>用户名</dt>
+            <dd className="text-sm text-[hsl(var(--aia-ink))]">{currentUser.username}</dd>
+          </div>
+          <div className="flex flex-col gap-1 border-b aia-border-rule py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+            <dt className={labelClass}>个人主页</dt>
+            <dd className="break-all text-sm text-[hsl(var(--aia-ink))]">/members/{currentUser.username || currentUser._id}</dd>
+          </div>
+          <div className="flex flex-col gap-1 border-b aia-border-rule py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+            <dt className={labelClass}>学号</dt>
+            <dd className="text-sm text-[hsl(var(--aia-ink))]">{currentUser.studentId}</dd>
+          </div>
+          <div className="flex flex-col gap-1 border-b aia-border-rule py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+            <dt className={labelClass}>角色</dt>
+            <dd className="text-sm text-[hsl(var(--aia-ink))]">{getAccountRoleLabel(currentUser.role)}</dd>
+          </div>
+        </dl>
+
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="aia-focus mt-6 inline-flex items-center border aia-border-rule px-4 py-2.5 text-sm font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]"
+        >
+          <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />退出登录
+        </button>
+      </section>
+    </main>
   )
 }

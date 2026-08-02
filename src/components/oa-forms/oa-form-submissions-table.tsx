@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react"
 import { Download, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -44,7 +43,7 @@ function isFileAnswer(value: unknown): value is OAFileAnswer[] {
 function AttachmentLink({ submissionId, file }: { submissionId: string; file: OAFileAnswer }) {
   const url = useOAFormAttachmentUrl({ submissionId, storageId: file.storageId })
   if (!url) return <span>{file.fileName}</span>
-  return <a href={url as string} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline underline-offset-4">{file.fileName}<ExternalLink className="h-3 w-3" /></a>
+  return <a href={url as string} target="_blank" rel="noreferrer" className="aia-link inline-flex items-center gap-1">{file.fileName}<ExternalLink className="h-3 w-3" /></a>
 }
 
 function formatAnswer(submission: OAFormSubmission, fieldId: string) {
@@ -126,7 +125,7 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <button type="button" className="text-sm font-medium text-primary hover:underline">{triggerLabel}</button>
+        <button type="button" className="aia-link aia-focus text-sm font-medium">{triggerLabel}</button>
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
@@ -135,24 +134,24 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
         </DialogHeader>
         {mode === "edit" ? (
           <div className="space-y-4">
-            {saveError ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{saveError}</p> : null}
+            {saveError ? <p className="border-y aia-border-rule bg-[hsl(var(--aia-tag))] px-4 py-3 text-sm text-[hsl(var(--aia-red-deep))]" role="alert">{saveError}</p> : null}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">审核状态</label>
-                <select className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm" value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value as OAReviewStatus)}>
+                <label className="text-sm font-medium text-[hsl(var(--aia-ink))]">审核状态</label>
+                <select className="aia-focus h-10 w-full rounded-none border aia-border-rule bg-transparent px-3 text-sm text-[hsl(var(--aia-ink))]" value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value as OAReviewStatus)}>
                   {Object.entries(oaReviewStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </div>
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-slate-700">管理员备注</label>
+                <label className="text-sm font-medium text-[hsl(var(--aia-ink))]">管理员备注</label>
                 <Textarea value={adminNote} onChange={(event) => setAdminNote(event.target.value)} rows={4} placeholder="例如：请补充票据、审核意见等" />
               </div>
             </div>
             <div className="space-y-3">
-              <div className="font-medium text-slate-900">结果回填</div>
-              {(form.resultFields || []).length === 0 ? <p className="text-sm text-slate-500">暂未配置结果字段。</p> : (form.resultFields || []).map((field) => (
+              <div className="font-medium text-[hsl(var(--aia-ink))]">结果回填</div>
+              {(form.resultFields || []).length === 0 ? <p className="text-sm aia-text-muted">暂未配置结果字段。</p> : (form.resultFields || []).map((field) => (
                 <div key={field.id} className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">{field.label}</label>
+                  <label className="text-sm font-medium text-[hsl(var(--aia-ink))]">{field.label}</label>
                   <Input type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"} value={resultValues[field.id] || ""} onChange={(event) => setResultValues((current) => ({ ...current, [field.id]: event.target.value }))} />
                 </div>
               ))}
@@ -166,21 +165,21 @@ function SubmissionReviewDialog({ form, submission, initialMode, triggerLabel, o
           <div className="space-y-5">
             <div className="grid gap-3 md:grid-cols-2">
               {form.fields.map((field) => (
-                <div key={field.id} className="rounded-md border bg-slate-50 px-3 py-2">
-                  <div className="text-xs font-medium text-slate-500">{field.label}</div>
-                  <div className="mt-1 break-words text-sm text-slate-900">{formatAnswer(submission, field.id)}</div>
+                <div key={field.id} className="aia-bg-tag border aia-border-rule px-3 py-2">
+                  <div className="aia-mono text-xs font-medium uppercase tracking-[0.1em] aia-text-muted">{field.label}</div>
+                  <div className="mt-1 break-words text-sm text-[hsl(var(--aia-ink))]">{formatAnswer(submission, field.id)}</div>
                 </div>
               ))}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-md border px-3 py-2 text-sm"><span className="text-slate-500">状态：</span>{oaReviewStatusLabels[submission.reviewStatus]}</div>
-              {submission.adminNote ? <div className="rounded-md border px-3 py-2 text-sm"><span className="text-slate-500">管理员备注：</span>{submission.adminNote}</div> : null}
+              <div className="border aia-border-rule px-3 py-2 text-sm"><span className="aia-text-muted">状态：</span>{oaReviewStatusLabels[submission.reviewStatus]}</div>
+              {submission.adminNote ? <div className="border aia-border-rule px-3 py-2 text-sm"><span className="aia-text-muted">管理员备注：</span>{submission.adminNote}</div> : null}
               {(form.resultFields || []).map((field) => (
-                <div key={field.id} className="rounded-md border px-3 py-2 text-sm"><span className="text-slate-500">{field.label}：</span>{String(submission.resultValues?.[field.id] ?? "-")}</div>
+                <div key={field.id} className="border aia-border-rule px-3 py-2 text-sm"><span className="aia-text-muted">{field.label}：</span>{String(submission.resultValues?.[field.id] ?? "-")}</div>
               ))}
             </div>
             <div className="flex justify-end">
-              {hasWorkflow ? <p className="mr-auto text-sm text-slate-500">该提交使用审批工作流，请在“审批处理台”按当前任务处理。</p> : null}
+              {hasWorkflow ? <p className="mr-auto text-sm aia-text-muted">该提交使用审批工作流，请在“审批处理台”按当前任务处理。</p> : null}
               {!hasWorkflow ? (
               <Button type="button" variant="outline" onClick={() => setMode("edit")}>修改审核</Button>
               ) : null}
@@ -200,17 +199,21 @@ export function OAFormSubmissionsTable({ form, submissions, onReview }: Props) {
   const [message, setMessage] = useState("")
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>提交记录</CardTitle>
-          <Button type="button" variant="outline" disabled={submissions.length === 0} onClick={() => downloadTextFile(`${form.slug}-submissions.csv`, serializeOAFormSubmissionsToCsv(form, submissions))}>
-            <Download className="mr-2 h-4 w-4" />导出 CSV
-          </Button>
+    <section aria-labelledby="oa-form-submissions-heading">
+      <div className="flex flex-col gap-3 border-b aia-border-rule pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-baseline gap-3">
+          <span className="aia-kicker">提交 · Submissions</span>
+          <h2 id="oa-form-submissions-heading" className="aia-serif text-lg font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+            提交记录
+            <span className="aia-mono ml-2 text-xs font-normal aia-text-muted">{submissions.length} 条</span>
+          </h2>
         </div>
-      </CardHeader>
-      <CardContent className="overflow-x-auto">
-        {message ? <p className="mb-3 text-sm text-slate-600">{message}</p> : null}
+        <Button type="button" variant="outline" className="min-h-11 rounded-none border aia-border-rule bg-transparent px-3 text-xs" disabled={submissions.length === 0} onClick={() => downloadTextFile(`${form.slug}-submissions.csv`, serializeOAFormSubmissionsToCsv(form, submissions))}>
+          <Download className="mr-2 h-4 w-4" />导出 CSV
+        </Button>
+      </div>
+      <div className="overflow-x-auto pt-4">
+        {message ? <p className="mb-3 text-sm aia-text-muted">{message}</p> : null}
         <Table className="min-w-[980px]">
           <TableHeader>
             <TableRow>
@@ -224,7 +227,7 @@ export function OAFormSubmissionsTable({ form, submissions, onReview }: Props) {
           </TableHeader>
           <TableBody>
             {submissions.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="h-24 text-center text-slate-500">暂无提交</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center aia-text-muted">暂无提交</TableCell></TableRow>
             ) : submissions.map((submission) => {
               const historicalForm = presentationForm(form, submission)
               const visibleFields = visibleFieldsBySubmission.get(submission._id) || []
@@ -234,7 +237,7 @@ export function OAFormSubmissionsTable({ form, submissions, onReview }: Props) {
                 <TableCell>{submission.studentId}</TableCell>
                 <TableCell>{oaReviewStatusLabels[submission.reviewStatus]}</TableCell>
                 <TableCell className="whitespace-nowrap">{formatTime(submission.submittedAt)}</TableCell>
-                <TableCell className="max-w-[360px] truncate text-sm text-slate-600">
+                <TableCell className="max-w-[360px] truncate text-sm aia-text-muted">
                   {visibleFields.map((field) => `${field.label}: ${summarizeAnswer(submission.answers?.[field.id])}`).join("；") || "-"}
                 </TableCell>
                 <TableCell className="text-right">
@@ -250,7 +253,7 @@ export function OAFormSubmissionsTable({ form, submissions, onReview }: Props) {
             })}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

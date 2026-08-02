@@ -1,16 +1,60 @@
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 import { getUserBySession } from "./reviewer/lib"
-import { requireContentAdmin } from "./lib/contentAuthorization"
+import {
+  requireContentManager,
+  requireSuperAdminForDirectContentCreate,
+} from "./lib/contentAuthorization"
+import { loadOAUserScopeContext, userMatchesOAUserScope } from "./lib/oaWorkflow"
+
+function canViewNews(news: { targetScope?: any }, actor: any | null, scopeContext?: any) {
+  if (news.targetScope) {
+    if (!actor || !scopeContext) return false
+    return userMatchesOAUserScope(
+      actor,
+      news.targetScope,
+      scopeContext.researchGroupId,
+      scopeContext.userGroupIds,
+    )
+  }
+  return true
+}
+
+async function loadNewsViewer(ctx: any, sessionToken?: string) {
+  if (!sessionToken) return { actor: null, scopeContext: undefined }
+  try {
+    const actor = await getUserBySession(ctx, sessionToken)
+    const scopeContext = await loadOAUserScopeContext(ctx, actor._id)
+    return { actor, scopeContext }
+  } catch {
+    return { actor: null, scopeContext: undefined }
+  }
+}
 
 function publicNewsDto(news: any) {
   const {
     authorId: _authorId,
+    targetScope: _targetScope,
     createdAt: _createdAt,
     updatedAt: _updatedAt,
     ...publicFields
   } = news
   return publicFields
+}
+
+function managerNewsDto(news: any) {
+  return {
+    _id: news._id,
+    title: news.title,
+    content: news.content,
+    sourceUrl: news.sourceUrl,
+    coverImageUrl: news.coverImageUrl,
+    showOnHomepage: news.showOnHomepage,
+    homepageSubtitle: news.homepageSubtitle,
+    category: news.category,
+    publishedAt: news.publishedAt,
+    isPublished: news.isPublished,
+  }
 }
 
 // Get all published news with pagination
@@ -19,6 +63,7 @@ export const list = query({
     skip: v.optional(v.number()),
     limit: v.optional(v.number()),
     category: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let query = ctx.db.query("news").filter((q) => q.eq(q.field("isPublished"), true))
@@ -26,9 +71,11 @@ export const list = query({
       query = query.filter((q) => q.eq(q.field("category"), args.category))
     }
     const allNews = await query.order("desc").collect()
+    const { actor, scopeContext } = await loadNewsViewer(ctx, args.sessionToken)
+    const visibleNews = allNews.filter((news) => canViewNews(news, actor, scopeContext))
     const skip = args.skip || 0
     const limit = args.limit || 50
-    return allNews.slice(skip, skip + limit).map(publicNewsDto)
+    return visibleNews.slice(skip, skip + limit).map(publicNewsDto)
   },
 })
 
@@ -41,7 +88,8 @@ export const listAll = query({
     category: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    await requireContentManager(ctx, actor, "news")
     let query = ctx.db.query("news")
     if (args.category) {
       query = query.filter((q) => q.eq(q.field("category"), args.category))
@@ -49,7 +97,7 @@ export const listAll = query({
     const allNews = await query.order("desc").collect()
     const skip = args.skip || 0
     const limit = args.limit || 50
-    return allNews.slice(skip, skip + limit)
+    return allNews.slice(skip, skip + limit).map(managerNewsDto)
   },
 })
 
@@ -60,10 +108,13 @@ export const getById = query({
     const news = await ctx.db.get(args.id)
     if (news && !news.isPublished) {
       if (!args.sessionToken) return null
-      requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
-      return news
+      const actor = await getUserBySession(ctx, args.sessionToken)
+      await requireContentManager(ctx, actor, "news")
+      return managerNewsDto(news)
     }
-    return news ? publicNewsDto(news) : null
+    if (!news) return null
+    const { actor, scopeContext } = await loadNewsViewer(ctx, args.sessionToken)
+    return canViewNews(news, actor, scopeContext) ? publicNewsDto(news) : null
   },
 })
 
@@ -83,7 +134,9 @@ export const create = mutation({
     isPublished: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const actor = requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const actor = requireSuperAdminForDirectContentCreate(
+      await getUserBySession(ctx, args.sessionToken),
+    )
     const { title, content, category } = args
     const authorId = args.authorId || actor._id
 
@@ -121,7 +174,8 @@ export const update = mutation({
     isPublished: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    await requireContentManager(ctx, actor, "news")
     const { id, sessionToken: _sessionToken, ...updates } = args
     const news = await ctx.db.get(id)
     if (!news) {
@@ -142,7 +196,8 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("news"), sessionToken: v.string() },
   handler: async (ctx, args) => {
-    requireContentAdmin(await getUserBySession(ctx, args.sessionToken))
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    await requireContentManager(ctx, actor, "news")
     const news = await ctx.db.get(args.id)
     if (!news) {
       throw new Error("News not found")
@@ -154,13 +209,17 @@ export const remove = mutation({
 
 // Get news count
 export const count = query({
-  args: { category: v.optional(v.string()) },
+  args: {
+    category: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     let query = ctx.db.query("news").filter((q) => q.eq(q.field("isPublished"), true))
     if (args.category) {
       query = query.filter((q) => q.eq(q.field("category"), args.category))
     }
     const news = await query.collect()
-    return news.length
+    const { actor, scopeContext } = await loadNewsViewer(ctx, args.sessionToken)
+    return news.filter((news) => canViewNews(news, actor, scopeContext)).length
   },
 })

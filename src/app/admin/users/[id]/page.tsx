@@ -22,19 +22,12 @@ import type { UserLink, UserRole } from "@/types"
 import { cohortToSelectValue, getCohortLabel, getCohortOptions, parseCohortValue, type CohortValue } from "@/lib/cohort"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { RESEARCH_DIRECTIONS } from "@/lib/research-directions"
-import { accountRoleOptions } from "@/lib/account-role"
+import { accountIdentityTypeOptions, accountRoleOptions } from "@/lib/account-role"
 
 type Organization = "pku" | "thu"
 type Role = UserRole
 
-const instituteIdentityOptions = [
-  { value: "undergrad", label: "本科生" },
-  { value: "graduate", label: "研究生" },
-  { value: "teacher", label: "教师" },
-  { value: "other", label: "其他研究院成员" },
-] as const
-
-type InstituteIdentityType = typeof instituteIdentityOptions[number]["value"]
+type InstituteIdentityType = typeof accountIdentityTypeOptions[number]["value"]
 
 const organizationOptions: { value: Organization; label: string }[] = [
   { value: "pku", label: "北大通班" },
@@ -273,7 +266,7 @@ export default function UserFormPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900">{isCreateMode ? "新建用户" : "编辑用户"}</h1>
-          <p className="text-gray-500 mt-1">{isCreateMode ? "创建本科生、研究生、教师或管理账号" : "修改用户信息与角色权限"}</p>
+          <p className="text-gray-500 mt-1">{isCreateMode ? "创建账号并分别设置系统角色与研究院成员资格组" : "修改用户信息、系统角色与成员资格组"}</p>
         </div>
       </div>
 
@@ -394,7 +387,7 @@ export default function UserFormPage() {
               {isSuperAdmin ? (
                 <div className="space-y-4 md:col-span-2 rounded-md border border-slate-200 p-4">
                   <div className="space-y-2">
-                    <Label htmlFor="identityType">研究院身份组</Label>
+                    <Label htmlFor="identityType">研究院成员资格组</Label>
                     <Select
                       value={formData.identityType}
                       onValueChange={(value) => {
@@ -407,15 +400,15 @@ export default function UserFormPage() {
                       }}
                     >
                       <SelectTrigger id="identityType">
-                        <SelectValue placeholder="选择研究院身份组" />
+                        <SelectValue placeholder="选择研究院成员资格组" />
                       </SelectTrigger>
                       <SelectContent>
-                        {instituteIdentityOptions.map((option) => (
+                        {accountIdentityTypeOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-slate-600">仅超级管理员可调整研究院身份组；该身份不等同于系统角色。</p>
+                    <p className="text-xs text-slate-600">仅超级管理员可调整研究院成员资格组；该资格不等同于系统角色。</p>
                   </div>
                   <label className="flex items-start gap-2 text-sm text-slate-700">
                     <input
@@ -432,7 +425,7 @@ export default function UserFormPage() {
                 </div>
               ) : (
                 <p className="text-xs text-slate-600 md:col-span-2">
-                  研究院身份组：{instituteIdentityOptions.find((option) => option.value === formData.identityType)?.label ?? "其他研究院成员"}。仅超级管理员可修改。
+                  研究院成员资格组：{accountIdentityTypeOptions.find((option) => option.value === formData.identityType)?.label ?? "其他成员资格组"}。仅超级管理员可修改。
                 </p>
               )}
               {isCreateMode && (

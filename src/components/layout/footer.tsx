@@ -1,3 +1,5 @@
+import { siteCopy } from "@/config/site-copy"
+
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-slate-100/30">
@@ -9,11 +11,11 @@ export function Footer() {
                 <span className="text-white font-extrabold">通</span>
               </div>
               <span className="text-sm text-slate-600">
-                北京大学 & 清华大学 通用人工智能实验班
+                {siteCopy.footer.tongClassName}
               </span>
             </div>
             <p className="text-sm text-slate-600">
-              &copy; {new Date().getFullYear()} Tong Class. All rights reserved.
+              &copy; {new Date().getFullYear()} {siteCopy.footer.tongClassCopyright}
             </p>
           </div>
         </div>

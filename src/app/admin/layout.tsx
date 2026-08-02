@@ -42,7 +42,7 @@ const navItems = [
   { href: "/admin/news", label: "新闻管理", icon: FileText },
   { href: "/admin/events", label: "活动管理", icon: Calendar },
   { href: "/admin/reimbursements", label: "报销管理", icon: TableProperties },
-  { href: "/admin/forms", label: "OA 表单", icon: ClipboardList },
+  { href: "/forms/manage", label: "表单管理", icon: ClipboardList },
   { href: "/admin/intranet", label: "内网模块", icon: LayoutGrid },
   { href: "/admin/creative-challenge-2026", label: "挑战赛", icon: Trophy },
   { href: "/admin/techday/settings", label: "TechDay", icon: Calendar },
@@ -134,7 +134,7 @@ export default function AdminLayout({
   const actorArgs = useTechDayActorArgs()
   const techDayPrincipal = useTechDayCurrentPrincipal(actorArgs)
 
-  const adminAllowedPrefixes = ["/admin/news", "/admin/events", "/admin/reviews", "/admin/treehole", "/admin/feedback", "/admin/reimbursements", "/admin/forms", "/admin/techday"]
+  const adminAllowedPrefixes = ["/admin/news", "/admin/events", "/admin/reviews", "/admin/treehole", "/admin/feedback", "/admin/techday"]
   const isAdminAllowed =
     isSuperAdmin || adminAllowedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   const isTechDayAdminRoute = pathname === "/admin/techday" || pathname.startsWith("/admin/techday/")

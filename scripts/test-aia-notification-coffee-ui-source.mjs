@@ -101,6 +101,11 @@ test("AIA notification and Coffee Talk presentation components keep their safety
     sources["src/components/coffee-talk/coffee-talk-entry-list.tsx"],
     /href=["']\/services\/coffee-talk\/apply["']/,
   )
+  assert.match(
+    routes["src/app/services/coffee-talk/page.tsx"],
+    /showRule=\{false\}/,
+    "Coffee Talk heading must not duplicate the entry list's top rule",
+  )
   assert.match(routes["src/app/services/coffee-talk/apply/page.tsx"], /CoffeeTalkApplyClient/)
   assert.match(routes["src/app/services/coffee-talk/my/page.tsx"], /CoffeeTalkMyClient/)
 })

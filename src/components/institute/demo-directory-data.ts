@@ -29,6 +29,10 @@ export type PublicResearchGroup = {
   summary: string
   description: string
   researchAreas: readonly string[]
+  publicLinks: readonly {
+    label: string
+    href: string
+  }[]
   leaderSlug: string
   memberSlugs: readonly string[]
   recruitmentNote: string
@@ -111,6 +115,7 @@ export const demoResearchGroups: readonly PublicResearchGroup[] = [
     description:
       "该团队为产品演示数据，不代表真实研究组织、项目或招募信息。它用于验证用户能够从人员页、团队页和成果页之间清楚地浏览公开资料。",
     researchAreas: ["可信人工智能", "机器学习系统", "人机协作"],
+    publicLinks: [],
     leaderSlug: "demo-professor-alpha",
     memberSlugs: ["demo-professor-alpha", "demo-graduate-beta"],
     recruitmentNote: "演示信息：真实招募与联系渠道将在经研究院确认后单独发布。",
@@ -126,6 +131,7 @@ export const demoResearchGroups: readonly PublicResearchGroup[] = [
     description:
       "该团队为产品演示数据，不代表真实课题组、论文、人员或招募安排。它用于说明未来真实公开资料接入后的页面组织方式。",
     researchAreas: ["基础模型", "智能体", "科学智能"],
+    publicLinks: [],
     leaderSlug: "demo-professor-alpha",
     memberSlugs: ["demo-graduate-beta", "demo-graduate-gamma"],
     recruitmentNote: "演示信息：真实招募与联系渠道将在经研究院确认后单独发布。",

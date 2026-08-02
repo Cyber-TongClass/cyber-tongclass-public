@@ -5,7 +5,6 @@ import {
   toDirectoryUpdate,
   toDirectoryPerson,
   toDirectoryResearchGroup,
-  toDirectoryResearchGroupMember,
 } from "@/components/institute/live-directory-view-model"
 import { PersonProfile } from "@/components/institute/person-profile"
 import { SafeReturnLink } from "@/components/navigation/safe-return-link"
@@ -60,23 +59,12 @@ export function LivePersonProfile({ slug }: LivePersonProfileProps) {
     .filter((group) => relatedGroupSlugs.has(group.slug))
   const relatedGroups = relatedPublicGroups
     .map(toDirectoryResearchGroup)
-  const relatedGraduateMembers = person.kind === "teacher"
-    ? relatedPublicGroups.flatMap((group) => (group.members ?? [])
-      .filter((member) => member.person.kind === "graduate")
-      .map((member) => ({
-        ...toDirectoryResearchGroupMember(member),
-        groupSlug: group.slug,
-        groupNameZh: group.nameZh,
-      })))
-    : []
-
   return (
     <PersonProfile
       person={directoryPerson}
       groups={relatedGroups}
       outputs={research.map((item) => toDirectoryResearchOutput(item, `/people/${slug}`))}
       updates={updates.map((item) => toDirectoryUpdate(item, `/people/${slug}`))}
-      relatedGraduateMembers={relatedGraduateMembers}
     />
   )
 }

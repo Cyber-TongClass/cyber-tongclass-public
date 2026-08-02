@@ -160,6 +160,7 @@ try {
   const { buildAcademicExchangePdf } = buildGeneratorModule()
   const outboundApplication = {
     _id: "outbound-record-202607-001",
+    pdfBrand: "tong_class",
     applicantName: "张三",
     studentId: "2300012345",
     gender: "男",

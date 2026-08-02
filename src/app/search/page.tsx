@@ -7,9 +7,7 @@ import { Search, FileText, Users, Calendar, BookOpen, Newspaper } from "lucide-r
 import { useNews, useUsers, usePublications, useEvents, useCourses } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { formatPublicationAuthorsForText, getPublicationAuthorName } from "@/lib/publication-authors"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import type { Course, Event, News, Publication, User } from "@/types"
 import { withReturnTo } from "@/lib/safe-local-path"
 
@@ -20,11 +18,12 @@ interface SearchResult {
   description: string
   url: string
   icon: React.ReactNode
+  date?: string
 }
 
 type SearchMember = Pick<
   User,
-  "username" | "englishName" | "chineseName" | "bio" | "researchInterests" | "researchDirections"
+  "username" | "englishName" | "chineseName" | "bio" | "researchInterests" | "researchDirections" | "createdAt"
 >
 
 function SearchContent() {
@@ -77,6 +76,7 @@ function SearchContent() {
           description: item.content.slice(0, 100) + (item.content.length > 100 ? "..." : ""),
           url: item.sourceUrl || withReturnTo(`/tong-class/news/${item._id}`, `/search?q=${encodeURIComponent(searchQuery)}`),
           icon: <Newspaper className="h-5 w-5" />,
+          date: new Date(item.publishedAt).toLocaleDateString("zh-CN"),
         })
       }
     })
@@ -98,6 +98,7 @@ function SearchContent() {
           description: user.bio?.slice(0, 100) || user.username,
           url: withReturnTo(`/tong-class/members/${user.username}`, `/search?q=${encodeURIComponent(searchQuery)}`),
           icon: <Users className="h-5 w-5" />,
+          date: new Date(user.createdAt).toLocaleDateString("zh-CN"),
         })
       }
     })
@@ -117,6 +118,7 @@ function SearchContent() {
           description: `${formatPublicationAuthorsForText(pub.authors)} - ${pub.venue} (${pub.year})`,
           url: withReturnTo(`/tong-class/publications/${pub._id}`, `/search?q=${encodeURIComponent(searchQuery)}`),
           icon: <FileText className="h-5 w-5" />,
+          date: String(pub.year),
         })
       }
     })
@@ -139,6 +141,7 @@ function SearchContent() {
             : eventLocation || event.date,
           url: withReturnTo(`/tong-class/events/${event._id}`, `/search?q=${encodeURIComponent(searchQuery)}`),
           icon: <Calendar className="h-5 w-5" />,
+          date: event.date,
         })
       }
     })
@@ -153,6 +156,7 @@ function SearchContent() {
           description: `${course.reviewCount} 条评测 · 均分 ${course.averageRating.toFixed(1)}`,
           url: `/tong-class/courses/${encodeURIComponent(course.name)}`,
           icon: <BookOpen className="h-5 w-5" />,
+          date: new Date(course.updatedAt).toLocaleDateString("zh-CN"),
         })
       }
     })
@@ -189,17 +193,6 @@ function SearchContent() {
     return labels[type] || type
   }
 
-  const getTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      news: "bg-blue-100 text-blue-800",
-      member: "bg-green-100 text-green-800",
-      publication: "bg-purple-100 text-purple-800",
-      event: "bg-orange-100 text-orange-800",
-      course: "bg-teal-100 text-teal-800",
-    }
-    return colors[type] || "bg-gray-100 text-gray-800"
-  }
-
   // Group results by type
   const groupedResults = results.reduce((acc, result) => {
     if (!acc[result.type]) {
@@ -210,85 +203,131 @@ function SearchContent() {
   }, {} as Record<string, SearchResult[]>)
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-extrabold mb-6">搜索</h1>
-          
-          <form onSubmit={handleSearch} className="flex gap-2 mb-8">
-            <label htmlFor="site-search-input" className="sr-only">
-              搜索新闻、成员、成果、活动和课程
-            </label>
-            <Input
-              id="site-search-input"
-              type="search"
-              placeholder="输入关键词搜索新闻、成员、成果、活动、课程..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="h-12 text-lg"
-            />
-            <Button type="submit" size="lg" className="h-12" disabled={isSearching}>
-              {isSearching ? "搜索中..." : "搜索"}
-            </Button>
-          </form>
+    <main className="container-custom max-w-4xl py-10 sm:py-12">
+      <header>
+        <p className="aia-kicker">搜索</p>
+        <h1 className="aia-serif mt-3 text-3xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+          全站搜索
+        </h1>
+        <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">
+          检索新闻、成员、研究成果、活动与课程。
+        </p>
+      </header>
 
-          {hasSearched && (
-            <div className="mb-4">
-              <p className="text-slate-600">
-                {results.length === 0
-                  ? "未找到相关结果"
-                  : `找到 ${results.length} 个相关结果`}
-              </p>
-            </div>
-          )}
-
-          {Object.entries(groupedResults).map(([type, items]) => (
-            <div key={type} className="mb-8">
-              <h2 className="text-xl font-extrabold mb-4 flex items-center gap-2">
-                <span>{getTypeLabel(type)}</span>
-                <Badge variant="secondary">{items.length}</Badge>
-              </h2>
-              <div className="space-y-3">
-                {items.map((result) => (
-                  <Link
-                    key={`${result.type}-${result.id}`}
-                    href={result.url}
-                    className="block p-4 rounded-lg border border-slate-200 hover:bg-slate-100/50 transition-colors"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="text-slate-600 mt-0.5">{result.icon}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-medium truncate">{result.title}</h3>
-                          <Badge className={getTypeColor(result.type)}>{getTypeLabel(result.type)}</Badge>
-                        </div>
-                        <p className="text-sm text-slate-600 line-clamp-2">{result.description}</p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
+      <form onSubmit={handleSearch} className="mt-8 flex items-stretch gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search
+            className="aia-text-muted pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2"
+            aria-hidden="true"
+          />
+          <label htmlFor="site-search-input" className="sr-only">
+            搜索新闻、成员、成果、活动和课程
+          </label>
+          <input
+            id="site-search-input"
+            type="search"
+            placeholder="输入关键词搜索新闻、成员、成果、活动、课程..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="aia-focus h-14 w-full border aia-border-rule bg-transparent pl-12 pr-4 text-base text-[hsl(var(--aia-ink))] placeholder:text-[hsl(var(--aia-muted))]"
+          />
         </div>
+        <Button type="submit" size="lg" className="h-14 shrink-0 px-6" disabled={isSearching}>
+          {isSearching ? "搜索中..." : "搜索"}
+        </Button>
+      </form>
+
+      {hasSearched && (
+        <p className="aia-mono aia-text-muted mt-4 text-xs uppercase tracking-[0.12em]" aria-live="polite">
+          {results.length === 0
+            ? "未找到相关结果"
+            : `找到 ${results.length} 个相关结果`}
+        </p>
+      )}
+
+      {results.length > 0 ? (
+        <nav className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t aia-border-rule pt-4" aria-label="搜索结果分类">
+          <button
+            type="button"
+            className="aia-focus aia-mono text-xs font-semibold uppercase tracking-[0.12em] text-[hsl(var(--aia-red))]"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          >
+            全部 · {results.length}
+          </button>
+          {Object.entries(groupedResults).map(([type, items]) => (
+            <button
+              type="button"
+              key={type}
+              className="aia-focus aia-mono text-xs uppercase tracking-[0.12em] aia-text-muted transition-colors hover:text-[hsl(var(--aia-red))]"
+              onClick={() => document.getElementById(`search-results-${type}`)?.scrollIntoView({ behavior: "smooth" })}
+            >
+              {getTypeLabel(type)} · {items.length}
+            </button>
+          ))}
+        </nav>
+      ) : null}
+
+      <div className="mt-2">
+        {Object.entries(groupedResults).map(([type, items]) => (
+          <section
+            id={`search-results-${type}`}
+            key={type}
+            className="mt-10 border-t aia-border-rule pt-8 scroll-mt-24"
+          >
+            <h2 className="flex items-baseline gap-3">
+              <span className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+                {getTypeLabel(type)}
+              </span>
+              <span className="aia-mono text-xs aia-text-muted">{items.length} 条</span>
+            </h2>
+            <ul className="mt-4 border-t aia-border-rule">
+              {items.map((result) => (
+                <li key={`${result.type}-${result.id}`} className="border-b aia-border-rule">
+                  <Link
+                    href={result.url}
+                    className="aia-focus group flex items-start gap-4 py-5"
+                  >
+                    <span className="aia-text-muted mt-0.5 shrink-0 transition-colors group-hover:text-[hsl(var(--aia-red))]" aria-hidden="true">
+                      {result.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="aia-serif block text-lg font-semibold leading-6 text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
+                        {result.title}
+                      </span>
+                      <span className="aia-mono aia-text-muted mt-1.5 block text-xs uppercase tracking-[0.12em]">
+                        {getTypeLabel(result.type)}
+                        {result.date ? ` · ${result.date}` : ""}
+                      </span>
+                      <span className="aia-text-muted mt-2 block text-sm leading-6 line-clamp-2">
+                        {result.description}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </div>
-    </div>
+    </main>
   )
 }
 
 function SearchLoading() {
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-extrabold mb-6">搜索</h1>
-          <div className="animate-pulse space-y-4">
-            <div className="h-12 bg-slate-100 rounded-lg"></div>
-            <div className="h-96 bg-slate-100 rounded-lg"></div>
-          </div>
+    <main className="container-custom max-w-4xl py-10 sm:py-12">
+      <p className="aia-kicker">搜索</p>
+      <h1 className="aia-serif mt-3 text-3xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+        全站搜索
+      </h1>
+      <div className="mt-8 animate-pulse" role="status" aria-label="正在加载搜索">
+        <div className="h-14 border aia-border-rule aia-bg-tag" />
+        <div className="mt-10 border-t aia-border-rule">
+          <div className="h-24 border-b aia-border-rule" />
+          <div className="h-24 border-b aia-border-rule" />
         </div>
       </div>
-    </div>
+    </main>
   )
 }
 

@@ -12,19 +12,11 @@ import { ResearchOutputList } from "@/components/institute/research-output-list"
 import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 import { withReturnTo } from "@/lib/safe-local-path"
 
-type RelatedGraduateMember = {
-  person: PublicDirectoryPerson
-  groupSlug: string
-  groupNameZh: string
-  roleLabel: string
-}
-
 type PersonProfileProps = {
   person: PublicDirectoryPerson
   groups?: readonly PublicResearchGroup[]
   outputs?: readonly PublicResearchOutput[]
   updates?: readonly PublicDirectoryUpdate[]
-  relatedGraduateMembers?: readonly RelatedGraduateMember[]
 }
 
 export function PersonProfile({
@@ -32,7 +24,6 @@ export function PersonProfile({
   groups = [],
   outputs = [],
   updates = [],
-  relatedGraduateMembers = [],
 }: PersonProfileProps) {
   const Icon = person.kind === "teacher" ? UserRound : GraduationCap
   const publicGroups = groups.filter(
@@ -111,101 +102,75 @@ export function PersonProfile({
           </section>
         </article>
 
-        <div className="mt-12 grid gap-10 lg:grid-cols-[1fr_1.35fr]">
-          <section aria-labelledby="person-groups-title" className="border aia-border-rule p-6 sm:p-7">
-            <div className="flex items-center gap-3">
-              <Network className="h-5 w-5 text-[hsl(var(--aia-muted))]" aria-hidden="true" />
-              <h2 id="person-groups-title" className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
-                相关团队
-              </h2>
+        {person.kind !== "teacher" ? (
+          <>
+            <div className="mt-12 grid gap-10 lg:grid-cols-[1fr_1.35fr]">
+              <section aria-labelledby="person-groups-title" className="border aia-border-rule p-6 sm:p-7">
+                <div className="flex items-center gap-3">
+                  <Network className="h-5 w-5 text-[hsl(var(--aia-muted))]" aria-hidden="true" />
+                  <h2 id="person-groups-title" className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+                    相关团队
+                  </h2>
+                </div>
+                {publicGroups.length > 0 ? (
+                  <ul className="mt-5 border-t aia-border-rule" aria-label="相关公开团队">
+                    {publicGroups.map((group) => (
+                      <li key={group.slug} className="border-b aia-border-rule">
+                        <Link
+                          href={withReturnTo(`/groups/${group.slug}`, `/people/${person.slug}`)}
+                          className="aia-focus group flex items-center justify-between gap-3 py-4"
+                        >
+                          <span>
+                            <span className="aia-serif block text-base font-semibold text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
+                              {group.nameZh}
+                            </span>
+                            <span className="aia-mono mt-1 block text-xs text-[hsl(var(--aia-muted))]">{group.nameEn}</span>
+                          </span>
+                          <ArrowUpRight
+                            className="h-4 w-4 shrink-0 text-[hsl(var(--aia-muted))] transition-colors group-hover:text-[hsl(var(--aia-red))]"
+                            aria-hidden="true"
+                          />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="aia-text-muted mt-5 text-sm leading-6">暂未发布相关公开团队资料。</p>
+                )}
+              </section>
+
+              <ResearchOutputList outputs={relatedOutputs} />
             </div>
-            {publicGroups.length > 0 ? (
-              <ul className="mt-5 border-t aia-border-rule" aria-label="相关公开团队">
-                {publicGroups.map((group) => (
-                  <li key={group.slug} className="border-b aia-border-rule">
-                    <Link
-                      href={withReturnTo(`/groups/${group.slug}`, `/people/${person.slug}`)}
-                      className="aia-focus group flex items-center justify-between gap-3 py-4"
-                    >
-                      <span>
-                        <span className="aia-serif block text-base font-semibold text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
-                          {group.nameZh}
-                        </span>
-                        <span className="aia-mono mt-1 block text-xs text-[hsl(var(--aia-muted))]">{group.nameEn}</span>
-                      </span>
-                      <ArrowUpRight
-                        className="h-4 w-4 shrink-0 text-[hsl(var(--aia-muted))] transition-colors group-hover:text-[hsl(var(--aia-red))]"
-                        aria-hidden="true"
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="aia-text-muted mt-5 text-sm leading-6">暂未发布相关公开团队资料。</p>
-            )}
-          </section>
 
-          <ResearchOutputList outputs={relatedOutputs} />
-        </div>
-
-        {person.kind === "teacher" ? (
-          <section aria-labelledby="person-graduate-members-title" className="mt-10 border aia-border-rule p-6 sm:p-7">
-            <h2 id="person-graduate-members-title" className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
-              相关团队的公开研究生
-            </h2>
-            {relatedGraduateMembers.length > 0 ? (
-              <ul className="mt-5 grid gap-4 sm:grid-cols-2" aria-label="相关团队的公开研究生">
-                {relatedGraduateMembers.map((membership) => (
-                  <li key={`${membership.groupSlug}:${membership.person.slug}`}>
-                    <Link
-                      href={withReturnTo(`/people/${membership.person.slug}`, `/people/${person.slug}`)}
-                      className="aia-focus group block border aia-border-rule p-4 transition-colors hover:border-[hsl(var(--aia-red))]"
-                    >
-                      <span className="aia-serif block text-base font-semibold text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
-                        {membership.person.nameZh}
-                      </span>
-                      <span className="aia-text-muted mt-1 block text-xs">{membership.person.title}</span>
-                      <span className="aia-mono mt-3 block text-xs uppercase tracking-[0.1em] text-[hsl(var(--aia-red))]">
-                        {membership.groupNameZh} · {membership.roleLabel}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="aia-text-muted mt-5 text-sm leading-6">暂未发布相关团队的公开研究生资料。</p>
-            )}
-          </section>
+            <section aria-labelledby="person-updates-title" className="mt-10 border aia-border-rule p-6 sm:p-7">
+              <h2 id="person-updates-title" className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+                相关动态
+              </h2>
+              {relatedUpdates.length > 0 ? (
+                <ul className="mt-5 border-t aia-border-rule" aria-label="相关公开动态">
+                  {relatedUpdates.map((update) => (
+                    <li key={update.id} className="border-b aia-border-rule py-4">
+                      <div className="aia-mono flex flex-wrap items-center gap-2 text-xs text-[hsl(var(--aia-muted))]">
+                        <span>{update.dateLabel}</span>
+                        {update.isDemo ? (
+                          <span className="border border-dashed aia-border-rule px-2 py-0.5 text-[0.7rem] uppercase tracking-[0.12em]">
+                            演示数据
+                          </span>
+                        ) : null}
+                      </div>
+                      <h3 className="aia-serif mt-2 text-base font-semibold text-[hsl(var(--aia-ink))]">
+                        {update.href ? <Link href={update.href} className="aia-link">{update.title}</Link> : update.title}
+                      </h3>
+                      <p className="aia-text-muted mt-2 text-sm leading-6">{update.summary}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="aia-text-muted mt-5 text-sm leading-6">暂未发布相关公开动态。</p>
+              )}
+            </section>
+          </>
         ) : null}
-
-        <section aria-labelledby="person-updates-title" className="mt-10 border aia-border-rule p-6 sm:p-7">
-          <h2 id="person-updates-title" className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
-            相关动态
-          </h2>
-          {relatedUpdates.length > 0 ? (
-            <ul className="mt-5 border-t aia-border-rule" aria-label="相关公开动态">
-              {relatedUpdates.map((update) => (
-                <li key={update.id} className="border-b aia-border-rule py-4">
-                  <div className="aia-mono flex flex-wrap items-center gap-2 text-xs text-[hsl(var(--aia-muted))]">
-                    <span>{update.dateLabel}</span>
-                    {update.isDemo ? (
-                      <span className="border border-dashed aia-border-rule px-2 py-0.5 text-[0.7rem] uppercase tracking-[0.12em]">
-                        演示数据
-                      </span>
-                    ) : null}
-                  </div>
-                  <h3 className="aia-serif mt-2 text-base font-semibold text-[hsl(var(--aia-ink))]">
-                    {update.href ? <Link href={update.href} className="aia-link">{update.title}</Link> : update.title}
-                  </h3>
-                  <p className="aia-text-muted mt-2 text-sm leading-6">{update.summary}</p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="aia-text-muted mt-5 text-sm leading-6">暂未发布相关公开动态。</p>
-          )}
-        </section>
       </div>
     </div>
   )

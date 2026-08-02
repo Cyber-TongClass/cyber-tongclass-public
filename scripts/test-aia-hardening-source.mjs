@@ -5,12 +5,16 @@ import test from "node:test"
 const read = (file) => fs.readFileSync(file, "utf8")
 
 test("shared content writes require a main-site session and administrator", () => {
-  for (const file of ["convex/news.ts", "convex/events.ts", "convex/courses.ts"]) {
+  for (const file of ["convex/news.ts", "convex/events.ts"]) {
     const source = read(file)
     assert.match(source, /getUserBySession/)
     assert.match(source, /sessionToken:\s*v\.string\(\)/)
-    assert.match(source, /requireContentAdmin/)
+    assert.match(source, /requireContentManager/)
   }
+  const courses = read("convex/courses.ts")
+  assert.match(courses, /getUserBySession/)
+  assert.match(courses, /sessionToken:\s*v\.string\(\)/)
+  assert.match(courses, /requireContentAdmin/)
 
   const publications = read("convex/publications.ts")
   assert.match(publications, /getUserBySession/)

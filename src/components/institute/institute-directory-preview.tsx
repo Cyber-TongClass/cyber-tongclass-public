@@ -54,6 +54,7 @@ export function InstituteDirectoryPreview({ index }: { index?: string }) {
           href="/institute"
           hrefLabel="研究院概览"
           headingId="institute-directory-title"
+          showRule={false}
         />
 
         <ul className="mt-10 border-t aia-border-rule">

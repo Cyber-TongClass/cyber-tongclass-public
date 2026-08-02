@@ -4,7 +4,11 @@ import { getConvexHttpClient } from "@/lib/server/convex-http"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
 import { getAcademicExchangePaperPdfLabel } from "@/lib/academic-exchange-pdf-source"
 import { fetchUploadedAcademicExchangePaperPdf } from "@/lib/server/academic-exchange-paper-pdf"
-import { buildAcademicExchangePdf, sanitizeAcademicExchangePdfFileName } from "@/lib/server/academic-exchange-pdf"
+import { buildAcademicExchangePdf } from "@/lib/server/academic-exchange-pdf"
+import {
+  buildAcademicExchangePdfFileName,
+  resolveAcademicExchangeBrand,
+} from "@/lib/academic-exchange-brand"
 import { buildSimpleXlsx } from "@/lib/server/simple-xlsx"
 import { buildSimpleZip } from "@/lib/server/simple-zip"
 import {
@@ -143,10 +147,13 @@ export async function POST(request: NextRequest) {
     for (const application of applications) {
       const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, accessArgs)
       const pdfBytes = await buildAcademicExchangePdf(application, { paperPdfBytes })
-      const applicantName = sanitizeAcademicExchangePdfFileName(application.applicantName || "申请人")
-      const projectName = sanitizeAcademicExchangePdfFileName(application.projectName || String(application._id))
+      const brand = resolveAcademicExchangeBrand(application)
       zipEntries.push({
-        name: `${folderName}/申请表PDF/通班学术交流支持项目申请表-${projectName}-${applicantName}.pdf`,
+        name: `${folderName}/申请表PDF/${buildAcademicExchangePdfFileName(
+          brand,
+          application.projectName || String(application._id),
+          application.applicantName,
+        )}`,
         data: Buffer.from(pdfBytes),
       })
       await client.mutation(logDownloadRef, {

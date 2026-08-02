@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import {
   encodePublicationAuthor,
+  normalizePublicationAuthorSearchValue,
   parsePublicationAuthor,
   type PublicationAuthor,
 } from "@/lib/publication-authors"
@@ -28,10 +29,6 @@ type PublicationAuthorEditorProps = {
   error?: string
 }
 
-function normalize(value: string) {
-  return value.trim().toLowerCase()
-}
-
 function buildRow(author?: PublicationAuthor): AuthorRow {
   const key = typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -50,7 +47,7 @@ function buildRow(author?: PublicationAuthor): AuthorRow {
 }
 
 function findUserByName(users: User[], name: string) {
-  const target = normalize(name)
+  const target = normalizePublicationAuthorSearchValue(name)
   if (!target) return null
 
   return users.find((user) => {
@@ -59,7 +56,7 @@ function findUserByName(users: User[], name: string) {
       user.chineseName || "",
       user.username,
       user.email,
-    ].some((candidate) => normalize(candidate) === target)
+    ].some((candidate) => normalizePublicationAuthorSearchValue(candidate) === target)
   }) || null
 }
 

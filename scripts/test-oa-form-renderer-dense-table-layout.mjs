@@ -15,7 +15,7 @@ const expectations = [
   ['spreadsheet header class constant', 'denseTableHeaderClassName'],
   ['sticky row index column', 'sticky left-0 z-10'],
   ['compact cells without rounded card inputs', 'rounded-none border-0 bg-transparent'],
-  ['bounded horizontal worksheet scroll', 'overflow-x-auto rounded-sm border border-slate-300'],
+  ['bounded horizontal worksheet scroll', 'overflow-x-auto border aia-border-rule'],
 ]
 
 const missing = expectations.filter(([, needle]) => !source.includes(needle))

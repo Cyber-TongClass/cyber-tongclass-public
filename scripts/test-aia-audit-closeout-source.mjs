@@ -11,7 +11,7 @@ test("Tong Class membership is enforced in the UI and course backend", () => {
   const reviews = read("convex/courseReviews.ts")
 
   assert.match(guard, /currentUser/)
-  assert.match(guard, /isClassMember/)
+  assert.match(guard, /canAccessMemberArea/)
   assert.match(authorization, /requireTongClassMember/)
   assert.match(courses, /requireTongClassMember/)
   assert.match(reviews, /requireTongClassMember/)
@@ -38,7 +38,9 @@ test("public discovery pages have titles, contact actions, and discoverable sear
   assert.match(read("src/app/groups/page.tsx"), /title:\s*"研究团队"/)
   assert.match(read("src/app/contact/page.tsx"), /mailto:aipku@pku\.edu\.cn/)
   assert.match(read("src/app/contact/page.tsx"), /tel:\+861062755373/)
-  assert.match(read("src/components/layout/aia-footer.tsx"), /href:\s*"\/contact"/)
+  const footer = read("src/components/layout/aia-footer.tsx")
+  assert.match(footer, /siteCopy\.footer\.platformLinks/)
+  assert.match(read("src/config/site-copy.ts"), /href:\s*"\/contact"/)
   assert.match(read("src/components/layout/aia-navbar.tsx"), /href="\/search"/)
   assert.match(read("src/components/layout/tong-class-navbar.tsx"), /href="\/search"/)
   assert.match(read("src/app/search/page.tsx"), /htmlFor="site-search-input"/)
@@ -72,10 +74,20 @@ test("critical domains have local recovery boundaries and MathJax is route-scope
     assert.match(read(path), /reset/)
   }
   const rootLayout = read("src/app/layout.tsx")
+  const globals = read("src/styles/globals.css")
   assert.doesNotMatch(rootLayout, /MathJax/)
   assert.doesNotMatch(rootLayout, /next\/script/)
   assert.doesNotMatch(rootLayout, /next\/font\/google/)
-  assert.match(rootLayout, /@fontsource\/noto-sans-sc/)
+  assert.doesNotMatch(rootLayout, /@fontsource\//)
+  for (const [family, asset] of [
+    ["Alibaba PuHuiTi 3", "alibaba-puhuiti-regular.woff2"],
+    ["FZ DaBiaoSong", "fz-dabiaosong.woff2"],
+    ["Geist Mono", "geist-mono.woff2"],
+  ]) {
+    assert.match(globals, new RegExp(`font-family:\\s*"${family.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}"`))
+    assert.ok(globals.includes(`/fonts/aia/${asset}`), `${asset} must be referenced by global CSS`)
+    assert.ok(existsSync(`public/fonts/aia/${asset}`), `${asset} must be bundled locally`)
+  }
   assert.match(read("src/components/markdown/markdown-renderer.tsx"), /rehypeKatex/)
 })
 

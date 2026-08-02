@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, Save } from "lucide-react"
-import { useEventById, useCreateEvent, useUpdateEvent } from "@/lib/api"
+import { useAdminEventById, useCreateEvent, useUpdateEvent } from "@/lib/api"
 import { MarkdownSplitEditor } from "@/components/markdown/markdown-split-editor"
 
 const typeOptions = [
@@ -38,7 +38,7 @@ export default function EditEventPage() {
     audiences: ["undergrad", "graduate"] as Array<"undergrad" | "graduate">,
   })
 
-  const eventData = useEventById(isCreateMode ? undefined : (eventId as string))
+  const eventData = useAdminEventById(isCreateMode ? undefined : eventId)
   const createEventMutation = useCreateEvent()
   const updateEventMutation = useUpdateEvent()
 

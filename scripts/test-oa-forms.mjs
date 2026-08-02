@@ -94,6 +94,41 @@ test('toOAFormUpsertPayload preserves publication controls without forcing empty
   assert.equal(payload.allowSubmissionEdits, true)
 })
 
+test('toOAFormUpsertPayload preserves the V2 workflow definition alongside legacy steps', () => {
+  const workflowDefinition = {
+    version: 2,
+    nodes: [
+      { id: 'create', type: 'create_form', title: '创建表单' },
+      {
+        id: 'review',
+        type: 'approval',
+        title: '导师审批',
+        scope: { identityTypes: ['teacher'], userIds: ['teacher-1'] },
+      },
+    ],
+  }
+  const approvalSteps = [
+    {
+      id: 'legacy-review',
+      title: '旧审批',
+      scope: { identityTypes: ['teacher'] },
+      completion: 'any',
+    },
+  ]
+
+  const payload = forms.toOAFormUpsertPayload({
+    title: '奖学金申请',
+    slug: 'scholarship',
+    category: 'scholarship',
+    fields: [{ id: 'name', label: '姓名', required: true, type: 'text' }],
+    workflowDefinition,
+    approvalSteps,
+  })
+
+  assert.deepEqual(payload.workflowDefinition, workflowDefinition)
+  assert.deepEqual(payload.approvalSteps, approvalSteps)
+})
+
 test('validateOAFormDraftForSave blocks empty category before saving', () => {
   const draft = {
     title: '奖学金申请',

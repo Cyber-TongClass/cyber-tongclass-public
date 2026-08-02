@@ -3,7 +3,6 @@
 import { FormEvent, useMemo, useState } from "react"
 import { Plus, Trash2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -24,13 +23,13 @@ type OAFormRendererProps = {
 }
 
 const denseTableHeaderClassName =
-  "sticky top-0 z-20 h-8 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left align-middle text-xs font-semibold text-slate-700"
+  "aia-bg-tag sticky top-0 z-20 h-9 border-r aia-border-rule px-2 py-1 text-left align-middle text-xs font-semibold text-[hsl(var(--aia-ink))]"
 
 const denseTableCellClassName =
-  "min-w-[152px] border-r border-slate-200 p-0 align-middle"
+  "min-w-[152px] border-r aia-border-rule p-0 align-middle"
 
 const denseTableInputClassName =
-  "h-8 rounded-none border-0 bg-transparent px-2 py-1 text-xs shadow-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+  "aia-focus h-9 rounded-none border-0 bg-transparent px-2 py-1 text-xs text-[hsl(var(--aia-ink))] focus-visible:ring-0 focus-visible:ring-offset-0"
 
 function asString(value: unknown) {
   return typeof value === "string" ? value : ""
@@ -149,27 +148,35 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
   }
 
   const renderField = (field: OAFormField) => {
+    const fieldId = `oa-field-${field.id}`
+    const requiredLabel = field.required ? <><span aria-hidden="true" className="text-[hsl(var(--aia-red))]"> *</span><span className="sr-only">（必填）</span></> : null
     const commonLabel = (
       <div className="space-y-1">
-        <Label htmlFor={`oa-field-${field.id}`}>{field.label}{field.required ? <span className="text-red-500"> *</span> : null}</Label>
-        {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
+        <Label htmlFor={fieldId}>{field.label}{requiredLabel}</Label>
+        {field.helpText ? <p id={`${fieldId}-help`} className="text-xs aia-text-muted">{field.helpText}</p> : null}
       </div>
     )
+    const groupLegend = (
+      <legend className="text-sm font-medium text-[hsl(var(--aia-ink))]">
+        {field.label}{requiredLabel}
+      </legend>
+    )
+    const describedBy = field.helpText ? `${fieldId}-help` : undefined
 
     if (field.type === "textarea") {
-      return <div className="space-y-2">{commonLabel}<Textarea id={`oa-field-${field.id}`} value={asString(answers[field.id])} placeholder={field.placeholder} onChange={(event) => updateAnswer(field.id, event.target.value)} rows={5} /></div>
+      return <div className="space-y-2">{commonLabel}<Textarea id={fieldId} aria-describedby={describedBy} aria-required={field.required} className="aia-focus rounded-none border aia-border-rule bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0" value={asString(answers[field.id])} placeholder={field.placeholder} onChange={(event) => updateAnswer(field.id, event.target.value)} rows={5} /></div>
     }
     if (field.type === "number") {
-      return <div className="space-y-2">{commonLabel}<Input id={`oa-field-${field.id}`} type="number" value={asNumberInput(answers[field.id])} placeholder={field.placeholder} onChange={(event) => updateAnswer(field.id, event.target.value === "" ? undefined : Number(event.target.value))} /></div>
+      return <div className="space-y-2">{commonLabel}<Input id={fieldId} aria-describedby={describedBy} aria-required={field.required} className="aia-focus rounded-none border aia-border-rule bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0" type="number" value={asNumberInput(answers[field.id])} placeholder={field.placeholder} onChange={(event) => updateAnswer(field.id, event.target.value === "" ? undefined : Number(event.target.value))} /></div>
     }
     if (field.type === "date") {
-      return <div className="space-y-2">{commonLabel}<Input id={`oa-field-${field.id}`} type="date" value={asString(answers[field.id])} onChange={(event) => updateAnswer(field.id, event.target.value)} /></div>
+      return <div className="space-y-2">{commonLabel}<Input id={fieldId} aria-describedby={describedBy} aria-required={field.required} className="aia-focus rounded-none border aia-border-rule bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0" type="date" value={asString(answers[field.id])} onChange={(event) => updateAnswer(field.id, event.target.value)} /></div>
     }
     if (field.type === "select") {
       return (
         <div className="space-y-2">
           {commonLabel}
-          <select id={`oa-field-${field.id}`} className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm" value={asString(answers[field.id])} onChange={(event) => updateAnswer(field.id, event.target.value)}>
+          <select id={fieldId} aria-describedby={describedBy} aria-required={field.required} className="aia-focus h-11 w-full rounded-none border aia-border-rule bg-transparent px-3 text-sm text-[hsl(var(--aia-ink))]" value={asString(answers[field.id])} onChange={(event) => updateAnswer(field.id, event.target.value)}>
             <option value="">请选择</option>
             {(field.options || []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
@@ -178,27 +185,29 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
     }
     if (field.type === "radio") {
       return (
-        <div className="space-y-2">
-          {commonLabel}
+        <fieldset className="space-y-2" aria-describedby={describedBy}>
+          {groupLegend}
+          {field.helpText ? <p id={`${fieldId}-help`} className="text-xs aia-text-muted">{field.helpText}</p> : null}
           <div className="flex flex-wrap gap-3">
             {(field.options || []).map((option) => (
-              <label key={option.value} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <label key={option.value} className="inline-flex min-h-11 items-center gap-2 border aia-border-rule px-3 py-2 text-sm">
                 <input type="radio" name={field.id} checked={answers[field.id] === option.value} onChange={() => updateAnswer(field.id, option.value)} />
                 {option.label}
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
       )
     }
     if (field.type === "checkbox") {
       const selected = Array.isArray(answers[field.id]) ? answers[field.id] as string[] : []
       return (
-        <div className="space-y-2">
-          {commonLabel}
+        <fieldset className="space-y-2" aria-describedby={describedBy}>
+          {groupLegend}
+          {field.helpText ? <p id={`${fieldId}-help`} className="text-xs aia-text-muted">{field.helpText}</p> : null}
           <div className="flex flex-wrap gap-3">
             {(field.options || []).map((option) => (
-              <label key={option.value} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <label key={option.value} className="inline-flex min-h-11 items-center gap-2 border aia-border-rule px-3 py-2 text-sm">
                 <input
                   type="checkbox"
                   checked={selected.includes(option.value)}
@@ -208,7 +217,7 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
       )
     }
     if (field.type === "file") {
@@ -216,10 +225,10 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
       return (
         <div className="space-y-2">
           {commonLabel}
-          <Input id={`oa-field-${field.id}`} type="file" multiple={(field.maxFiles || 1) > 1} accept={(field.acceptedMimeTypes || []).join(",")} onChange={(event) => void uploadFiles(field, event.target.files)} />
-          <p className="text-xs text-slate-500">最多 {field.maxFiles || 1} 个文件，单个不超过 {field.maxFileSizeMB || 20}MB。</p>
-          {uploadingFieldId === field.id ? <p className="text-sm text-slate-600">上传中...</p> : null}
-          {files.length > 0 ? <ul className="space-y-1 text-sm text-slate-700">{files.map((file) => <li key={`${file.storageId}-${file.fileName}`} className="flex items-center gap-2"><Upload className="h-3.5 w-3.5" />{file.fileName}</li>)}</ul> : null}
+          <Input id={fieldId} aria-describedby={`${fieldId}-limits${describedBy ? ` ${describedBy}` : ""}`} aria-required={field.required} className="aia-focus rounded-none border aia-border-rule bg-transparent file:text-[hsl(var(--aia-ink))] focus-visible:ring-0 focus-visible:ring-offset-0" type="file" multiple={(field.maxFiles || 1) > 1} accept={(field.acceptedMimeTypes || []).join(",")} onChange={(event) => void uploadFiles(field, event.target.files)} />
+          <p id={`${fieldId}-limits`} className="text-xs aia-text-muted">最多 {field.maxFiles || 1} 个文件，单个不超过 {field.maxFileSizeMB || 20}MB。</p>
+          {uploadingFieldId === field.id ? <p role="status" className="text-sm aia-text-muted">上传中...</p> : null}
+          {files.length > 0 ? <ul className="space-y-1 text-sm text-[hsl(var(--aia-ink))]">{files.map((file) => <li key={`${file.storageId}-${file.fileName}`} className="flex items-center gap-2"><Upload className="h-3.5 w-3.5" aria-hidden="true" />{file.fileName}</li>)}</ul> : null}
         </div>
       )
     }
@@ -227,36 +236,37 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
       const columns = field.columns || []
       const rows = getTableRows(answers[field.id])
       return (
-        <div className="space-y-2">
-          {commonLabel}
-          <div className="oa-form-dense-table overflow-x-auto rounded-sm border border-slate-300 bg-white">
+        <fieldset className="space-y-2" aria-describedby={describedBy}>
+          {groupLegend}
+          {field.helpText ? <p id={`${fieldId}-help`} className="text-xs aia-text-muted">{field.helpText}</p> : null}
+          <div className="oa-form-dense-table overflow-x-auto border aia-border-rule bg-[hsl(var(--aia-paper))]">
             <table className="w-full min-w-[720px] border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-300">
+                <tr className="border-b aia-border-rule">
                   <th className={cn(denseTableHeaderClassName, "sticky left-0 top-0 z-30 w-12 min-w-12 text-center")}>#</th>
                   {columns.map((column) => (
                     <th key={column.id} className={denseTableHeaderClassName}>
-                      {column.label}{column.required ? <span className="text-red-500"> *</span> : null}
+                      {column.label}{column.required ? <span aria-hidden="true" className="text-[hsl(var(--aia-red))]"> *</span> : null}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, rowIndex) => (
-                  <tr key={rowIndex} className="h-8 border-b border-slate-200 last:border-b-0 hover:bg-slate-50">
-                    <td className="sticky left-0 z-10 w-12 border-r border-slate-300 bg-slate-50 p-0 align-middle">
-                      <div className="flex h-8 items-center justify-center gap-1">
-                        <span className="w-4 text-center text-[11px] text-slate-500">{rowIndex + 1}</span>
+                  <tr key={rowIndex} className="h-9 border-b aia-border-rule last:border-b-0 hover:bg-[hsl(var(--aia-tag))]">
+                    <td className="aia-bg-tag sticky left-0 z-10 w-14 border-r aia-border-rule p-0 align-middle">
+                      <div className="flex h-11 items-center justify-center gap-1">
+                        <span className="w-4 text-center text-[11px] aia-text-muted">{rowIndex + 1}</span>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 rounded-sm text-slate-400 hover:text-red-600"
+                          className="aia-focus min-h-11 min-w-11 rounded-none aia-text-muted hover:text-[hsl(var(--aia-red))]"
                           onClick={() => updateAnswer(field.id, rows.filter((_, index) => index !== rowIndex))}
                           aria-label={`删除${field.label}第 ${rowIndex + 1} 行`}
                           title="删除行"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                         </Button>
                       </div>
                     </td>
@@ -280,19 +290,21 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
               </tbody>
             </table>
           </div>
-          <Button type="button" variant="outline" size="sm" className="h-8 rounded-sm px-2 text-xs" onClick={() => updateAnswer(field.id, [...rows, emptyTableRow(columns)])}><Plus className="mr-1.5 h-3.5 w-3.5" />增加一行</Button>
-        </div>
+          <Button type="button" variant="outline" size="sm" className="min-h-11 rounded-none border aia-border-rule bg-transparent px-3 text-xs" onClick={() => updateAnswer(field.id, [...rows, emptyTableRow(columns)])}><Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />增加一行</Button>
+        </fieldset>
       )
     }
-    return <div className="space-y-2">{commonLabel}<Input id={`oa-field-${field.id}`} value={asString(answers[field.id])} placeholder={field.placeholder} onChange={(event) => updateAnswer(field.id, event.target.value)} /></div>
+    return <div className="space-y-2">{commonLabel}<Input id={fieldId} aria-describedby={describedBy} aria-required={field.required} className="aia-focus rounded-none border aia-border-rule bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0" value={asString(answers[field.id])} placeholder={field.placeholder} onChange={(event) => updateAnswer(field.id, event.target.value)} /></div>
   }
 
   return (
     <form className="space-y-6" onSubmit={submit}>
-      <Card>
-        <CardHeader><CardTitle>{heading || form.title}</CardTitle></CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          {form.description ? <p className="text-sm leading-7 text-slate-600 md:col-span-2">{form.description}</p> : null}
+      <section aria-labelledby="oa-form-renderer-title" className="border-y aia-border-rule py-7">
+        <header className="mb-6 border-b aia-border-rule pb-5">
+          <h2 id="oa-form-renderer-title" className="aia-serif text-2xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">{heading || form.title}</h2>
+          {form.description ? <p className="mt-2 max-w-3xl text-sm leading-7 aia-text-muted">{form.description}</p> : null}
+        </header>
+        <div className="grid gap-5 md:grid-cols-2">
           {form.fields.map((field) => {
             const fieldError = errors.find((error) => error.startsWith(field.label))
             const showFieldError = Boolean(fieldError) && (attemptedSubmit || touchedFieldIds.has(field.id))
@@ -303,12 +315,12 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
               </div>
             )
           })}
-        </CardContent>
-      </Card>
-      {message ? <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{message}</p> : null}
-      {attemptedSubmit && errors.length > 0 ? <p className="text-xs text-slate-500">当前还有 {errors.length} 项需要补充；请检查上方标红字段。</p> : null}
+        </div>
+      </section>
+      {message ? <p role="alert" className="border-y aia-border-rule bg-[hsl(var(--aia-tag))] px-4 py-3 text-sm text-[hsl(var(--aia-red-deep))]">{message}</p> : null}
+      {attemptedSubmit && errors.length > 0 ? <p className="text-xs aia-text-muted">当前还有 {errors.length} 项需要补充；请检查上方标红字段。</p> : null}
       <div className="flex justify-end">
-        <Button type="submit" disabled={submitting || uploadingFieldId !== null}>{submitting ? "提交中..." : submitLabel}</Button>
+        <Button className="min-h-11 rounded-none bg-[hsl(var(--aia-red))] px-5 hover:bg-[hsl(var(--aia-red-deep))]" type="submit" disabled={submitting || uploadingFieldId !== null}>{submitting ? "提交中..." : submitLabel}</Button>
       </div>
     </form>
   )

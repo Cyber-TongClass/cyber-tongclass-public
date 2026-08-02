@@ -76,6 +76,7 @@ const oaUserScope = v.object({
   roles: v.optional(v.array(oaUserRole)),
   userIds: v.optional(v.array(v.id("users"))),
   researchGroupIds: v.optional(v.array(v.id("researchGroups"))),
+  userGroupIds: v.optional(v.array(v.id("userGroups"))),
 })
 
 const oaApprovalStep = v.object({
@@ -85,6 +86,45 @@ const oaApprovalStep = v.object({
   // "any" lets one recipient complete the step; "all" requires every
   // recipient in the immutable submission snapshot to approve.
   completion: v.optional(v.union(v.literal("any"), v.literal("all"))),
+})
+
+const oaWorkflowNode = v.union(
+  v.object({
+    id: v.string(),
+    type: v.literal("create_form"),
+    title: v.string(),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal("approval"),
+    title: v.string(),
+    scope: oaUserScope,
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal("batch_approval"),
+    title: v.string(),
+    scope: oaUserScope,
+    completion: v.union(v.literal("any"), v.literal("all")),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal("fill_form"),
+    title: v.string(),
+    targetFormId: v.id("oaForms"),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal("notification"),
+    title: v.string(),
+    scope: oaUserScope,
+    message: v.string(),
+  }),
+)
+
+const oaWorkflowDefinition = v.object({
+  version: v.literal(2),
+  nodes: v.array(oaWorkflowNode),
 })
 
 const oaWorkflowStatus = v.union(
@@ -113,6 +153,10 @@ const oaApprovalEventAction = v.union(
   v.literal("changes_requested"),
   v.literal("workflow_changes_requested"),
   v.literal("resubmitted"),
+  v.literal("form_access_granted"),
+  v.literal("notification_sent"),
+  v.literal("workflow_paused"),
+  v.literal("workflow_withdrawn"),
 )
 
 // Coffee Talk is intentionally a lightweight application workflow, not a
@@ -221,6 +265,28 @@ export default defineSchema({
   })
     .index("by_user_capability", ["userId", "capability"]),
 
+  // Admin-curated user groups for organizational scoping (form visibility,
+  // approval routing). Membership is explicit and many-to-many — unlike
+  // research-group assignments, one account can belong to any number of
+  // user groups.
+  userGroups: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    createdByUserId: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
+
+  userGroupMemberships: defineTable({
+    groupId: v.id("userGroups"),
+    userId: v.id("users"),
+    addedByUserId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_groupId", ["groupId"])
+    .index("by_userId", ["userId"])
+    .index("by_group_user", ["groupId", "userId"]),
+
   // Publications table
   publications: defineTable({
     title: v.string(),
@@ -310,6 +376,14 @@ export default defineSchema({
     isPublished: v.boolean(),
     // Existing records without a scope remain Tong Class content.
     siteScope: v.optional(v.union(v.literal("tong_class"), v.literal("institute"))),
+    // Optional audience restriction set by permission-created content.
+    targetScope: v.optional(v.object({
+      identityTypes: v.optional(v.array(v.string())),
+      roles: v.optional(v.array(v.string())),
+      userIds: v.optional(v.array(v.id("users"))),
+      researchGroupIds: v.optional(v.array(v.id("researchGroups"))),
+      userGroupIds: v.optional(v.array(v.id("userGroups"))),
+    })),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -323,6 +397,15 @@ export default defineSchema({
   institutePeople: defineTable({
     slug: v.string(),
     kind: v.union(v.literal("teacher"), v.literal("graduate")),
+    // Optional account identity snapshot for directory records. `kind` remains
+    // the public-directory presentation while identityType drives private
+    // audience/brand decisions when this person is linked to an account.
+    identityType: v.optional(v.union(
+      v.literal("undergrad"),
+      v.literal("graduate"),
+      v.literal("teacher"),
+      v.literal("other"),
+    )),
     nameZh: v.string(),
     nameEn: v.string(),
     titleZh: v.optional(v.string()),
@@ -404,16 +487,31 @@ export default defineSchema({
 
   // This private account-level assignment drives internal group scoping. It is
   // deliberately separate from the public-directory membership table above;
-  // one student account can belong to at most one research group.
+  // one account can belong to at most one research group. The optional
+  // subtitle is a per-member role note set by the group leader (e.g. 工程师);
+  // only the member's display name and subtitle are ever exposed publicly.
   studentResearchGroupAssignments: defineTable({
     studentUserId: v.id("users"),
     researchGroupId: v.id("researchGroups"),
+    subtitle: v.optional(v.string()),
+    sortOrder: v.optional(v.number()),
     assignedByUserId: v.id("users"),
     assignedAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_studentUserId", ["studentUserId"])
     .index("by_researchGroupId", ["researchGroupId"]),
+
+  researchGroupPublicationVisibilityOverrides: defineTable({
+    researchGroupId: v.id("researchGroups"),
+    publicationId: v.id("publications"),
+    visible: v.boolean(),
+    changedByUserId: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_group_publication", ["researchGroupId", "publicationId"])
+    .index("by_group", ["researchGroupId"]),
 
   publicationAuthorships: defineTable({
     publicationId: v.id("publications"),
@@ -521,11 +619,11 @@ export default defineSchema({
     userId: v.id("users"),
     // Keep the existing Coffee Talk rows valid while making the inbox usable
     // for staged OA approvals. Resource IDs stay typed by resourceType.
-    kind: v.union(v.literal("coffee_talk"), v.literal("oa_workflow")),
+    kind: v.union(v.literal("coffee_talk"), v.literal("oa_workflow"), v.literal("content_review")),
     title: v.string(),
     body: v.string(),
-    resourceType: v.union(v.literal("coffee_talk"), v.literal("oa_workflow")),
-    resourceId: v.union(v.id("coffeeTalkApplications"), v.id("oaFormSubmissions")),
+    resourceType: v.union(v.literal("coffee_talk"), v.literal("oa_workflow"), v.literal("content_review")),
+    resourceId: v.union(v.id("coffeeTalkApplications"), v.id("oaFormSubmissions"), v.id("contentSubmissions")),
     naturalKey: v.optional(v.string()),
     readAt: v.optional(v.number()),
     archivedAt: v.optional(v.number()),
@@ -533,6 +631,89 @@ export default defineSchema({
   })
     .index("by_user_createdAt", ["userId", "createdAt"])
     .index("by_naturalKey", ["naturalKey"]),
+
+  // Per-category content rights granted by the super admin. A row exists for
+  // every listed person; the two flags carry the actual rights.
+  contentPermissions: defineTable({
+    category: v.union(v.literal("news"), v.literal("events"), v.literal("reimbursement")),
+    userId: v.id("users"),
+    canCreate: v.boolean(),
+    canManage: v.boolean(),
+    grantedBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_category_user", ["category", "userId"])
+    .index("by_user", ["userId"]),
+
+  // Fixed publication flow for permission-created news/events:
+  // creator submits -> every reviewer in the resolved panel approves, or any
+  // one reviewer rejects.
+  contentSubmissions: defineTable({
+    category: v.union(v.literal("news"), v.literal("events")),
+    title: v.string(),
+    payload: v.object({
+      content: v.optional(v.string()),
+      sourceUrl: v.optional(v.string()),
+      coverImageUrl: v.optional(v.string()),
+      newsCategory: v.optional(v.string()),
+      date: v.optional(v.string()),
+      time: v.optional(v.string()),
+      endDate: v.optional(v.string()),
+      endTime: v.optional(v.string()),
+      location: v.optional(v.string()),
+      description: v.optional(v.string()),
+      url: v.optional(v.string()),
+      color: v.optional(v.string()),
+    }),
+    // Explicit empty scope means all institute accounts; absent means public.
+    targetScope: v.optional(v.object({
+      identityTypes: v.optional(v.array(v.string())),
+      roles: v.optional(v.array(v.string())),
+      userIds: v.optional(v.array(v.id("users"))),
+      researchGroupIds: v.optional(v.array(v.id("researchGroups"))),
+      userGroupIds: v.optional(v.array(v.id("userGroups"))),
+    })),
+    createdBy: v.id("users"),
+    creatorName: v.string(),
+    // A caller-generated key makes submit retries safe. The fingerprint
+    // rejects accidental reuse of the same key for different draft content.
+    idempotencyKey: v.optional(v.string()),
+    requestFingerprint: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    reviewedBy: v.optional(v.id("users")),
+    reviewerName: v.optional(v.string()),
+    reviewComment: v.optional(v.string()),
+    reviewedAt: v.optional(v.number()),
+    publishedContentId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_category_status_createdAt", ["category", "status", "createdAt"])
+    .index("by_creator_createdAt", ["createdBy", "createdAt"])
+    .index("by_creator_idempotency", ["createdBy", "idempotencyKey"]),
+
+  // Immutable reviewer panel resolved when content is submitted. Every task
+  // must approve; one rejection skips the still-pending siblings.
+  contentReviewTasks: defineTable({
+    submissionId: v.id("contentSubmissions"),
+    userId: v.id("users"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("skipped"),
+    ),
+    comment: v.optional(v.string()),
+    naturalKey: v.string(),
+    decidedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_naturalKey", ["naturalKey"])
+    .index("by_submission", ["submissionId"])
+    .index("by_submission_user", ["submissionId", "userId"])
+    .index("by_user_status_createdAt", ["userId", "status", "createdAt"]),
 
   // Events table
   events: defineTable({
@@ -546,6 +727,14 @@ export default defineSchema({
     url: v.optional(v.string()),
     color: v.string(),
     audiences: v.optional(v.array(v.union(v.literal("undergrad"), v.literal("graduate")))),
+    // Optional audience restriction set by permission-created content.
+    targetScope: v.optional(v.object({
+      identityTypes: v.optional(v.array(v.string())),
+      roles: v.optional(v.array(v.string())),
+      userIds: v.optional(v.array(v.id("users"))),
+      researchGroupIds: v.optional(v.array(v.id("researchGroups"))),
+      userGroupIds: v.optional(v.array(v.id("userGroups"))),
+    })),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -653,6 +842,9 @@ export default defineSchema({
     paperPdfFileName: v.optional(v.string()),
     paperPdfMimeType: v.optional(v.string()),
     paperPdfSize: v.optional(v.number()),
+    // Immutable at creation. Optional keeps applications created before the
+    // brand split readable through the owner-identity fallback.
+    pdfBrand: v.optional(v.union(v.literal("tong_class"), v.literal("institute"))),
     status: v.union(
       v.literal("submitted"),
       v.literal("reviewing"),
@@ -664,11 +856,20 @@ export default defineSchema({
     reviewNote: v.optional(v.string()),
     reviewerName: v.optional(v.string()),
     reviewedAt: v.optional(v.number()),
+    // New applications bridge into the unified OA task system. Optional keeps
+    // historical Reviewer-only records readable without a migration.
+    oaSubmissionId: v.optional(v.id("oaFormSubmissions")),
+    // Stable client request identity prevents double-clicks and transport
+    // retries from creating two applications and two OA workflows.
+    creationIdempotencyKey: v.optional(v.string()),
+    creationRequestFingerprint: v.optional(v.string()),
     submittedAt: v.number(),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
     .index("by_user_createdAt", ["userId", "createdAt"])
+    .index("by_user_idempotency", ["userId", "creationIdempotencyKey"])
+    .index("by_oaSubmissionId", ["oaSubmissionId"])
     .index("by_createdAt", ["createdAt"]),
 
   reimbursementMaterialTables: defineTable({
@@ -702,6 +903,8 @@ export default defineSchema({
     description: v.optional(v.string()),
     category: v.string(),
     kind: v.optional(v.union(v.literal("form"), v.literal("reimbursement"))),
+    // Admin-curated pin for the OA workspace; the timestamp doubles as the pin order.
+    pinnedAt: v.optional(v.number()),
     visibility: v.union(v.literal("members"), v.literal("admins")),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
     allowMultipleSubmissions: v.optional(v.boolean()),
@@ -716,6 +919,7 @@ export default defineSchema({
     // compatibility contract for all legacy Tong Class forms.
     targetScope: v.optional(oaUserScope),
     approvalSteps: v.optional(v.array(oaApprovalStep)),
+    workflowDefinition: v.optional(oaWorkflowDefinition),
     createdBy: v.id("users"),
     updatedBy: v.optional(v.id("users")),
     publishedAt: v.optional(v.number()),
@@ -746,6 +950,9 @@ export default defineSchema({
     workflowStatus: v.optional(oaWorkflowStatus),
     currentApprovalStep: v.optional(v.number()),
     approvalStepsSnapshot: v.optional(v.array(oaApprovalStep)),
+    workflowDefinitionSnapshot: v.optional(oaWorkflowDefinition),
+    currentWorkflowNodeIndex: v.optional(v.number()),
+    workflowError: v.optional(v.string()),
     workflowStartedAt: v.optional(v.number()),
     workflowCompletedAt: v.optional(v.number()),
     workflowVersion: v.optional(v.number()),
@@ -762,6 +969,21 @@ export default defineSchema({
     .index("by_submitter_idempotency", ["submitterId", "submissionIdempotencyKey"])
     .index("by_form_studentId", ["formId", "studentId"]),
 
+  // A workflow fill-form node grants one submitter access to a later form.
+  // The deterministic natural key keeps retries idempotent.
+  oaFormAccessGrants: defineTable({
+    formId: v.id("oaForms"),
+    userId: v.id("users"),
+    sourceSubmissionId: v.id("oaFormSubmissions"),
+    nodeId: v.string(),
+    workflowVersion: v.number(),
+    naturalKey: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_naturalKey", ["naturalKey"])
+    .index("by_form_user", ["formId", "userId"])
+    .index("by_user_createdAt", ["userId", "createdAt"]),
+
   // A task is the authorization snapshot for one recipient at one ordered
   // workflow step. A scope change on the form cannot retarget submissions
   // that have already started.
@@ -773,6 +995,7 @@ export default defineSchema({
     userId: v.id("users"),
     status: oaApprovalTaskStatus,
     workflowVersion: v.optional(v.number()),
+    naturalKey: v.optional(v.string()),
     actedAt: v.optional(v.number()),
     comment: v.optional(v.string()),
     actionIdempotencyKey: v.optional(v.string()),
@@ -781,6 +1004,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_naturalKey", ["naturalKey"])
     .index("by_submission_step", ["submissionId", "stepIndex"])
     .index("by_submission_user", ["submissionId", "userId"])
     .index("by_user_status_createdAt", ["userId", "status", "createdAt"]),
@@ -793,6 +1017,8 @@ export default defineSchema({
     stepIndex: v.optional(v.number()),
     stepId: v.optional(v.string()),
     actorUserId: v.optional(v.id("users")),
+    workflowVersion: v.optional(v.number()),
+    nodeType: v.optional(v.string()),
     action: oaApprovalEventAction,
     comment: v.optional(v.string()),
     createdAt: v.number(),

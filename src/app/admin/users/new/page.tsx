@@ -7,28 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useCreateUser } from "@/lib/api"
+import { accountIdentityTypeOptions, accountRoleOptions } from "@/lib/account-role"
 import { cohortToSelectValue, getCohortLabel, getCohortOptions, parseCohortValue, type CohortValue } from "@/lib/cohort"
 import { useAuth } from "@/lib/hooks/use-auth"
-
-const roleOptions = [
-  { value: "member", label: "成员" },
-  { value: "admin", label: "管理员" },
-  { value: "super_admin", label: "超级管理员" },
-] as const
 
 const organizationOptions = [
   { value: "pku", label: "北大通班" },
   { value: "thu", label: "清华通班" },
 ] as const
 
-const instituteIdentityOptions = [
-  { value: "undergrad", label: "本科生" },
-  { value: "graduate", label: "研究生" },
-  { value: "teacher", label: "教师" },
-  { value: "other", label: "其他研究院成员" },
-] as const
-
-type InstituteIdentityType = typeof instituteIdentityOptions[number]["value"]
+type InstituteIdentityType = typeof accountIdentityTypeOptions[number]["value"]
 
 const INITIAL_PASSWORD_LENGTH = 14
 const INITIAL_PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
@@ -110,7 +98,7 @@ export default function AdminUserCreatePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-gray-900">新建用户</h1>
-        <p className="text-gray-500 mt-1">填写基础信息后，系统会自动生成随机初始密码。超级管理员可同时创建研究生、教师等研究院账号。</p>
+        <p className="text-gray-500 mt-1">填写基础信息后，系统会自动生成随机初始密码，并分别设置系统角色与研究院成员资格组。</p>
       </div>
 
       <Card>
@@ -209,7 +197,7 @@ export default function AdminUserCreatePage() {
                 value={role}
                 onChange={(e) => setRole(e.target.value as "member" | "admin" | "super_admin")}
               >
-                {roleOptions.map((option) => (
+                {accountRoleOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -220,7 +208,7 @@ export default function AdminUserCreatePage() {
             {isSuperAdmin ? (
               <div className="rounded-md border border-slate-200 p-4 space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="identityType">研究院身份组</Label>
+                  <Label htmlFor="identityType">研究院成员资格组</Label>
                   <select
                     id="identityType"
                     className="h-10 w-full rounded-md border border-input bg-white px-3"
@@ -231,11 +219,11 @@ export default function AdminUserCreatePage() {
                       setIsClassMember(nextIdentityType === "undergrad")
                     }}
                   >
-                    {instituteIdentityOptions.map((option) => (
+                    {accountIdentityTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
-                  <p className="text-xs text-slate-600">身份组仅用于研究院服务范围和目录筛选，不会替代系统角色权限。</p>
+                  <p className="text-xs text-slate-600">成员资格组仅用于研究院服务范围和目录筛选，不会替代系统角色权限。</p>
                 </div>
                 <label className="flex items-start gap-2 text-sm text-slate-700">
                   <input

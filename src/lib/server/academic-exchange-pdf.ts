@@ -3,6 +3,11 @@ import path from "path"
 import fontkit from "@pdf-lib/fontkit"
 import { PDFDocument, rgb } from "pdf-lib"
 import { hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
+import {
+  getAcademicExchangeBrandNumberPrefix,
+  getAcademicExchangeBrandTitle,
+  resolveAcademicExchangeBrand,
+} from "@/lib/academic-exchange-brand"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
 
 const TEMPLATE_FILE_NAME = "academic-exchange-application-form-template.pdf"
@@ -13,6 +18,7 @@ const FILL_FONT_SIZE = 8.5
 const NUMBER_FONT_SIZE = 10.2
 const CONTINUATION_ROWS_PER_PAGE = 20
 const APPLICATION_NUMBER_RECT = { x: 185, top: 145, width: 225, height: 23 }
+const APPLICATION_TITLE_RECT = { x: 95, top: 68, width: 405, height: 39 }
 // The application form explicitly supports direct arXiv PDF links. Keep this
 // list deliberately narrow rather than allowing arbitrary external hosts.
 const TRUSTED_EXTERNAL_PAPER_PDF_HOSTS = new Set(["arxiv.org"])
@@ -212,7 +218,27 @@ function getApplicationDisplayNumber(application: any) {
     .replace(/[^a-zA-Z0-9]/g, "")
     .slice(-6)
     .toUpperCase() || "申请"
-  return `[通] ${yearMonth}-${recordSuffix} 号`
+  const prefix = getAcademicExchangeBrandNumberPrefix(resolveAcademicExchangeBrand(application))
+  return `[${prefix}] ${yearMonth}-${recordSuffix} 号`
+}
+
+function redrawApplicationBrandHeader(page: any, headingFont: any, application: any) {
+  const brand = resolveAcademicExchangeBrand(application)
+  // The template already contains the canonical Tong Class title and its
+  // original font. Do not cover it for undergraduate applications.
+  if (brand === "tong_class") return
+
+  clearTemplateRect(page, APPLICATION_TITLE_RECT)
+  drawTextInTemplateRect({
+    page,
+    text: getAcademicExchangeBrandTitle(brand),
+    rect: APPLICATION_TITLE_RECT,
+    font: headingFont,
+    fontSize: 14,
+    align: "center",
+    paddingX: 2,
+    paddingY: 4,
+  })
 }
 
 function getPaperDetailText(application: any, hasPaperAttachment: boolean) {
@@ -354,6 +380,7 @@ function drawExpenseContinuationPages({
     const isLastPage = pageIndex === pages.length - 1
 
     clearTemplateRect(page, { x: 70, top: 188, width: 455, height: 590 })
+    redrawApplicationBrandHeader(page, headingFont, application)
     clearTemplateRect(page, APPLICATION_NUMBER_RECT)
     drawTextInTemplateRect({
       page,
@@ -477,6 +504,7 @@ function drawApplicationTemplatePage({
     projectPlan: { x: 171.99, top: 461.19, width: 343.91, height: 64.55 },
   }
 
+  redrawApplicationBrandHeader(page, headingFont, application)
   clearTemplateRect(page, fields.number)
   drawTextInTemplateRect({
     page,

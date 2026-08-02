@@ -43,13 +43,14 @@ export type OAResultField = {
 // Tong Class member gate; an explicitly empty target scope means that an AIA
 // administrator intentionally selected all authenticated institute accounts.
 export type OAIdentityType = "undergrad" | "graduate" | "teacher" | "other"
-export type OAWorkflowRole = "admin" | "super_admin"
+export type OAWorkflowRole = "member" | "admin" | "super_admin"
 
 export type OAUserScope = {
   identityTypes?: OAIdentityType[]
   roles?: OAWorkflowRole[]
   userIds?: string[]
   researchGroupIds?: string[]
+  userGroupIds?: string[]
 }
 
 export type OAApprovalCompletion = "any" | "all"
@@ -61,11 +62,34 @@ export type OAApprovalStep = {
   completion: OAApprovalCompletion
 }
 
+export type OAWorkflowNode =
+  | { id: string; type: "create_form"; title: string }
+  | { id: string; type: "approval"; title: string; scope: OAUserScope }
+  | { id: string; type: "batch_approval"; title: string; scope: OAUserScope; completion: OAApprovalCompletion }
+  | { id: string; type: "fill_form"; title: string; targetFormId: string }
+  | { id: string; type: "notification"; title: string; scope: OAUserScope; message: string }
+
+export type OAWorkflowDefinition = {
+  version: 2
+  nodes: OAWorkflowNode[]
+}
+
+export type OAFormAccessGrant = {
+  formId: string
+  userId: string
+  sourceSubmissionId: string
+  nodeId: string
+  workflowVersion: number
+  naturalKey: string
+  createdAt: number
+}
+
 export type OAWorkflowDraftConfig = {
   // `null` is an explicit deletion instruction for an existing AIA scope;
   // `undefined` means the caller left the legacy configuration untouched.
   targetScope?: OAUserScope | null
   approvalSteps?: OAApprovalStep[]
+  workflowDefinition?: OAWorkflowDefinition
 }
 
 export type OAFormLike = {
@@ -97,6 +121,7 @@ export type OAFormUpsertPayload = {
   resultsVisible?: boolean
   targetScope?: OAUserScope | null
   approvalSteps?: OAApprovalStep[]
+  workflowDefinition?: OAWorkflowDefinition
 }
 
 export type OAFileMetadata = {
@@ -117,6 +142,10 @@ export type OASubmissionLike = {
     resultFields?: OAResultField[]
   }
   submittedAt?: number
+  workflowDefinitionSnapshot?: OAWorkflowDefinition
+  currentWorkflowNodeIndex?: number
+  workflowVersion?: number
+  workflowError?: string
 }
 
 export const oaReviewStatusLabels: Record<OAReviewStatus, string> = {
@@ -260,7 +289,7 @@ export function getOAFormKind(form?: { kind?: string } | null): OAFormKind {
 }
 
 const oaIdentityTypes: OAIdentityType[] = ["undergrad", "graduate", "teacher", "other"]
-const oaWorkflowRoles: OAWorkflowRole[] = ["admin", "super_admin"]
+const oaWorkflowRoles: OAWorkflowRole[] = ["member", "admin", "super_admin"]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
@@ -293,16 +322,18 @@ export function normalizeOAUserScope(value: unknown): OAUserScope | undefined {
   const roles = readAllowedStrings(value.roles, oaWorkflowRoles)
   const userIds = readUserIds(value.userIds)
   const researchGroupIds = readUserIds(value.researchGroupIds)
+  const userGroupIds = readUserIds(value.userGroupIds)
   const scope: OAUserScope = {}
   if (identityTypes.length > 0) scope.identityTypes = identityTypes
   if (roles.length > 0) scope.roles = roles
   if (userIds.length > 0) scope.userIds = userIds
   if (researchGroupIds.length > 0) scope.researchGroupIds = researchGroupIds
+  if (userGroupIds.length > 0) scope.userGroupIds = userGroupIds
   return scope
 }
 
 export function hasOAUserScopeRecipients(scope?: OAUserScope) {
-  return Boolean(scope?.identityTypes?.length || scope?.roles?.length || scope?.userIds?.length || scope?.researchGroupIds?.length)
+  return Boolean(scope?.identityTypes?.length || scope?.roles?.length || scope?.userIds?.length || scope?.researchGroupIds?.length || scope?.userGroupIds?.length)
 }
 
 export function normalizeOAApprovalSteps(value: unknown): OAApprovalStep[] | undefined {
@@ -324,6 +355,132 @@ export function normalizeOAApprovalSteps(value: unknown): OAApprovalStep[] | und
   })
 }
 
+const DEFAULT_CREATE_FORM_NODE: OAWorkflowNode = {
+  id: "create_form",
+  type: "create_form",
+  title: "创建表单",
+}
+
+export function validateOAWorkflowDefinition(value: unknown): asserts value is OAWorkflowDefinition {
+  if (!isRecord(value) || value.version !== 2 || !Array.isArray(value.nodes)) {
+    throw new Error("审批流程必须使用 V2 定义")
+  }
+  if (value.nodes.length === 0) {
+    throw new Error("审批流程必须包含创建表单节点")
+  }
+
+  const ids = new Set<string>()
+  let createNodeCount = 0
+  for (const [index, candidate] of value.nodes.entries()) {
+    if (!isRecord(candidate)) throw new Error(`第 ${index + 1} 个流程节点无效`)
+    const id = typeof candidate.id === "string" ? candidate.id.trim() : ""
+    const title = typeof candidate.title === "string" ? candidate.title.trim() : ""
+    if (!id) throw new Error(`请填写第 ${index + 1} 个节点 ID`)
+    if (ids.has(id)) throw new Error("流程节点 ID 不能重复")
+    ids.add(id)
+    if (!title) throw new Error(`请填写第 ${index + 1} 个节点名称`)
+
+    switch (candidate.type) {
+      case "create_form":
+        createNodeCount += 1
+        break
+      case "approval":
+        if (!hasOAUserScopeRecipients(normalizeOAUserScope(candidate.scope))) {
+          throw new Error(`请为第 ${index + 1} 个审批节点选择审批对象`)
+        }
+        break
+      case "batch_approval":
+        if (!hasOAUserScopeRecipients(normalizeOAUserScope(candidate.scope))) {
+          throw new Error(`请为第 ${index + 1} 个批量审批节点选择审批对象`)
+        }
+        if (candidate.completion !== "any" && candidate.completion !== "all") {
+          throw new Error(`请为第 ${index + 1} 个批量审批节点选择完成方式`)
+        }
+        break
+      case "fill_form":
+        if (typeof candidate.targetFormId !== "string" || !candidate.targetFormId.trim()) {
+          throw new Error(`请为第 ${index + 1} 个填写节点选择目标表单`)
+        }
+        break
+      case "notification":
+        if (!hasOAUserScopeRecipients(normalizeOAUserScope(candidate.scope))) {
+          throw new Error(`请为第 ${index + 1} 个通知节点选择通知对象`)
+        }
+        if (typeof candidate.message !== "string" || !candidate.message.trim()) {
+          throw new Error(`请填写第 ${index + 1} 个通知节点的通知内容`)
+        }
+        break
+      default:
+        throw new Error(`第 ${index + 1} 个流程节点类型无效`)
+    }
+  }
+
+  if (value.nodes[0]?.type !== "create_form") {
+    throw new Error("审批流程首个节点必须是创建表单")
+  }
+  if (createNodeCount !== 1) {
+    throw new Error("审批流程只能包含一个创建表单节点")
+  }
+}
+
+export function normalizeOAWorkflowDefinition(
+  value: unknown,
+  legacyApprovalSteps?: unknown,
+): OAWorkflowDefinition {
+  if (value !== undefined && value !== null) {
+    validateOAWorkflowDefinition(value)
+    return {
+      version: 2,
+      nodes: value.nodes.map((node) => {
+        const base = { id: node.id.trim(), type: node.type, title: node.title.trim() }
+        switch (node.type) {
+          case "create_form":
+            return base
+          case "approval":
+            return { ...base, scope: normalizeOAUserScope(node.scope) || {} }
+          case "batch_approval":
+            return { ...base, scope: normalizeOAUserScope(node.scope) || {}, completion: node.completion }
+          case "fill_form":
+            return { ...base, targetFormId: node.targetFormId.trim() }
+          case "notification":
+            return {
+              ...base,
+              scope: normalizeOAUserScope(node.scope) || {},
+              message: node.message.trim(),
+            }
+        }
+      }) as OAWorkflowNode[],
+    }
+  }
+
+  const legacy = (normalizeOAApprovalSteps(legacyApprovalSteps) || [])
+    .filter((step) => hasOAUserScopeRecipients(step.scope))
+  const usedIds = new Set([DEFAULT_CREATE_FORM_NODE.id])
+  const legacyNodes = legacy.map<OAWorkflowNode>((step) => {
+    let id = step.id
+    let suffix = 2
+    while (usedIds.has(id)) {
+      id = `${step.id}_${suffix}`
+      suffix += 1
+    }
+    usedIds.add(id)
+    return {
+      id,
+      type: "batch_approval",
+      title: step.title,
+      scope: step.scope,
+      completion: step.completion === "all" ? "all" : "any",
+    }
+  })
+  return {
+    version: 2,
+    nodes: [
+      { ...DEFAULT_CREATE_FORM_NODE },
+      ...legacyNodes,
+    ],
+  }
+}
+
 export function getOAWorkflowDraftConfig(draft: Record<string, unknown>): OAWorkflowDraftConfig {
   const config: OAWorkflowDraftConfig = {}
   if (Object.prototype.hasOwnProperty.call(draft, "targetScope")) {
@@ -337,6 +494,12 @@ export function getOAWorkflowDraftConfig(draft: Record<string, unknown>): OAWork
   if (Object.prototype.hasOwnProperty.call(draft, "approvalSteps")) {
     const approvalSteps = normalizeOAApprovalSteps(draft.approvalSteps)
     if (approvalSteps !== undefined) config.approvalSteps = approvalSteps
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(draft, "workflowDefinition")
+    && draft.workflowDefinition !== undefined
+  ) {
+    config.workflowDefinition = normalizeOAWorkflowDefinition(draft.workflowDefinition)
   }
   return config
 }
@@ -389,6 +552,7 @@ export function toOAFormUpsertPayload(draft: Record<string, unknown>): OAFormUps
   const workflow = getOAWorkflowDraftConfig(draft)
   if (workflow.targetScope !== undefined) payload.targetScope = workflow.targetScope
   if (workflow.approvalSteps !== undefined) payload.approvalSteps = workflow.approvalSteps
+  if (workflow.workflowDefinition !== undefined) payload.workflowDefinition = workflow.workflowDefinition
   return payload
 }
 

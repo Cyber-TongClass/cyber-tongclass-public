@@ -120,16 +120,16 @@ test("public directory resolves relationships only through active public members
   assert.doesNotMatch(publicDirectorySource, /accountUserId|publicEmail|studentId/)
 })
 
-test("live profiles render explicit group membership roles without private profile fields", () => {
+test("live group profiles render explicit membership roles while teacher profiles stay compact", () => {
   const livePersonProfile = readFileSync("src/components/institute/live-person-profile.tsx", "utf8")
   const liveGroupProfile = readFileSync("src/components/institute/live-research-group-profile.tsx", "utf8")
   const personProfile = readFileSync("src/components/institute/person-profile.tsx", "utf8")
   const groupProfile = readFileSync("src/components/institute/research-group-profile.tsx", "utf8")
 
   assert.match(livePersonProfile, /person\.researchGroupMemberships/)
-  assert.match(livePersonProfile, /group\.members/)
   assert.match(liveGroupProfile, /group\.members/)
-  assert.match(personProfile, /相关团队的公开研究生/)
+  assert.match(personProfile, /person\.kind !== "teacher"/)
+  assert.doesNotMatch(personProfile, /相关团队的公开研究生/)
   assert.match(groupProfile, /roleLabel/)
 
   for (const source of [livePersonProfile, liveGroupProfile]) {

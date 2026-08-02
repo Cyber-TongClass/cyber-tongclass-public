@@ -28,6 +28,7 @@ export function HomeLiveUpdates({ index }: { index?: string }) {
           href="/updates"
           hrefLabel="全部动态"
           headingId="home-updates-title"
+          showRule={false}
         />
 
         {updates === undefined ? (

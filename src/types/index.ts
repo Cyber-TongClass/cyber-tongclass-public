@@ -118,6 +118,9 @@ export interface AcademicExchangeSupportApplication {
   paperPdfFileName?: string
   paperPdfMimeType?: string
   paperPdfSize?: number
+  pdfBrand?: "tong_class" | "institute"
+  oaSubmissionId?: string
+  ownerIdentity?: { identityType?: UserIdentityType }
   status: "submitted" | "reviewing" | "needs_changes" | "approved" | "rejected" | "withdrawn"
   reviewNote?: string
   reviewerName?: string
@@ -167,6 +170,36 @@ export interface OAResultField {
   options?: OAFormOption[]
 }
 
+export type OAIdentityType = "undergrad" | "graduate" | "teacher" | "other"
+export type OAWorkflowRole = "member" | "admin" | "super_admin"
+
+export interface OAUserScope {
+  identityTypes?: OAIdentityType[]
+  roles?: OAWorkflowRole[]
+  userIds?: string[]
+  researchGroupIds?: string[]
+  userGroupIds?: string[]
+}
+
+export interface OAApprovalStep {
+  id: string
+  title: string
+  scope: OAUserScope
+  completion: "any" | "all"
+}
+
+export type OAWorkflowNode =
+  | { id: string; type: "create_form"; title: string }
+  | { id: string; type: "approval"; title: string; scope: OAUserScope }
+  | { id: string; type: "batch_approval"; title: string; scope: OAUserScope; completion: "any" | "all" }
+  | { id: string; type: "fill_form"; title: string; targetFormId: string }
+  | { id: string; type: "notification"; title: string; scope: OAUserScope; message: string }
+
+export interface OAWorkflowDefinition {
+  version: 2
+  nodes: OAWorkflowNode[]
+}
+
 export interface OAForm {
   _id: string
   slug: string
@@ -174,6 +207,7 @@ export interface OAForm {
   description?: string
   category: string
   kind?: OAFormKind
+  pinnedAt?: number
   visibility: "members" | "admins"
   status: OAFormStatus
   allowMultipleSubmissions?: boolean
@@ -184,6 +218,9 @@ export interface OAForm {
   fields: OAFormField[]
   resultFields?: OAResultField[]
   resultsVisible?: boolean
+  targetScope?: OAUserScope
+  approvalSteps?: OAApprovalStep[]
+  workflowDefinition?: OAWorkflowDefinition
   createdBy: string
   updatedBy?: string
   publishedAt?: number
@@ -228,7 +265,10 @@ export interface OAFormSubmission {
   workflowStatus?: "pending" | "needs_changes" | "approved" | "rejected"
   workflowVersion?: number
   currentApprovalStep?: number
+  currentWorkflowNodeIndex?: number
   approvalStepsSnapshot?: Array<{ id: string; title: string; completion?: "any" | "all" }>
+  workflowDefinitionSnapshot?: OAWorkflowDefinition
+  workflowError?: string
   workflowStartedAt?: number
   workflowCompletedAt?: number
   submittedAt: number
@@ -354,8 +394,8 @@ export interface Event {
   url?: string
   color: string // For calendar display
   audiences?: Array<"undergrad" | "graduate">
-  createdAt: number
-  updatedAt: number
+  createdAt?: number
+  updatedAt?: number
 }
 
 export interface TreeholePostSummary {

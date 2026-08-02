@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { ChevronDown, ChevronUp } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 import type { OAReviewStatus } from "@/types"
@@ -42,9 +43,32 @@ export function AiaOAAuthLoading() {
   )
 }
 
+/** Inline overflow control for capped OA lists: "展开剩余 N 项" / "收起". */
+export function AiaOAListOverflowButton({
+  expanded,
+  remaining,
+  onToggle,
+}: {
+  expanded: boolean
+  remaining: number
+  onToggle: () => void
+}) {
+  const Icon = expanded ? ChevronUp : ChevronDown
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="aia-focus aia-mono inline-flex items-center gap-1.5 text-xs uppercase tracking-[0.12em] aia-text-muted transition-colors hover:text-[hsl(var(--aia-red))]"
+    >
+      {expanded ? "收起" : `展开剩余 ${remaining} 项`}
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+    </button>
+  )
+}
+
 export function AiaOAServiceBackLink() {
   return (
-    <SafeReturnLink fallback="/services/oa" className="aia-link aia-focus text-sm font-medium">
+    <SafeReturnLink fallback="/services/oa" className="aia-link aia-mono text-xs uppercase tracking-[0.14em]">
       ← 返回 OA 与审批
     </SafeReturnLink>
   )

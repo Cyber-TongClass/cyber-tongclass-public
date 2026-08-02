@@ -72,6 +72,15 @@ export type PublicResearchGroupMember = {
   person: PublicInstitutePersonReference
 }
 
+/**
+ * Roster entry sourced from the private group-assignment table. Only the
+ * display name and the leader-set subtitle are ever exposed publicly.
+ */
+export type PublicResearchGroupRosterEntry = {
+  name: string
+  subtitle?: string
+}
+
 export type PublicResearchGroup = {
   slug: string
   nameZh: string
@@ -87,6 +96,7 @@ export type PublicResearchGroup = {
   isDemo: boolean
   leader?: PublicInstitutePerson
   members?: PublicResearchGroupMember[]
+  roster?: PublicResearchGroupRosterEntry[]
 }
 
 export type PublicInstituteResearch = {
@@ -117,4 +127,51 @@ export type PublicInstituteUpdate = {
   publishedAt: number
   people?: PublicInstitutePersonReference[]
   researchGroups?: PublicInstituteResearchGroupReference[]
+}
+
+export type ManagedResearchGroupProfile = {
+  nameZh: string
+  nameEn: string
+  summaryZh: string
+  summaryEn: string
+  descriptionZh: string
+  descriptionEn: string
+  researchAreas: string[]
+  recruitmentZh: string
+  recruitmentEn: string
+  publicLinks: InstituteResearchGroupLink[]
+  visibility: "public" | "hidden"
+}
+
+export type ManagedResearchGroupPerson = {
+  id: string
+  userId?: string
+  username: string
+  name: string
+  identityType: string
+  subtitle?: string
+  otherGroupName?: string
+}
+
+export type ManagedResearchGroupPublication = {
+  id: string
+  title: string
+  authors: string[]
+  venue?: string
+  year?: number
+  relationSource: "automatic" | "explicit" | "both" | string
+  effectiveVisibility: "public" | "hidden"
+}
+
+export type ManagedResearchGroupRoster = {
+  canManage: boolean
+  group: ({
+    id: string
+    slug: string
+    name: string
+  } & ManagedResearchGroupProfile) | null
+  leader: ManagedResearchGroupPerson | null
+  members: ManagedResearchGroupPerson[]
+  candidates: ManagedResearchGroupPerson[]
+  publications: ManagedResearchGroupPublication[]
 }

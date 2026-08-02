@@ -11,7 +11,7 @@ const expectations = [
   ['top-right action button label', '批量批复与修改'],
   ['button toggles the batch panel', 'setShowBatchTools((current) => !current)'],
   ['button exposes expanded state', 'aria-expanded={showBatchTools}'],
-  ['primary deep-blue button styling', 'bg-primary text-primary-foreground hover:bg-primary/90'],
+  ['primary editorial red button styling', 'bg-[hsl(var(--aia-red))] px-5 hover:bg-[hsl(var(--aia-red-deep))]'],
   ['batch tools panel is conditional', '{showBatchTools ? ('],
   ['result config kept inside batch tools panel', 'admin-submissions-batch-tools'],
   ['result config card no longer always visible', '结果展示配置'],

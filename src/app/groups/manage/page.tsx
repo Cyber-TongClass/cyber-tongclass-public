@@ -1,109 +1,210 @@
 "use client"
 
+import { Suspense } from "react"
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { ArrowLeft } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import {
-  useAssignTeacherGroupStudent,
-  useRemoveTeacherGroupStudent,
+  ResearchGroupMemberManager,
+  type ResearchGroupManagedPerson,
+} from "@/components/institute/research-group-member-manager"
+import {
+  ResearchGroupProfileEditor,
+  type ResearchGroupProfileDraft,
+} from "@/components/institute/research-group-profile-editor"
+import {
+  ResearchGroupPublicationManager,
+  type ResearchGroupManagedPublication,
+} from "@/components/institute/research-group-publication-manager"
+import {
+  useAssignTeacherGroupMember,
+  useResearchGroupScopeOptions,
+  useRemoveTeacherGroupMember,
+  useSetTeacherGroupMemberOrder,
+  useSetTeacherGroupPublicationVisibility,
+  useSetTeacherGroupMemberSubtitle,
   useTeacherGroupRoster,
+  useUpdateTeacherGroupProfile,
 } from "@/lib/api"
+import { useAuth } from "@/lib/hooks/use-auth"
+import type { ManagedResearchGroupPerson } from "@/types/institute"
 
-type Roster = {
-  canManage: boolean
-  groups: Array<{ id: string; slug: string; name: string }>
-  students: Array<{ id: string; username: string; name: string; identityType: string; researchGroupId?: string }>
+function managedPerson(person: ManagedResearchGroupPerson): ResearchGroupManagedPerson {
+  return {
+    userId: person.userId ?? person.id,
+    username: person.username,
+    name: person.name,
+    identityType: person.identityType,
+    subtitle: person.subtitle,
+    otherGroupName: person.otherGroupName,
+  }
 }
 
-export default function TeacherGroupManagementPage() {
-  const roster = useTeacherGroupRoster() as Roster | undefined
-  const assignStudent = useAssignTeacherGroupStudent()
-  const removeStudent = useRemoveTeacherGroupStudent()
-  const [studentUserId, setStudentUserId] = useState("")
-  const [researchGroupId, setResearchGroupId] = useState("")
-  const [message, setMessage] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+function TeacherGroupManagementContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { currentUser } = useAuth()
+  const isSuperAdmin = currentUser?.role === "super_admin"
+  const selectedGroupId = isSuperAdmin
+    ? searchParams.get("groupId") || undefined
+    : undefined
+  const groupOptions = useResearchGroupScopeOptions() as
+    | Array<{ id: string; name: string; leaderName?: string }>
+    | undefined
+  const roster = useTeacherGroupRoster(selectedGroupId)
+  const assignMember = useAssignTeacherGroupMember()
+  const removeMember = useRemoveTeacherGroupMember()
+  const saveSubtitle = useSetTeacherGroupMemberSubtitle()
+  const saveProfile = useUpdateTeacherGroupProfile()
+  const saveOrder = useSetTeacherGroupMemberOrder()
+  const savePublicationVisibility = useSetTeacherGroupPublicationVisibility()
 
-  const selectedGroup = useMemo(
-    () => roster?.groups.find((group) => group.id === researchGroupId),
-    [researchGroupId, roster?.groups],
-  )
-
-  async function assign() {
-    if (!studentUserId || !researchGroupId) return
-    setSaving(true)
-    setMessage(null)
-    try {
-      await assignStudent({ studentUserId, researchGroupId })
-      setMessage("学生已加入课题组。若其原来属于其他课题组，归属已自动替换。")
-      setStudentUserId("")
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "保存失败")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function remove(student: Roster["students"][number]) {
-    setSaving(true)
-    setMessage(null)
-    try {
-      await removeStudent(student.id)
-      setMessage(`已将 ${student.name} 移出课题组。`)
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "移除失败")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (roster === undefined) {
-    return <main className="container-custom py-16"><p className="text-sm text-slate-600">正在加载课题组管理信息…</p></main>
+  if (roster === undefined || (isSuperAdmin && groupOptions === undefined)) {
+    return (
+      <main className="container-custom py-12">
+        <p role="status" className="aia-text-muted border-y aia-border-rule py-6 text-sm">
+          正在加载课题组管理信息…
+        </p>
+      </main>
+    )
   }
 
   if (!roster.canManage) {
-    return <main className="container-custom max-w-3xl py-16"><h1 className="text-3xl font-semibold text-slate-950">课题组管理</h1><p className="mt-4 text-slate-600">课题组成员管理权限已被超级管理员关闭；你的课题组和已有成员信息保持不变。</p></main>
+    return (
+      <main className="container-custom max-w-3xl py-12 sm:py-16">
+        <p className="aia-kicker">内网 · 课题组</p>
+        <h1 className="aia-serif mt-3 text-3xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">课题组管理</h1>
+        <p className="aia-text-muted mt-4 text-sm leading-6">
+          课题组管理权限已被关闭；现有公开资料、成员顺序和文章展示设置保持不变。
+        </p>
+      </main>
+    )
   }
 
-  if (roster.groups.length === 0) {
-    return <main className="container-custom max-w-3xl py-16"><h1 className="text-3xl font-semibold text-slate-950">课题组管理</h1><p className="mt-4 text-slate-600">当前账号未绑定为任何课题组的负责人，无法管理学生名单。</p></main>
+  const groupSelector = isSuperAdmin ? (
+    <section className="mt-8 border-y aia-border-rule py-5">
+      <label
+        htmlFor="managed-research-group"
+        className="aia-mono block text-xs font-medium tracking-[0.08em] text-[hsl(var(--aia-ink))]"
+      >
+        超级管理员 · 选择课题组
+      </label>
+      <select
+        id="managed-research-group"
+        className="aia-focus mt-3 h-11 w-full max-w-xl border aia-border-rule bg-transparent px-3 text-sm text-[hsl(var(--aia-ink))]"
+        value={selectedGroupId ?? ""}
+        onChange={(event) => {
+          const groupId = event.target.value
+          router.replace(groupId ? `/groups/manage?groupId=${encodeURIComponent(groupId)}` : "/groups/manage")
+        }}
+      >
+        <option value="">选择要管理的课题组…</option>
+        {(groupOptions ?? []).map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name}{option.leaderName ? ` · ${option.leaderName}` : ""}
+          </option>
+        ))}
+      </select>
+      <p className="aia-text-muted mt-2 text-xs leading-5">
+        超级管理员可切换并维护全部课题组；教师账号始终只管理自己负责的课题组。
+      </p>
+    </section>
+  ) : null
+
+  if (!roster.group) {
+    return (
+      <main className="container-custom max-w-3xl py-12 sm:py-16">
+        <p className="aia-kicker">内网 · 课题组</p>
+        <h1 className="aia-serif mt-3 text-3xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">课题组管理</h1>
+        {groupSelector}
+        <p className="aia-text-muted mt-4 text-sm leading-6">
+          {isSuperAdmin ? "请选择一个课题组开始管理。" : "当前账号未绑定为任何课题组的负责人，无法管理课题组资料。"}
+        </p>
+      </main>
+    )
   }
 
-  const assignedStudents = roster.students.filter((student) => student.researchGroupId)
+  const group = roster.group
+  const profile: ResearchGroupProfileDraft = {
+    nameZh: group.nameZh ?? group.name,
+    nameEn: group.nameEn ?? "",
+    summaryZh: group.summaryZh ?? "",
+    summaryEn: group.summaryEn ?? "",
+    descriptionZh: group.descriptionZh ?? "",
+    descriptionEn: group.descriptionEn ?? "",
+    researchAreas: group.researchAreas ?? [],
+    recruitmentZh: group.recruitmentZh ?? "",
+    recruitmentEn: group.recruitmentEn ?? "",
+    publicLinks: group.publicLinks ?? [],
+    visibility: group.visibility,
+  }
+  const members = roster.members.map(managedPerson)
+  const candidates = roster.candidates.map(managedPerson)
+  const publications: ResearchGroupManagedPublication[] = (roster.publications ?? []).map((publication) => ({
+    ...publication,
+    relationSource: publication.relationSource,
+  }))
+
   return (
-    <main className="container-custom max-w-4xl py-12 sm:py-16">
-      <Link href="/portal" className="text-sm text-primary hover:underline">返回内网</Link>
-      <h1 className="mt-5 text-3xl font-semibold text-slate-950">课题组管理</h1>
-      <p className="mt-3 text-sm leading-6 text-slate-600">从学生账号中选择成员。每位学生只能归属一个课题组；该归属不会公开展示，仅用于内部筛选与审批范围。</p>
+    <main className="container-custom max-w-6xl py-10 sm:py-12">
+      <Link href="/portal" className="aia-link aia-focus inline-flex items-center gap-1.5 text-sm font-medium">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />返回内网
+      </Link>
 
-      <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="font-semibold text-slate-950">添加或调整学生归属</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <select className="h-10 rounded-md border border-input bg-white px-3 text-sm" value={researchGroupId} onChange={(event) => setResearchGroupId(event.target.value)}>
-            <option value="">选择课题组</option>
-            {roster.groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-          </select>
-          <select className="h-10 rounded-md border border-input bg-white px-3 text-sm" value={studentUserId} onChange={(event) => setStudentUserId(event.target.value)}>
-            <option value="">选择学生</option>
-            {roster.students.map((student) => <option key={student.id} value={student.id}>{student.name}（{student.username}）{student.researchGroupId ? " · 已归属" : ""}</option>)}
-          </select>
+      <header className="mt-8 border-b aia-border-rule pb-8">
+        <p className="aia-kicker">内网 · 课题组</p>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="aia-serif text-3xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+              {group.nameZh ?? group.name}
+            </h1>
+            {group.nameEn ? <p className="aia-mono aia-text-muted mt-2 text-xs tracking-[0.08em]">{group.nameEn}</p> : null}
+          </div>
+          <p className="aia-mono aia-text-muted text-xs">/groups/{group.slug}</p>
         </div>
-        <Button className="mt-4" type="button" disabled={saving || !studentUserId || !selectedGroup} onClick={assign}>保存归属</Button>
-        {message ? <p className="mt-3 text-sm text-slate-600" role="status">{message}</p> : null}
-      </section>
+      </header>
 
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="font-semibold text-slate-950">当前学生名单</h2>
-        <ul className="mt-4 divide-y divide-slate-100">
-          {assignedStudents.length === 0 ? <li className="py-3 text-sm text-slate-500">暂无已归属的学生。</li> : assignedStudents.map((student) => (
-            <li key={student.id} className="flex items-center justify-between gap-4 py-3 text-sm">
-              <span>{student.name}<span className="ml-2 text-slate-500">{roster.groups.find((group) => group.id === student.researchGroupId)?.name}</span></span>
-              <Button type="button" variant="outline" size="sm" disabled={saving} onClick={() => remove(student)}>移除</Button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {groupSelector}
+
+      <ResearchGroupProfileEditor
+        profile={profile}
+        onSave={(nextProfile) => saveProfile({ groupId: group.id, profile: nextProfile })}
+      />
+
+      <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <ResearchGroupMemberManager
+          leader={roster.leader ? managedPerson(roster.leader) : null}
+          members={members}
+          candidates={candidates}
+          onAdd={(userId, subtitle) => assignMember({ groupId: group.id, userId, subtitle })}
+          onRemove={(userId) => removeMember({ groupId: group.id, userId })}
+          onSaveSubtitle={(userId, subtitle) => saveSubtitle({ groupId: group.id, userId, subtitle })}
+          onReorder={(orderedUserIds) => saveOrder({ groupId: group.id, orderedUserIds })}
+        />
+        <ResearchGroupPublicationManager
+          publications={publications}
+          onSetVisibility={(publicationId, visible) => (
+            savePublicationVisibility({ groupId: group.id, publicationId, visible })
+          )}
+        />
+      </div>
     </main>
+  )
+}
+
+export default function TeacherGroupManagementPage() {
+  return (
+    <Suspense
+      fallback={(
+        <main className="container-custom py-12">
+          <p role="status" className="aia-text-muted border-y aia-border-rule py-6 text-sm">
+            正在加载课题组管理信息…
+          </p>
+        </main>
+      )}
+    >
+      <TeacherGroupManagementContent />
+    </Suspense>
   )
 }

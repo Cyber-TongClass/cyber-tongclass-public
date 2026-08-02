@@ -13,6 +13,10 @@ export type PublicationAuthor = {
 
 type EncodedAuthorMeta = Omit<PublicationAuthor, "name">
 
+export function normalizePublicationAuthorSearchValue(value: unknown) {
+  return String(value ?? "").trim().toLowerCase()
+}
+
 function encodeMeta(meta: EncodedAuthorMeta) {
   return encodeURIComponent(JSON.stringify(meta))
 }

@@ -2,12 +2,12 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ClipboardList, Copy, Eye, FilePlus2, Settings, TableProperties, Trash2 } from "lucide-react"
+import { ClipboardList, Copy, Eye, FilePlus2, Pin, PinOff, Settings, TableProperties, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createDefaultReimbursementFormDraft, normalizeFormSlug, oaFormStatusLabels } from "@/lib/oa-forms"
-import { useAdminOAForms, useAdminRemoveOAForm, useAdminSetOAFormStatus, useAdminUpsertOAForm } from "@/lib/api"
+import { useAdminOAForms, useAdminRemoveOAForm, useAdminSetOAFormPinned, useAdminSetOAFormStatus, useAdminUpsertOAForm } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import type { OAForm } from "@/types"
 import { useState } from "react"
@@ -27,6 +27,7 @@ export default function AdminReimbursementsPage() {
   const forms = useAdminOAForms({ kind: "reimbursement" }) as OAForm[] | undefined
   const upsert = useAdminUpsertOAForm()
   const setStatus = useAdminSetOAFormStatus()
+  const setPinned = useAdminSetOAFormPinned()
   const removeForm = useAdminRemoveOAForm()
   const [message, setMessage] = useState("")
 
@@ -74,6 +75,16 @@ export default function AdminReimbursementsPage() {
     }
   }
 
+  const togglePinned = async (form: OAForm) => {
+    setMessage("")
+    try {
+      await setPinned({ id: form._id, pinned: !form.pinnedAt })
+      setMessage(form.pinnedAt ? "已取消置顶" : "已置顶")
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "置顶操作失败")
+    }
+  }
+
   const remove = async (form: OAForm) => {
     if (!window.confirm(`确定删除报销模板“${form.title}”？已有提交的报销模板不能删除。`)) return
     setMessage("")
@@ -110,7 +121,10 @@ export default function AdminReimbursementsPage() {
             <TableBody>
               {forms === undefined ? <TableRow><TableCell colSpan={5} className="text-center text-gray-500">Loading...</TableCell></TableRow> : forms.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-gray-500">暂无报销模板</TableCell></TableRow> : forms.map((form) => (
                 <TableRow key={form._id}>
-                  <TableCell className="font-medium">{form.title}</TableCell>
+                  <TableCell className="font-medium">
+                    {form.pinnedAt ? <span className="mr-2 rounded bg-rose-50 px-1.5 py-0.5 text-xs font-bold text-rose-700">置顶</span> : null}
+                    {form.title}
+                  </TableCell>
                   <TableCell>{form.slug}</TableCell>
                   <TableCell>{oaFormStatusLabels[form.status]}</TableCell>
                   <TableCell>{formatTime(form.updatedAt)}</TableCell>
@@ -119,6 +133,12 @@ export default function AdminReimbursementsPage() {
                       <Button asChild variant="outline" size="sm"><Link href={`/admin/forms/${form._id}`}><Settings className="mr-2 h-4 w-4" />编辑模板</Link></Button>
                       <Button asChild variant="outline" size="sm"><Link href={`/admin/forms/${form._id}/submissions`}><Eye className="mr-2 h-4 w-4" />审核提交</Link></Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => void duplicateForm(form)}><Copy className="mr-2 h-4 w-4" />复制</Button>
+                      {form.status !== "archived" ? (
+                        <Button type="button" variant="outline" size="sm" onClick={() => void togglePinned(form)}>
+                          {form.pinnedAt ? <PinOff className="mr-2 h-4 w-4" /> : <Pin className="mr-2 h-4 w-4" />}
+                          {form.pinnedAt ? "取消置顶" : "置顶"}
+                        </Button>
+                      ) : null}
                       {form.status === "published" ? <Button type="button" variant="outline" size="sm" onClick={() => void updateStatus(form, "draft")}>取消发布</Button> : <Button type="button" variant="outline" size="sm" onClick={() => void updateStatus(form, "published")}>发布</Button>}
                       <Button type="button" variant="destructive" size="sm" onClick={() => void remove(form)}><Trash2 className="mr-2 h-4 w-4" />删除</Button>
                     </div>

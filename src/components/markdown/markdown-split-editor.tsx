@@ -121,14 +121,14 @@ export function MarkdownSplitEditor({
   return (
     <div className={cn("space-y-3", className)}>
       {showToolbar && (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-white/60 p-2">
-          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => replaceSelection("**", "**", "bold")}>B</Button>
-          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => replaceSelection("*", "*", "italic")}>I</Button>
-          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => replaceSelection("~~", "~~", "delete")}>S</Button>
-          <div className="mx-1 h-5 w-px bg-border" />
+        <div className="flex flex-wrap items-center gap-1 border-y aia-border-rule py-2">
+          <Button className="min-h-11 rounded-none border-0 bg-transparent px-3 hover:bg-[hsl(var(--aia-tag))]" type="button" size="sm" variant="outline" aria-label="加粗" onMouseDown={preserveSelection} onClick={() => replaceSelection("**", "**", "bold")}>B</Button>
+          <Button className="min-h-11 rounded-none border-0 bg-transparent px-3 hover:bg-[hsl(var(--aia-tag))]" type="button" size="sm" variant="outline" aria-label="斜体" onMouseDown={preserveSelection} onClick={() => replaceSelection("*", "*", "italic")}>I</Button>
+          <Button className="min-h-11 rounded-none border-0 bg-transparent px-3 hover:bg-[hsl(var(--aia-tag))]" type="button" size="sm" variant="outline" aria-label="删除线" onMouseDown={preserveSelection} onClick={() => replaceSelection("~~", "~~", "delete")}>S</Button>
+          <div className="mx-1 h-5 w-px bg-[hsl(var(--aia-rule))]" aria-hidden="true" />
           <select
-            aria-label="Insert heading"
-            className="h-8 rounded-md border border-input bg-white px-2 text-sm"
+            aria-label="插入标题"
+            className="aia-focus min-h-11 rounded-none border aia-border-rule bg-transparent px-2 text-sm text-[hsl(var(--aia-ink))]"
             defaultValue=""
             onChange={(event) => {
               const level = Number(event.target.value)
@@ -146,14 +146,14 @@ export function MarkdownSplitEditor({
             <option value="5">H5</option>
             <option value="6">H6</option>
           </select>
-          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => insertTemplate("[text](https://)", 1, 5)}>Link</Button>
-          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => insertTemplate("![alt](https://)", 2, 5)}>Image</Button>
-          <Button type="button" size="sm" variant="outline" onMouseDown={preserveSelection} onClick={() => prefixSelectedLines("> ")}>Quote</Button>
-          <div className="mx-1 h-5 w-px bg-border" />
-          <div className="inline-flex items-center rounded-md border border-input">
-            <Button type="button" size="sm" variant={viewMode === "edit" ? "secondary" : "ghost"} onClick={() => setViewMode("edit")}>Edit</Button>
-            <Button type="button" size="sm" variant={viewMode === "split" ? "secondary" : "ghost"} onClick={() => setViewMode("split")}>Split</Button>
-            <Button type="button" size="sm" variant={viewMode === "preview" ? "secondary" : "ghost"} onClick={() => setViewMode("preview")}>Preview</Button>
+          <Button className="min-h-11 rounded-none border-0 bg-transparent px-3 hover:bg-[hsl(var(--aia-tag))]" type="button" size="sm" variant="outline" aria-label="插入链接" onMouseDown={preserveSelection} onClick={() => insertTemplate("[text](https://)", 1, 5)}>Link</Button>
+          <Button className="min-h-11 rounded-none border-0 bg-transparent px-3 hover:bg-[hsl(var(--aia-tag))]" type="button" size="sm" variant="outline" aria-label="插入图片" onMouseDown={preserveSelection} onClick={() => insertTemplate("![alt](https://)", 2, 5)}>Image</Button>
+          <Button className="min-h-11 rounded-none border-0 bg-transparent px-3 hover:bg-[hsl(var(--aia-tag))]" type="button" size="sm" variant="outline" aria-label="插入引用" onMouseDown={preserveSelection} onClick={() => prefixSelectedLines("> ")}>Quote</Button>
+          <div className="mx-1 h-5 w-px bg-[hsl(var(--aia-rule))]" aria-hidden="true" />
+          <div className="inline-flex items-center border aia-border-rule" role="group" aria-label="编辑器视图">
+            <Button className="min-h-11 rounded-none" type="button" size="sm" variant={viewMode === "edit" ? "secondary" : "ghost"} aria-pressed={viewMode === "edit"} onClick={() => setViewMode("edit")}>Edit</Button>
+            <Button className="min-h-11 rounded-none" type="button" size="sm" variant={viewMode === "split" ? "secondary" : "ghost"} aria-pressed={viewMode === "split"} onClick={() => setViewMode("split")}>Split</Button>
+            <Button className="min-h-11 rounded-none" type="button" size="sm" variant={viewMode === "preview" ? "secondary" : "ghost"} aria-pressed={viewMode === "preview"} onClick={() => setViewMode("preview")}>Preview</Button>
           </div>
         </div>
       )}
@@ -161,7 +161,7 @@ export function MarkdownSplitEditor({
       <div className={cn("grid grid-cols-1 gap-4", viewMode === "split" && "lg:grid-cols-2")}>
         {showSource && (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-slate-900">{sourceLabel}</p>
+            <label htmlFor={id} className="aia-mono text-xs font-semibold uppercase tracking-[0.12em] text-[hsl(var(--aia-ink))]">{sourceLabel}</label>
             <Textarea
               ref={textareaRef}
               id={id}
@@ -169,8 +169,8 @@ export function MarkdownSplitEditor({
               onChange={(event) => onChange(event.target.value)}
               placeholder={placeholder}
               className={cn(
-                "resize-y border-slate-800 bg-slate-950/95 font-mono text-sm leading-6 text-slate-100 caret-slate-100 placeholder:text-slate-400",
-                "selection:bg-primary/30 selection:text-slate-100 focus-visible:ring-slate-500",
+                "aia-focus resize-y rounded-none border aia-border-rule bg-transparent font-mono text-sm leading-6 text-[hsl(var(--aia-ink))] caret-[hsl(var(--aia-red))] placeholder:text-[hsl(var(--aia-muted))]",
+                "selection:bg-[hsl(var(--aia-tag))] selection:text-[hsl(var(--aia-ink))] focus-visible:ring-0 focus-visible:ring-offset-0",
                 minHeightClassName,
                 textareaClassName
               )}
@@ -182,8 +182,8 @@ export function MarkdownSplitEditor({
 
         {showPreview && (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-slate-900">{previewLabel}</p>
-            <div className={cn("overflow-auto rounded-md border bg-slate-100/20 p-4", minHeightClassName, previewClassName)}>
+            <p id={`${id}-preview-label`} className="aia-mono text-xs font-semibold uppercase tracking-[0.12em] text-[hsl(var(--aia-ink))]">{previewLabel}</p>
+            <div aria-labelledby={`${id}-preview-label`} className={cn("overflow-auto border-y aia-border-rule bg-[hsl(var(--aia-paper))] p-4", minHeightClassName, previewClassName)}>
               <MarkdownRenderer content={value} emptyFallback="在左侧输入 Markdown 后，这里会实时预览。" />
             </div>
           </div>

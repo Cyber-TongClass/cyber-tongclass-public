@@ -15,6 +15,7 @@ export function AiaSectionHeading({
   href,
   hrefLabel,
   headingId,
+  showRule = true,
   className,
 }: {
   kicker: string
@@ -24,6 +25,7 @@ export function AiaSectionHeading({
   href?: string
   hrefLabel?: string
   headingId?: string
+  showRule?: boolean
   className?: string
 }) {
   return (
@@ -51,7 +53,7 @@ export function AiaSectionHeading({
           </Link>
         ) : null}
       </div>
-      <AiaRule />
+      {showRule ? <AiaRule /> : null}
     </div>
   )
 }

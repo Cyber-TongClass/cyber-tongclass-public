@@ -3,10 +3,9 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useRef, useState } from "react"
-import { ArrowLeft, ExternalLink } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { OAFormRenderer } from "@/components/oa-forms/oa-form-renderer"
@@ -33,7 +32,7 @@ function AttachmentLink({ submissionId, file }: { submissionId: string; file: OA
   const url = useOAFormAttachmentUrl({ submissionId, storageId: file.storageId })
   if (!url) return <span>{file.fileName}</span>
   return (
-    <a href={url as string} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline underline-offset-4">
+    <a href={url as string} target="_blank" rel="noreferrer" className="aia-link inline-flex items-center gap-1">
       {file.fileName}
       <ExternalLink className="h-3 w-3" />
     </a>
@@ -68,7 +67,7 @@ function SubmissionDialog({ form, submission, canEdit, initialMode, triggerLabel
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <button type="button" className="text-sm font-medium text-primary hover:underline">{triggerLabel}</button>
+        <button type="button" className="aia-link aia-focus text-sm font-medium">{triggerLabel}</button>
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
@@ -90,22 +89,22 @@ function SubmissionDialog({ form, submission, canEdit, initialMode, triggerLabel
           <div className="space-y-5">
             <div className="space-y-3">
               {form.fields.map((field) => (
-                <div key={field.id} className="rounded-md border bg-slate-50 px-3 py-2">
-                  <div className="text-xs font-medium text-slate-500">{field.label}</div>
-                  <div className="mt-1 break-words text-sm text-slate-900">{formatAnswerValue(submission._id, submission.answers?.[field.id])}</div>
+                <div key={field.id} className="aia-bg-tag border aia-border-rule px-3 py-2">
+                  <div className="aia-mono text-xs font-medium uppercase tracking-[0.1em] aia-text-muted">{field.label}</div>
+                  <div className="mt-1 break-words text-sm text-[hsl(var(--aia-ink))]">{formatAnswerValue(submission._id, submission.answers?.[field.id])}</div>
                 </div>
               ))}
             </div>
             {submission.adminNote ? (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                <div className="font-medium">管理员备注</div>
-                <div className="mt-1 whitespace-pre-wrap">{submission.adminNote}</div>
+              <div className="border aia-border-rule px-3 py-2 text-sm">
+                <div className="font-medium text-[hsl(var(--aia-ink))]">管理员备注</div>
+                <div className="mt-1 whitespace-pre-wrap aia-text-muted">{submission.adminNote}</div>
               </div>
             ) : null}
             {form.resultsVisible && submission.resultValues && Object.keys(submission.resultValues).length > 0 ? (
-              <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950">
-                <div className="font-medium">结果</div>
-                <div className="mt-1">{formatResult(form, submission.resultValues)}</div>
+              <div className="border aia-border-rule px-3 py-2 text-sm">
+                <div className="font-medium text-[hsl(var(--aia-ink))]">结果</div>
+                <div className="mt-1 aia-text-muted">{formatResult(form, submission.resultValues)}</div>
               </div>
             ) : null}
             {canEdit ? (
@@ -120,6 +119,14 @@ function SubmissionDialog({ form, submission, canEdit, initialMode, triggerLabel
   )
 }
 
+function IntranetFormBackLink() {
+  return (
+    <Link href="/tong-class/intranet/forms" className="aia-link aia-mono text-xs uppercase tracking-[0.14em]">
+      ← 返回 OA 填报
+    </Link>
+  )
+}
+
 export default function IntranetFormDetailPage() {
   const params = useParams<{ slug: string }>()
   const form = usePublishedOAFormBySlug(params.slug) as OAForm | null | undefined
@@ -130,72 +137,80 @@ export default function IntranetFormDetailPage() {
   const canEditSubmissions = Boolean(form?.allowSubmissionEdits && collecting)
 
   if (form === undefined) {
-    return <div className="min-h-screen bg-[hsl(211,30%,97%)] flex items-center justify-center text-slate-500">Loading...</div>
+    return (
+      <div className="container-custom max-w-3xl py-10 sm:py-12">
+        <p role="status" className="aia-mono aia-text-muted text-xs">正在读取表单…</p>
+      </div>
+    )
   }
 
   if (!form) {
     return (
-      <div className="min-h-screen bg-[hsl(211,30%,97%)] py-10 px-4">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <Button asChild variant="ghost"><Link href="/tong-class/intranet/forms"><ArrowLeft className="mr-2 h-4 w-4" />返回 OA 填报</Link></Button>
-          <Card><CardContent className="py-10 text-center text-sm text-slate-500">表单不存在或尚未发布。</CardContent></Card>
-        </div>
+      <div className="container-custom max-w-3xl space-y-6 py-10 sm:py-12">
+        <IntranetFormBackLink />
+        <p className="border border-dashed aia-border-rule px-4 py-3 text-sm leading-6 text-[hsl(var(--aia-ink))]">表单不存在或尚未发布。</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[hsl(211,30%,97%)] py-10 px-4">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <Button asChild variant="ghost"><Link href="/tong-class/intranet/forms"><ArrowLeft className="mr-2 h-4 w-4" />返回 OA 填报</Link></Button>
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{form.category}</Badge>{form.resultsVisible ? <Badge>可查看结果</Badge> : null}</div>
-          <h1 className="text-3xl font-extrabold text-slate-900">{form.title}</h1>
-          {form.description ? <p className="max-w-3xl text-sm leading-7 text-slate-600">{form.description}</p> : null}
+    <div className="container-custom max-w-3xl space-y-10 py-10 sm:py-12">
+      <IntranetFormBackLink />
+
+      <header className="border-b aia-border-rule pb-7">
+        <p className="aia-kicker">OA · 填报</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="aia-mono aia-bg-tag px-1.5 py-0.5 text-[11px] tracking-wider">{form.category}</span>
+          {form.resultsVisible ? <Badge>可查看结果</Badge> : null}
         </div>
+        <h1 className="aia-serif mt-3 text-3xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">{form.title}</h1>
+        {form.description ? <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">{form.description}</p> : null}
+      </header>
 
-        {collecting ? (
-          <OAFormRenderer
-            form={form}
-            heading="新建提交"
-            onSubmit={async (answers) => {
-              submissionIdempotencyKeyRef.current ||= crypto.randomUUID()
-              await submitForm({
-                formId: form._id,
-                answers,
-                idempotencyKey: submissionIdempotencyKeyRef.current,
-              })
-              window.location.reload()
-            }}
-            submitLabel="提交填报"
-          />
-        ) : (
-          <Card><CardContent className="py-8 text-sm text-slate-600">该表单已停止收集，你仍可查看自己的提交记录。</CardContent></Card>
-        )}
+      {collecting ? (
+        <OAFormRenderer
+          form={form}
+          heading="新建提交"
+          onSubmit={async (answers) => {
+            submissionIdempotencyKeyRef.current ||= crypto.randomUUID()
+            await submitForm({
+              formId: form._id,
+              answers,
+              idempotencyKey: submissionIdempotencyKeyRef.current,
+            })
+            window.location.reload()
+          }}
+          submitLabel="提交填报"
+        />
+      ) : (
+        <p className="border border-dashed aia-border-rule px-4 py-3 text-sm leading-6 text-[hsl(var(--aia-ink))]">该表单已停止收集，你仍可查看自己的提交记录。</p>
+      )}
 
-        <Card>
-          <CardHeader><CardTitle>我的提交记录</CardTitle></CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader><TableRow><TableHead className="w-48">提交时间</TableHead><TableHead className="w-32">状态</TableHead><TableHead>详情</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {submissions === undefined ? <TableRow><TableCell colSpan={3} className="text-center text-slate-500">Loading...</TableCell></TableRow> : submissions.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center text-slate-500">暂无提交记录</TableCell></TableRow> : submissions.map((submission) => (
-                  <TableRow key={submission._id}>
-                    <TableCell className="whitespace-nowrap">{formatTime(submission.submittedAt)}</TableCell>
-                    <TableCell>{oaReviewStatusLabels[submission.reviewStatus]}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <SubmissionDialog form={form} submission={submission} canEdit={canEditSubmissions} initialMode="view" triggerLabel="查看内容" />
-                        {canEditSubmissions ? <SubmissionDialog form={form} submission={submission} canEdit={canEditSubmissions} initialMode="edit" triggerLabel="修改" /> : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+      <section aria-labelledby="intranet-form-submissions-heading">
+        <div className="flex items-baseline gap-3 border-b aia-border-rule pb-3">
+          <span className="aia-kicker">提交 · Submissions</span>
+          <h2 id="intranet-form-submissions-heading" className="aia-serif text-lg font-semibold tracking-tight text-[hsl(var(--aia-ink))]">我的提交记录</h2>
+        </div>
+        <div className="overflow-x-auto pt-4">
+          <Table>
+            <TableHeader><TableRow><TableHead className="w-48">提交时间</TableHead><TableHead className="w-32">状态</TableHead><TableHead>详情</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {submissions === undefined ? <TableRow><TableCell colSpan={3} className="text-center aia-text-muted">正在读取提交记录…</TableCell></TableRow> : submissions.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center aia-text-muted">暂无提交记录</TableCell></TableRow> : submissions.map((submission) => (
+                <TableRow key={submission._id}>
+                  <TableCell className="whitespace-nowrap">{formatTime(submission.submittedAt)}</TableCell>
+                  <TableCell>{oaReviewStatusLabels[submission.reviewStatus]}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <SubmissionDialog form={form} submission={submission} canEdit={canEditSubmissions} initialMode="view" triggerLabel="查看内容" />
+                      {canEditSubmissions ? <SubmissionDialog form={form} submission={submission} canEdit={canEditSubmissions} initialMode="edit" triggerLabel="修改" /> : null}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
     </div>
   )
 }

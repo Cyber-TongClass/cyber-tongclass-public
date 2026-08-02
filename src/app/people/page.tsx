@@ -2,10 +2,11 @@ import type { Metadata } from "next"
 import { AiaPageHero } from "@/components/institute/editorial/page-hero"
 import { AiaSectionHeading } from "@/components/institute/editorial/section-heading"
 import { LivePeopleDirectory } from "@/components/institute/live-people-directory"
+import { LivePeopleGroups } from "@/components/institute/live-people-groups"
 
 export const metadata: Metadata = {
   title: "人员目录",
-  description: "浏览北京大学人工智能研究院经批准公开的人员资料与通班成员目录。",
+  description: "浏览北京大学人工智能研究院经批准公开的人员资料、课题组与通班成员目录。",
   alternates: { canonical: "/people" },
 }
 
@@ -31,6 +32,7 @@ export default function PeoplePage() {
         </div>
       </section>
 
+      <LivePeopleGroups />
       <LivePeopleDirectory />
     </div>
   )

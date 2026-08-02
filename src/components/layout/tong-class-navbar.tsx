@@ -27,23 +27,32 @@ import {
   tongClassResourcesPath,
 } from "@/lib/tong-class-routes"
 import { cn } from "@/lib/utils"
+import { siteCopy } from "@/config/site-copy"
 
-const navigation = [
-  { name: "关于通班", href: tongClassAboutPath() },
-  { name: "动态", href: tongClassNewsPath() },
-  { name: "成员", href: tongClassMembersPath() },
-  { name: "成果", href: tongClassPublicationsPath() },
-  { name: "资源", href: tongClassResourcesPath() },
-  { name: "课程", href: tongClassCoursesPath(), auth: true },
-  { name: "活动", href: tongClassEventsPath(), auth: true },
-  { name: "内网", href: tongClassIntranetPath(), auth: true, loggedInOnly: true },
-]
+const tongClassNavigationPaths = {
+  about: tongClassAboutPath(),
+  news: tongClassNewsPath(),
+  members: tongClassMembersPath(),
+  publications: tongClassPublicationsPath(),
+  resources: tongClassResourcesPath(),
+  courses: tongClassCoursesPath(),
+  events: tongClassEventsPath(),
+  intranet: tongClassIntranetPath(),
+} as const
 
-const graduateNavigation = [
-  { name: "成员", href: tongClassMembersPath(), auth: true },
-  { name: "活动", href: tongClassEventsPath(), auth: true },
-  { name: "内网", href: tongClassIntranetPath(), auth: true, loggedInOnly: true },
-]
+const navigation = siteCopy.navigation.tongClass.map((item) => ({
+  name: item.name,
+  href: tongClassNavigationPaths[item.key],
+  auth: "auth" in item ? item.auth : undefined,
+  loggedInOnly: "loggedInOnly" in item ? item.loggedInOnly : undefined,
+}))
+
+const graduateNavigation = siteCopy.navigation.graduate.map((item) => ({
+  name: item.name,
+  href: tongClassNavigationPaths[item.key],
+  auth: item.auth,
+  loggedInOnly: "loggedInOnly" in item ? item.loggedInOnly : undefined,
+}))
 
 export function TongClassNavbar() {
   const pathname = usePathname() || tongClassHomePath()
@@ -101,14 +110,14 @@ export function TongClassNavbar() {
           href={tongClassHomePath()}
           className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
-          <Image src="/logo.png" alt={isGraduate ? "人工智能研究院研究生内网标识" : "通用人工智能实验班标识"} width={36} height={36} className="h-9 w-9 shrink-0 rounded-md" priority />
+          <Image src="/logo.png" alt={isGraduate ? siteCopy.brand.graduateIntranetLogoAlt : siteCopy.brand.tongClassLogoAlt} width={36} height={36} className="h-9 w-9 shrink-0 rounded-md" priority />
           <span className="min-w-0 leading-tight">
-            <span className="block truncate text-base font-semibold text-slate-900">{isGraduate ? "人工智能研究院研究生内网" : "通用人工智能实验班"}</span>
-            <span className="block truncate text-xs text-slate-500">{isGraduate ? "Graduate Intranet" : "Tong Class"}</span>
+            <span className="block truncate text-base font-semibold text-slate-900">{isGraduate ? siteCopy.brand.graduateIntranetName : siteCopy.brand.tongClassName}</span>
+            <span className="block truncate text-xs text-slate-500">{isGraduate ? siteCopy.brand.graduateIntranetEnglish : "Tong Class"}</span>
           </span>
         </Link>
 
-        <nav className="hidden items-center lg:flex" aria-label="通班主导航">
+        <nav className="hidden items-center lg:flex" aria-label={siteCopy.navigation.tongClassDesktopLabel}>
           {navigationLinks()}
         </nav>
 
@@ -116,12 +125,12 @@ export function TongClassNavbar() {
           <Link
             href="/search"
             className="inline-flex h-11 w-11 items-center justify-center rounded-md text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            aria-label="站内搜索"
+            aria-label={siteCopy.common.search}
           >
             <Search className="h-4 w-4" aria-hidden="true" />
           </Link>
           {isAuthenticated ? (
-            <NotificationBell unreadCount={unreadNotificationCount} href={withReturnTo("/notifications", pathname)} label="通知" />
+            <NotificationBell unreadCount={unreadNotificationCount} href={withReturnTo("/notifications", pathname)} label={siteCopy.common.notifications} />
           ) : null}
           {/*
             维护约束（请勿删改）：这是通班旧站完整的登录后账户菜单。
@@ -134,7 +143,7 @@ export function TongClassNavbar() {
               <button
                 type="button"
                 className="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                aria-label="打开账户菜单"
+                aria-label={siteCopy.common.openAccountMenu}
               >
                 {currentUserPhoto ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -156,26 +165,26 @@ export function TongClassNavbar() {
               <DropdownMenuItem asChild>
                 <Link href="/my-publications">
                   <BookOpen className="mr-2 h-4 w-4" />
-                  个人学术
+                  {siteCopy.common.personalAcademic}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/settings">
                   <Settings className="mr-2 h-4 w-4" />
-                  账户设置
+                  {siteCopy.common.accountSettings}
                 </Link>
               </DropdownMenuItem>
               {isAdmin && (
                 <DropdownMenuItem asChild>
                   <Link href="/admin">
                     <Shield className="mr-2 h-4 w-4" />
-                    管理后台
+                    {siteCopy.common.adminConsole}
                   </Link>
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onSelect={() => logout(tongClassHomePath())}>
                 <LogOut className="mr-2 h-4 w-4" />
-                退出登录
+                {siteCopy.common.logout}
               </DropdownMenuItem>
             </DropdownMenuContent>
             </DropdownMenu>
@@ -184,7 +193,7 @@ export function TongClassNavbar() {
               href={`/login?next=${encodeURIComponent(pathname)}`}
               className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
-              登录
+              {siteCopy.common.login}
             </Link>
           )}
         </div>
@@ -192,7 +201,7 @@ export function TongClassNavbar() {
         <button
           type="button"
           className="min-h-11 min-w-11 rounded-md p-2 text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 lg:hidden"
-          aria-label={isMobileMenuOpen ? "关闭通班导航菜单" : "打开通班导航菜单"}
+          aria-label={isMobileMenuOpen ? siteCopy.navigation.closeTongClassMenu : siteCopy.navigation.openTongClassMenu}
           aria-controls="tong-class-mobile-navigation"
           aria-expanded={isMobileMenuOpen}
           onClick={() => setIsMobileMenuOpen((isOpen) => !isOpen)}
@@ -211,7 +220,7 @@ export function TongClassNavbar() {
               className="mt-2 flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-3 py-3 text-base font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
               <Search className="h-4 w-4" aria-hidden="true" />
-              站内搜索
+              {siteCopy.common.search}
             </Link>
             {isAuthenticated && currentUser ? (
               <>
@@ -221,7 +230,7 @@ export function TongClassNavbar() {
                   className="mt-2 flex items-center gap-2 rounded-md border border-slate-300 px-3 py-3 text-base font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   <Bell className="h-4 w-4" aria-hidden="true" />
-                  通知
+                  {siteCopy.common.notifications}
                   {unreadNotificationCount > 0 ? <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-white">{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</span> : null}
                 </Link>
                 {profileDestination ? (
@@ -247,7 +256,7 @@ export function TongClassNavbar() {
                   className="mt-2 flex items-center gap-2 rounded-md border border-slate-300 px-3 py-3 text-base font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   <BookOpen className="h-4 w-4" />
-                  个人学术
+                  {siteCopy.common.personalAcademic}
                 </Link>
                 <Link
                   href="/settings"
@@ -255,7 +264,7 @@ export function TongClassNavbar() {
                   className="mt-2 flex items-center gap-2 rounded-md border border-slate-300 px-3 py-3 text-base font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   <Settings className="h-4 w-4" />
-                  账户设置
+                  {siteCopy.common.accountSettings}
                 </Link>
                 {isAdmin && (
                   <Link
@@ -264,7 +273,7 @@ export function TongClassNavbar() {
                     className="mt-2 flex items-center gap-2 rounded-md border border-slate-300 px-3 py-3 text-base font-medium text-slate-700 transition-colors hover:bg-slate-50"
                   >
                     <Shield className="h-4 w-4" />
-                    管理后台
+                    {siteCopy.common.adminConsole}
                   </Link>
                 )}
                 <button
@@ -276,7 +285,7 @@ export function TongClassNavbar() {
                   className="mt-2 flex w-full items-center gap-2 rounded-md border border-slate-300 px-3 py-3 text-left text-base font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   <LogOut className="h-4 w-4" />
-                  退出登录
+                  {siteCopy.common.logout}
                 </button>
               </>
             ) : (
@@ -285,7 +294,7 @@ export function TongClassNavbar() {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="mt-2 rounded-md border border-slate-300 px-3 py-3 text-base font-medium text-slate-700 transition-colors hover:bg-slate-50"
               >
-                登录
+                {siteCopy.common.login}
               </Link>
             )}
           </nav>

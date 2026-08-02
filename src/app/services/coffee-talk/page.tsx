@@ -24,6 +24,7 @@ export default function CoffeeTalkPage() {
           kicker="办理入口 · Entry"
           title="选择你要办理的事项"
           headingId="coffee-talk-entry-title"
+          showRule={false}
         />
         <CoffeeTalkEntryList />
         <p className="aia-text-muted mt-8 text-sm leading-6">

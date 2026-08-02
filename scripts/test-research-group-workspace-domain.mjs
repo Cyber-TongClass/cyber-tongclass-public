@@ -1,14 +1,33 @@
 import assert from "node:assert/strict"
+import { registerHooks } from "node:module"
 import test from "node:test"
 
-import {
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    try {
+      return nextResolve(specifier, context)
+    } catch (error) {
+      if (
+        error?.code === "ERR_MODULE_NOT_FOUND"
+        && /^\.{1,2}\//.test(specifier)
+        && !/\.[cm]?[jt]sx?$/.test(specifier)
+      ) {
+        return nextResolve(`${specifier}.ts`, context)
+      }
+      throw error
+    }
+  },
+})
+
+const {
   compactResearchGroupMemberOrder,
   createResearchGroupAccountSet,
   hasStructuredResearchGroupRelation,
   mergeResearchGroupPublicationSources,
+  normalizeResearchGroupProfile,
   researchGroupPublicationIsVisible,
   sortResearchGroupMembers,
-} from "../convex/lib/researchGroupPublications.ts"
+} = await import("../convex/lib/researchGroupPublications.ts")
 
 test("legacy members without an explicit order retain their input order", () => {
   const members = [
@@ -158,5 +177,60 @@ test("a hidden override wins while candidates are visible by default", () => {
     }),
     false,
     "a group override must not expose globally hidden content",
+  )
+})
+
+test("profile normalization trims text, removes empty values, and deduplicates research areas", () => {
+  assert.deepEqual(
+    normalizeResearchGroupProfile({
+      nameZh: "  智能系统课题组 ",
+      nameEn: " Intelligent Systems Lab  ",
+      summaryZh: "  简介 ",
+      summaryEn: " ",
+      descriptionZh: undefined,
+      descriptionEn: "  Long description  ",
+      researchAreas: [" AI ", "Systems", "AI", "", " Systems "],
+      recruitmentZh: " 招生中 ",
+      recruitmentEn: "",
+      publicLinks: [
+        { label: " 主页 ", href: " https://example.edu/lab " },
+        { label: "重复", href: "https://example.edu/lab" },
+      ],
+      visibility: "public",
+    }),
+    {
+      nameZh: "智能系统课题组",
+      nameEn: "Intelligent Systems Lab",
+      summaryZh: "简介",
+      summaryEn: undefined,
+      descriptionZh: undefined,
+      descriptionEn: "Long description",
+      researchAreas: ["AI", "Systems"],
+      recruitmentZh: "招生中",
+      recruitmentEn: undefined,
+      publicLinks: [{ label: "主页", href: "https://example.edu/lab" }],
+      visibility: "public",
+    },
+  )
+})
+
+test("profile normalization requires both names and HTTP(S) public links", () => {
+  const base = {
+    nameZh: "课题组",
+    nameEn: "Lab",
+    researchAreas: [],
+    publicLinks: [],
+    visibility: "hidden",
+  }
+  assert.throws(
+    () => normalizeResearchGroupProfile({ ...base, nameZh: " " }),
+    /RESEARCH_GROUP_NAME_REQUIRED/,
+  )
+  assert.throws(
+    () => normalizeResearchGroupProfile({
+      ...base,
+      publicLinks: [{ label: "Files", href: "file:///tmp/lab" }],
+    }),
+    /RESEARCH_GROUP_PUBLIC_LINK_INVALID/,
   )
 })

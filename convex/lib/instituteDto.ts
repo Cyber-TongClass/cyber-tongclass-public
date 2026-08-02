@@ -110,6 +110,11 @@ export type InstitutePublicResearchGroupMemberSource = {
   person: InstitutePersonRecord
 }
 
+export type InstitutePublicResearchGroupRosterEntry = {
+  name: string
+  subtitle?: string
+}
+
 function copyStringList(values: readonly string[]): string[] {
   return values.map((value) => value)
 }
@@ -228,6 +233,7 @@ export function toPublicResearchGroup(
   group: ResearchGroupRecord,
   leader?: InstitutePersonRecord,
   members?: readonly InstitutePublicResearchGroupMemberSource[],
+  roster?: readonly InstitutePublicResearchGroupRosterEntry[],
 ): PublicResearchGroup {
   const dto: PublicResearchGroup = {
     slug: group.slug,
@@ -246,6 +252,13 @@ export function toPublicResearchGroup(
   if (group.recruitmentEn !== undefined) dto.recruitmentEn = group.recruitmentEn
   if (leader !== undefined) dto.leader = toPublicInstitutePerson(leader)
   if (members !== undefined) dto.members = members.map((member) => toPublicResearchGroupMember(member))
+  if (roster !== undefined && roster.length > 0) {
+    dto.roster = roster.map((entry) => {
+      const copy: { name: string; subtitle?: string } = { name: entry.name }
+      if (entry.subtitle !== undefined) copy.subtitle = entry.subtitle
+      return copy
+    })
+  }
 
   return dto
 }

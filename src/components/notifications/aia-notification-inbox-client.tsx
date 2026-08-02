@@ -69,13 +69,18 @@ function notificationState(notification: AiaNotification): NotificationRowItem["
 }
 
 function toNotificationRow(notification: AiaNotification): NotificationRowItem {
+  const fallbackCategory = notification.type === "content_review"
+    ? "class-work"
+    : hasGenericNotificationHooks
+      ? "general"
+      : "coffee-talk"
   return {
     id: notification.id,
     title: notification.title,
     body: notification.body,
     createdAtLabel: formatNotificationTime(notification.createdAt),
     href: notification.href,
-    category: notification.category ?? (hasGenericNotificationHooks ? "general" : "coffee-talk"),
+    category: notification.category ?? fallbackCategory,
     type: notification.type,
     state: notificationState(notification),
   }
@@ -120,9 +125,9 @@ export function AiaNotificationInboxClient() {
 
   if (!isAuthenticated) {
     return (
-      <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-700">
+      <p className="aia-text-muted border-t border-b aia-border-rule py-5 text-sm leading-6">
         请先登录后查看通知。
-        <Link className="ml-2 font-medium text-primary underline-offset-4 hover:underline" href="/login?next=%2Fnotifications">
+        <Link className="aia-link aia-focus ml-2 font-medium" href="/login?next=%2Fnotifications">
           前往登录
         </Link>
       </p>
@@ -130,12 +135,29 @@ export function AiaNotificationInboxClient() {
   }
 
   if (notifications === undefined) {
-    return <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600" role="status">正在加载通知…</p>
+    return <p className="aia-text-muted border-b aia-border-rule py-5 text-sm" role="status">正在加载通知…</p>
   }
 
   return (
-    <div className="space-y-3">
-      {actionError ? <p className="text-sm text-red-700" role="alert">{actionError}</p> : null}
+    <div
+      className={[
+        "[&>section]:!overflow-visible [&>section]:!rounded-none [&>section]:!border-x-0 [&>section]:!border-b-0",
+        "[&>section]:!border-t-0 [&>section]:!bg-transparent [&>section]:!shadow-none",
+        "[&>section>div:first-child]:!border-[hsl(var(--aia-rule))] [&>section>div:first-child]:!px-0 [&>section>div:first-child]:!pt-0 [&>section>div:first-child]:!pb-4",
+        "[&_h2]:aia-serif [&_h2]:!text-xl [&_h2]:!font-semibold [&_h2]:!tracking-tight [&_h2]:!text-[hsl(var(--aia-ink))]",
+        "[&_[role=list]]:!border-t [&_[role=list]]:!border-[hsl(var(--aia-rule))]",
+        "[&_[role=listitem]>article]:!border-[hsl(var(--aia-rule))] [&_[role=listitem]>article]:!bg-transparent",
+        "[&_[role=listitem]>article]:!px-0 [&_[role=listitem]>article]:!py-5",
+        "[&_article_.text-slate-950]:aia-serif [&_article_.text-slate-950]:!text-base [&_article_.text-slate-950]:!font-semibold",
+        "[&_article_.text-slate-950]:!text-[hsl(var(--aia-ink))] [&_article_.text-primary]:!text-[hsl(var(--aia-red))]",
+        "[&_article_.text-xs]:aia-mono [&_article_.text-xs]:!uppercase [&_article_.text-xs]:!tracking-[0.12em]",
+        "[&_article_.text-slate-500]:!text-[hsl(var(--aia-muted))] [&_article_.text-slate-600]:!text-[hsl(var(--aia-muted))]",
+        "[&_article_.bg-slate-100]:!rounded-none [&_article_.bg-slate-100]:!bg-[hsl(var(--aia-tag))]",
+        "[&_article_a]:aia-focus [&_article_button]:aia-focus",
+        "[&>section>div:last-child]:!px-0 [&>section>div:last-child]:!py-10",
+      ].join(" ")}
+    >
+      {actionError ? <p className="mb-4 text-sm text-[hsl(var(--aia-red))]" role="alert">{actionError}</p> : null}
       <NotificationInbox
         notifications={(notifications as AiaNotification[]).map(toNotificationRow)}
         emptyMessage="暂时没有站内信。服务申请、审批处理和系统消息会显示在这里。"
@@ -145,7 +167,7 @@ export function AiaNotificationInboxClient() {
         onMarkAllRead={() => { void handleMarkAllRead() }}
       />
       {(notifications as AiaNotification[]).length >= limit && limit < 500 ? (
-        <div className="flex justify-center">
+        <div className="mt-6 flex justify-center">
           <Button type="button" variant="outline" onClick={() => setLimit((current) => Math.min(current + 30, 500))}>
             加载更早通知
           </Button>

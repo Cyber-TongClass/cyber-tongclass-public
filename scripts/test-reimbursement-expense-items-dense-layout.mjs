@@ -12,10 +12,11 @@ const expectations = [
   ['dense header class constant', 'expenseHeaderClassName'],
   ['sticky row index column', 'sticky left-0 z-10'],
   ['compact spreadsheet cells', 'rounded-none border-0 bg-transparent'],
-  ['thin spreadsheet grid border', 'overflow-x-auto rounded-sm border border-slate-300'],
-  ['compact table row height', 'className="h-8 border-b border-slate-200'],
+  ['AIA hairline spreadsheet grid border', 'overflow-x-auto border aia-border-rule'],
+  ['compact AIA hairline row height', 'className="h-8 border-b aia-border-rule'],
   ['compact toolbar with total', 'reimbursement-expense-toolbar'],
-  ['small add-row button', 'h-8 rounded-sm px-2 text-xs'],
+  ['touch-safe square-corner add-row button', 'className="min-h-11 rounded-none px-3 text-xs"'],
+  ['AIA tag toolbar surface', 'reimbursement-expense-toolbar aia-bg-tag'],
 ]
 
 const missing = expectations.filter(([, needle]) => !source.includes(needle))

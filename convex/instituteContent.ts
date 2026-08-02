@@ -20,9 +20,30 @@ import type {
   PublicInstituteUpdate,
 } from "../src/types/institute"
 import { resolveUserIdentityType } from "./lib/userIdentity"
+import { loadOAUserScopeContext, userMatchesOAUserScope } from "./lib/oaWorkflow"
+import { getUserBySession } from "./reviewer/lib"
+import { resolveResearchGroupPublicationCandidates } from "./lib/researchGroupPublications"
 
 const DEFAULT_PUBLIC_LIMIT = 24
 const MAX_PUBLIC_LIMIT = 500
+
+/** Scoped news is members-only; the viewer must match the scope. */
+async function loadUpdateViewer(ctx: any, sessionToken?: string) {
+  if (!sessionToken) return { actor: null as any, scopeContext: undefined as any }
+  try {
+    const actor = await getUserBySession(ctx, sessionToken)
+    const scopeContext = await loadOAUserScopeContext(ctx, actor._id)
+    return { actor, scopeContext }
+  } catch {
+    return { actor: null as any, scopeContext: undefined as any }
+  }
+}
+
+function canViewScopedNews(record: any, actor: any, scopeContext: any) {
+  if (!record.targetScope) return true
+  if (!actor || !scopeContext) return false
+  return userMatchesOAUserScope(actor, record.targetScope, scopeContext.researchGroupId, scopeContext.userGroupIds)
+}
 
 const contentTypes = new Set(["publication", "news"])
 const contentTargetTypes = new Set(["person", "researchGroup"])
@@ -211,7 +232,6 @@ async function listPublicationCandidates(ctx: any, limit: number): Promise<Store
 async function readNewsBucket(
   ctx: any,
   siteScope: StoredNews["siteScope"],
-  limit: number,
 ): Promise<StoredNews[]> {
   return ctx.db
     .query("news")
@@ -219,14 +239,14 @@ async function readNewsBucket(
       index.eq("siteScope", siteScope).eq("isPublished", true)
     ))
     .order("desc")
-    .take(limit) as Promise<StoredNews[]>
+    .collect() as Promise<StoredNews[]>
 }
 
 async function listNewsCandidates(ctx: any, limit: number): Promise<StoredNews[]> {
   const buckets = await Promise.all([
-    readNewsBucket(ctx, undefined, limit),
-    readNewsBucket(ctx, "tong_class", limit),
-    readNewsBucket(ctx, "institute", limit),
+    readNewsBucket(ctx, undefined),
+    readNewsBucket(ctx, "tong_class"),
+    readNewsBucket(ctx, "institute"),
   ])
 
   return dedupeContentRecords(buckets.flat())
@@ -433,6 +453,7 @@ async function contentKeysForPerson(ctx: any, personId: string): Promise<Set<str
 }
 
 async function contentKeysForResearchGroup(ctx: any, researchGroupId: string): Promise<Set<string>> {
+  const publicationCandidates = await resolveResearchGroupPublicationCandidates(ctx, researchGroupId)
   const mentions = await ctx.db
     .query("contentMentions")
     .withIndex("by_target", (index: any) => (
@@ -440,7 +461,13 @@ async function contentKeysForResearchGroup(ctx: any, researchGroupId: string): P
     ))
     .collect() as StoredContentMention[]
   const keys = new Set<string>()
+  for (const candidate of publicationCandidates) {
+    if (candidate.effectiveVisibility) {
+      keys.add(contentKey("publication", candidate.publicationId))
+    }
+  }
   for (const mention of mentions) {
+    if (mention.contentType === "publication") continue
     keys.add(contentKey(mention.contentType, String(mention.contentId)))
   }
   return keys
@@ -523,12 +550,31 @@ async function getPublicContentRelations(
       continue
     }
 
+    if (contentType === "publication") continue
     const researchGroupId = String(mention.targetId)
     if (seenResearchGroups.has(researchGroupId)) continue
     const researchGroup = await getPublicResearchGroup(ctx, researchGroupId)
     if (researchGroup !== undefined) {
       researchGroups.push(researchGroup)
       seenResearchGroups.add(researchGroupId)
+    }
+  }
+
+  if (contentType === "publication") {
+    const publicGroups = await ctx.db
+      .query("researchGroups")
+      .withIndex("by_visibility_order", (index: any) => index.eq("visibility", "public"))
+      .collect() as StoredResearchGroup[]
+    for (const group of publicGroups) {
+      const researchGroupId = String(group._id)
+      if (seenResearchGroups.has(researchGroupId)) continue
+      const candidates = await resolveResearchGroupPublicationCandidates(ctx, researchGroupId)
+      if (candidates.some((candidate) => (
+        candidate.publicationId === contentId && candidate.effectiveVisibility
+      ))) {
+        researchGroups.push(group)
+        seenResearchGroups.add(researchGroupId)
+      }
     }
   }
 
@@ -630,6 +676,7 @@ export const listPublicInstituteUpdates = queryGeneric({
     personSlug: v.optional(v.string()),
     researchGroupSlug: v.optional(v.string()),
     limit: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const matchingKeys = await resolveContentFilter(ctx, args)
@@ -637,8 +684,10 @@ export const listPublicInstituteUpdates = queryGeneric({
     const records = matchingKeys === undefined
       ? await listNewsCandidates(ctx, limit)
       : await loadMatchingNewsRecords(ctx, matchingKeys)
+    const { actor, scopeContext } = await loadUpdateViewer(ctx, args.sessionToken)
     const publicRecords = records.filter((record) => (
       record.isPublished === true
+      && canViewScopedNews(record, actor, scopeContext)
       && (matchingKeys === undefined || matchingKeys.has(contentKey("news", String(record._id))))
     )).slice(0, limit)
 
@@ -678,7 +727,7 @@ export const getPublicInstituteResearchById = queryGeneric({
 })
 
 export const getPublicInstituteUpdateById = queryGeneric({
-  args: { id: v.string() },
+  args: { id: v.string(), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     let newsId
     try {
@@ -690,6 +739,8 @@ export const getPublicInstituteUpdateById = queryGeneric({
 
     const record = await ctx.db.get(newsId) as StoredNews | null
     if (record === null || record.isPublished !== true) return null
+    const { actor, scopeContext } = await loadUpdateViewer(ctx, args.sessionToken)
+    if (!canViewScopedNews(record, actor, scopeContext)) return null
 
     const id = String(record._id)
     const [audiences, relations] = await Promise.all([

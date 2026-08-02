@@ -15,6 +15,15 @@ import type {
 } from "../src/types/institute"
 import { getUserBySession, requireSuperAdminBySession } from "./reviewer/lib"
 import { resolveUserIdentityType } from "./lib/userIdentity"
+import {
+  assertResearchGroupMemberTransferAllowed,
+  compactResearchGroupMemberOrder,
+  normalizeResearchGroupProfile,
+  resolveResearchGroupPublicationCandidates,
+  sortResearchGroupMembers,
+  teacherResearchGroupNameZh,
+} from "./lib/researchGroupPublications"
+import { isEnabledScopeAccount } from "./lib/oaScopeAuthorization"
 
 const DEFAULT_PUBLIC_LIMIT = 48
 const MAX_PUBLIC_LIMIT = 500
@@ -27,10 +36,12 @@ type StoredInstitutePerson = InstitutePersonRecord & {
 }
 
 type StoredResearchGroup = ResearchGroupRecord & {
-  _id: string
+  _id: Id<"researchGroups">
   visibility: "public" | "hidden"
   displayOrder: number
-  leaderPersonId: string
+  leaderPersonId: Id<"institutePeople">
+  createdAt: number
+  updatedAt: number
 }
 
 type StoredResearchGroupMembership = {
@@ -53,6 +64,8 @@ type StoredStudentResearchGroupAssignment = {
   _id: string
   studentUserId: Id<"users">
   researchGroupId: string
+  subtitle?: string
+  sortOrder?: number
   assignedByUserId: Id<"users">
   assignedAt: number
   updatedAt: number
@@ -63,11 +76,6 @@ type StoredAccountCapability = {
   userId: Id<"users">
   capability: typeof MANAGE_RESEARCH_GROUP_MEMBERS
   enabled: boolean
-}
-
-function isStudentAccount(user: any) {
-  const identityType = resolveUserIdentityType(user)
-  return identityType === "undergrad" || identityType === "graduate"
 }
 
 async function teacherLedResearchGroups(ctx: any, userId: Id<"users">) {
@@ -82,6 +90,35 @@ async function teacherLedResearchGroups(ctx: any, userId: Id<"users">) {
 
   const groups = await ctx.db.query("researchGroups").collect() as StoredResearchGroup[]
   return groups.filter((group) => teacherPersonIds.has(String(group.leaderPersonId)))
+}
+
+type PublicGroupRosterEntry = { name: string; subtitle?: string }
+
+/**
+ * Roster names exposed alongside a public group. Only the member's display
+ * name and the leader-set subtitle leave the private assignment table —
+ * never usernames, emails, or account identifiers.
+ */
+async function getPublicGroupRoster(ctx: any, researchGroupId: string): Promise<PublicGroupRosterEntry[]> {
+  const assignments = await ctx.db
+    .query("studentResearchGroupAssignments")
+    .withIndex("by_researchGroupId", (index: any) => index.eq("researchGroupId", researchGroupId))
+    .collect() as StoredStudentResearchGroupAssignment[]
+  const entries: Array<PublicGroupRosterEntry & { sortOrder?: number }> = []
+  for (const assignment of sortResearchGroupMembers(assignments)) {
+    const member = await ctx.db.get(assignment.studentUserId) as any
+    if (!isEnabledScopeAccount(member)) continue
+    const name = member.chineseName?.trim() || member.englishName?.trim() || member.username
+    if (!name) continue
+    const entry: PublicGroupRosterEntry & { sortOrder?: number } = {
+      name,
+      sortOrder: assignment.sortOrder,
+    }
+    const subtitle = assignment.subtitle?.trim()
+    if (subtitle) entry.subtitle = subtitle
+    entries.push(entry)
+  }
+  return entries.map(({ name, subtitle }) => ({ name, ...(subtitle ? { subtitle } : {}) }))
 }
 
 function teacherProfileSlugBase(username: string, userId: Id<"users">): string {
@@ -200,7 +237,9 @@ export async function ensureTeacherGroupManagement(
 
   await ctx.db.insert("researchGroups", {
     slug,
-    nameZh: `${input.user.chineseName?.trim() || input.user.englishName.trim()}课题组`,
+    nameZh: teacherResearchGroupNameZh(
+      input.user.chineseName?.trim() || input.user.englishName.trim(),
+    ),
     nameEn: `${input.user.englishName.trim()} Research Group`,
     leaderPersonId: person._id,
     researchAreas: [],
@@ -220,15 +259,34 @@ async function canManageTeacherGroupMembers(ctx: any, userId: Id<"users">) {
   return capability?.enabled === true
 }
 
-async function requireTeacherGroupManagement(ctx: any, sessionToken?: string | null) {
-  const teacher = await getUserBySession(ctx, sessionToken)
-  if (resolveUserIdentityType(teacher) !== "teacher") {
-    throw new Error("只有教师账号可以管理课题组成员")
+/**
+ * Resolves the only research group an actor may write. Super administrators
+ * must explicitly select a group; teachers remain limited to a group they lead
+ * and retain the existing capability revocation gate.
+ */
+export async function resolveManagedResearchGroup(
+  ctx: any,
+  actor: any,
+  requestedGroupId?: Id<"researchGroups">,
+): Promise<StoredResearchGroup> {
+  if (actor.role === "super_admin") {
+    if (!requestedGroupId) throw new Error("超级管理员必须先选择课题组")
+    const group = await ctx.db.get(requestedGroupId) as StoredResearchGroup | null
+    if (!group) throw new Error("未找到课题组")
+    return group
   }
-  if (!await canManageTeacherGroupMembers(ctx, teacher._id)) {
+  if (resolveUserIdentityType(actor) !== "teacher") {
+    throw new Error("只有课题组负责人或超级管理员可以管理课题组")
+  }
+  if (!await canManageTeacherGroupMembers(ctx, actor._id)) {
     throw new Error("课题组成员管理权限已被超级管理员关闭")
   }
-  return teacher
+  const ledGroups = await teacherLedResearchGroups(ctx, actor._id)
+  const group = requestedGroupId
+    ? ledGroups.find((item) => String(item._id) === String(requestedGroupId))
+    : ledGroups.sort((left, right) => left.createdAt - right.createdAt)[0]
+  if (!group) throw new Error("只能管理自己负责的课题组")
+  return group
 }
 
 function normalizePublicText(value?: string): string {
@@ -476,11 +534,12 @@ export const listPublicResearchGroups = queryGeneric({
       .slice(0, limit)
 
     return Promise.all(groups.map(async (group) => {
-      const [leader, members] = await Promise.all([
+      const [leader, members, roster] = await Promise.all([
         getPublicLeader(ctx, group.leaderPersonId),
         getPublicResearchGroupMembers(ctx, group._id),
+        getPublicGroupRoster(ctx, group._id),
       ])
-      return toPublicResearchGroup(group, leader, members)
+      return toPublicResearchGroup(group, leader, members, roster)
     }))
   },
 })
@@ -498,93 +557,236 @@ export const getPublicResearchGroup = queryGeneric({
 
     if (!record || record.visibility !== "public") return null
     const group = record as StoredResearchGroup
-    const [leader, members] = await Promise.all([
+    const [leader, members, roster] = await Promise.all([
       getPublicLeader(ctx, group.leaderPersonId),
       getPublicResearchGroupMembers(ctx, group._id),
+      getPublicGroupRoster(ctx, group._id),
     ])
-    return toPublicResearchGroup(group, leader, members)
+    return toPublicResearchGroup(group, leader, members, roster)
   },
 })
 
-/** Super-admin-only labels for OA audience and approval scope selection. */
+/**
+ * Research-group labels for OA audience and approval scope selection. Any
+ * signed-in account (including teachers building forms) may see group names;
+ * membership itself is never exposed here.
+ */
 export const listResearchGroupScopeOptions = queryGeneric({
   args: { sessionToken: v.string() },
   handler: async (ctx, args) => {
-    await requireSuperAdminBySession(ctx, args.sessionToken)
-    const groups = await ctx.db.query("researchGroups").collect() as StoredResearchGroup[]
-    return sortResearchGroups(groups).map((group) => ({ id: String(group._id), name: group.nameZh || group.nameEn }))
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const groups = actor.role === "super_admin"
+      ? await ctx.db.query("researchGroups").collect() as StoredResearchGroup[]
+      : resolveUserIdentityType(actor) === "teacher"
+        ? await teacherLedResearchGroups(ctx, actor._id)
+        : []
+    return Promise.all(sortResearchGroups(groups).map(async (group) => {
+      const leader = await ctx.db.get(group.leaderPersonId) as StoredInstitutePerson | null
+      return {
+        id: String(group._id),
+        name: teacherResearchGroupNameZh(leader?.nameZh || leader?.nameEn || group.nameZh || group.nameEn),
+        leaderName: leader?.nameZh || leader?.nameEn || "未绑定负责人",
+      }
+    }))
   },
 })
 
-/** Private roster for groups explicitly led by the signed-in teacher. */
+/**
+ * Private roster for the single group led by the signed-in teacher. Members
+ * can be any account (students as well as staff such as engineers); each
+ * carries an optional leader-set subtitle. Candidates are every other account
+ * so the leader can add people without a separate directory lookup.
+ */
 export const listTeacherGroupRoster = queryGeneric({
-  args: { sessionToken: v.string() },
+  args: {
+    sessionToken: v.string(),
+    groupId: v.optional(v.id("researchGroups")),
+  },
   handler: async (ctx, args) => {
-    const teacher = await getUserBySession(ctx, args.sessionToken)
-    const canManage = resolveUserIdentityType(teacher) === "teacher"
-      && await canManageTeacherGroupMembers(ctx, teacher._id)
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const isSuperAdmin = actor.role === "super_admin"
+    const canManage = isSuperAdmin || (
+      resolveUserIdentityType(actor) === "teacher"
+      && await canManageTeacherGroupMembers(ctx, actor._id)
+    )
     if (!canManage) {
-      return { groups: [], students: [], canManage: false }
+      return { group: null, leader: null, members: [], candidates: [], publications: [], canManage: false }
     }
-    const groups = await teacherLedResearchGroups(ctx, teacher._id)
-    const assignments = await ctx.db.query("studentResearchGroupAssignments").collect() as StoredStudentResearchGroupAssignment[]
-    const users = await ctx.db.query("users").collect()
 
-    const students = users
-      .filter(isStudentAccount)
-      .map((student: any) => {
-        const assignment = assignments.find((item) => String(item.studentUserId) === String(student._id))
+    let group: StoredResearchGroup | undefined
+    if (isSuperAdmin && !args.groupId) {
+      return { group: null, leader: null, members: [], candidates: [], publications: [], canManage: true }
+    }
+    try {
+      group = await resolveManagedResearchGroup(ctx, actor, args.groupId)
+    } catch (error) {
+      if (!isSuperAdmin && args.groupId === undefined) {
+        return { group: null, leader: null, members: [], candidates: [], publications: [], canManage: true }
+      }
+      throw error
+    }
+
+    const groupId = String(group._id)
+    const assignments = await ctx.db
+      .query("studentResearchGroupAssignments")
+      .withIndex("by_researchGroupId", (index: any) => index.eq("researchGroupId", group!._id))
+      .collect() as StoredStudentResearchGroupAssignment[]
+    const allAssignments = await ctx.db.query("studentResearchGroupAssignments").collect() as StoredStudentResearchGroupAssignment[]
+    const assignmentByUserId = new Map(allAssignments.map((item) => [String(item.studentUserId), item]))
+    const groupNameById = new Map(
+      (await ctx.db.query("researchGroups").collect() as StoredResearchGroup[])
+        .map((item) => [String(item._id), item.nameZh || item.nameEn]),
+    )
+    const usersRaw = await ctx.db.query("users").collect()
+    const users = usersRaw.filter(isEnabledScopeAccount)
+    const userById = new Map(users.map((user: any) => [String(user._id), user]))
+    const leaderPerson = await ctx.db.get(group.leaderPersonId) as StoredInstitutePerson | null
+    const leaderAccount = leaderPerson?.accountUserId === undefined
+      ? null
+      : userById.get(String(leaderPerson.accountUserId))
+
+    const describe = (user: any) => ({
+      id: String(user._id),
+      userId: String(user._id),
+      username: user.username,
+      name: user.chineseName?.trim() || user.englishName?.trim() || user.username,
+      identityType: resolveUserIdentityType(user),
+    })
+    const byName = (left: { name: string; username: string }, right: { name: string; username: string }) => (
+      compareText(left.name, right.name) || compareText(left.username, right.username)
+    )
+
+    const members = sortResearchGroupMembers(assignments)
+      .flatMap((assignment) => {
+        const user = userById.get(String(assignment.studentUserId))
+        return user ? [{ ...describe(user), subtitle: assignment.subtitle ?? "" }] : []
+      })
+    const candidates = users
+      .filter((user: any) => (
+        String(user._id) !== String(leaderAccount?._id)
+        && String(assignmentByUserId.get(String(user._id))?.researchGroupId) !== groupId
+        && (
+          isSuperAdmin
+          || assignmentByUserId.get(String(user._id)) === undefined
+        )
+      ))
+      .map((user: any) => {
+        const assignment = assignmentByUserId.get(String(user._id))
         return {
-          id: String(student._id),
-          username: student.username,
-          name: student.chineseName || student.englishName || student.username,
-          identityType: resolveUserIdentityType(student),
-          ...(assignment ? { researchGroupId: String(assignment.researchGroupId) } : {}),
+          ...describe(user),
+          ...(assignment ? { otherGroupName: groupNameById.get(String(assignment.researchGroupId)) || "其他课题组" } : {}),
         }
       })
-      .sort((left, right) => compareText(left.name, right.name) || compareText(left.username, right.username))
+      .sort(byName)
+
+    const resolvedPublications = await resolveResearchGroupPublicationCandidates(ctx, groupId)
+    const publications = resolvedPublications.map((candidate) => ({
+      id: candidate.publicationId,
+      title: candidate.publication.title,
+      authors: candidate.displayAuthors,
+      venue: candidate.publication.venue,
+      year: candidate.publication.year,
+      relationSource: candidate.relationSource === "automatic-and-explicit" ? "both" : candidate.relationSource,
+      effectiveVisibility: candidate.effectiveVisibility ? "public" : "hidden",
+    }))
 
     return {
-      groups: groups.map((group) => ({ id: String(group._id), slug: group.slug, name: group.nameZh || group.nameEn })),
-      students,
+      group: {
+        id: groupId,
+        slug: group.slug,
+        name: group.nameZh || group.nameEn,
+        nameZh: group.nameZh,
+        nameEn: group.nameEn,
+        summaryZh: group.summaryZh,
+        summaryEn: group.summaryEn,
+        descriptionZh: group.descriptionZh,
+        descriptionEn: group.descriptionEn,
+        researchAreas: group.researchAreas,
+        publicLinks: [...group.publicLinks],
+        recruitmentZh: group.recruitmentZh,
+        recruitmentEn: group.recruitmentEn,
+        visibility: group.visibility,
+      },
+      leader: leaderAccount ? describe(leaderAccount) : leaderPerson ? {
+        id: String(leaderPerson._id),
+        userId: String(leaderPerson._id),
+        username: "",
+        name: leaderPerson.nameZh || leaderPerson.nameEn,
+        identityType: "teacher",
+      } : null,
+      members,
+      candidates,
+      publications,
       canManage: true,
     }
   },
 })
 
-/** Assigns a student to one teacher-led group, replacing any previous assignment. */
-export const assignTeacherGroupStudent = mutationGeneric({
+/**
+ * Adds an account to the teacher's own group, replacing any previous group
+ * assignment. Accepts students and staff alike; the subtitle is a short role
+ * note shown next to the member's name (e.g. 工程师).
+ */
+export const assignTeacherGroupMember = mutationGeneric({
   args: {
     sessionToken: v.string(),
-    researchGroupId: v.id("researchGroups"),
-    studentUserId: v.id("users"),
+    groupId: v.optional(v.id("researchGroups")),
+    userId: v.id("users"),
+    subtitle: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const teacher = await requireTeacherGroupManagement(ctx, args.sessionToken)
-    const groups = await teacherLedResearchGroups(ctx, teacher._id)
-    if (!groups.some((group) => String(group._id) === String(args.researchGroupId))) {
-      throw new Error("只能管理由当前教师负责的课题组")
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const group = await resolveManagedResearchGroup(ctx, actor, args.groupId)
+    const leader = await ctx.db.get(group.leaderPersonId)
+    if (String(args.userId) === String(leader?.accountUserId)) {
+      throw new Error("课题组负责人无需添加自己为成员")
     }
-    const student = await ctx.db.get(args.studentUserId)
-    if (!student || !isStudentAccount(student)) throw new Error("只能选择学生账号")
+    const member = await ctx.db.get(args.userId)
+    if (!isEnabledScopeAccount(member)) throw new Error("目标账号不可用")
 
+    const subtitle = args.subtitle?.trim() || undefined
     const now = Date.now()
+    const groupAssignments = await ctx.db
+      .query("studentResearchGroupAssignments")
+      .withIndex("by_researchGroupId", (index: any) => index.eq("researchGroupId", group._id))
+      .collect() as StoredStudentResearchGroupAssignment[]
+    const nextSortOrder = Math.max(
+      0,
+      ...groupAssignments.map((assignment) => (
+        Number.isFinite(assignment.sortOrder) ? assignment.sortOrder! : 0
+      )),
+    ) + 10
     const existing = await ctx.db
       .query("studentResearchGroupAssignments")
-      .withIndex("by_studentUserId", (index: any) => index.eq("studentUserId", args.studentUserId))
+      .withIndex("by_studentUserId", (index: any) => index.eq("studentUserId", args.userId))
       .first() as StoredStudentResearchGroupAssignment | null
+    assertResearchGroupMemberTransferAllowed({
+      actorRole: String(actor.role),
+      destinationGroupId: String(group._id),
+      existingGroupId: existing ? String(existing.researchGroupId) : undefined,
+    })
 
     if (existing) {
+      if (
+        String(existing.researchGroupId) === String(group._id)
+        && (existing.subtitle ?? undefined) === subtitle
+      ) return
       await ctx.db.patch(existing._id as any, {
-        researchGroupId: args.researchGroupId,
-        assignedByUserId: teacher._id,
+        researchGroupId: group._id,
+        subtitle,
+        sortOrder: String(existing.researchGroupId) === String(group._id)
+          ? existing.sortOrder
+          : nextSortOrder,
+        assignedByUserId: actor._id,
         updatedAt: now,
       })
     } else {
       await ctx.db.insert("studentResearchGroupAssignments", {
-        studentUserId: args.studentUserId,
-        researchGroupId: args.researchGroupId,
-        assignedByUserId: teacher._id,
+        studentUserId: args.userId,
+        researchGroupId: group._id,
+        subtitle,
+        sortOrder: nextSortOrder,
+        assignedByUserId: actor._id,
         assignedAt: now,
         updatedAt: now,
       })
@@ -592,24 +794,213 @@ export const assignTeacherGroupStudent = mutationGeneric({
   },
 })
 
-/** Removes a student only from a group led by the signed-in teacher. */
-export const removeTeacherGroupStudent = mutationGeneric({
-  args: { sessionToken: v.string(), studentUserId: v.id("users") },
+/** Removes an account only from a group led by the signed-in teacher. */
+export const removeTeacherGroupMember = mutationGeneric({
+  args: {
+    sessionToken: v.string(),
+    groupId: v.optional(v.id("researchGroups")),
+    userId: v.id("users"),
+  },
   handler: async (ctx, args) => {
-    const teacher = await requireTeacherGroupManagement(ctx, args.sessionToken)
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const group = await resolveManagedResearchGroup(ctx, actor, args.groupId)
     const assignment = await ctx.db
       .query("studentResearchGroupAssignments")
-      .withIndex("by_studentUserId", (index: any) => index.eq("studentUserId", args.studentUserId))
+      .withIndex("by_studentUserId", (index: any) => index.eq("studentUserId", args.userId))
       .first() as StoredStudentResearchGroupAssignment | null
     if (!assignment) return
 
-    const groups = await teacherLedResearchGroups(ctx, teacher._id)
-    if (!groups.some((group) => String(group._id) === String(assignment.researchGroupId))) {
-      throw new Error("只能移除自己课题组中的学生")
+    if (String(group._id) !== String(assignment.researchGroupId)) {
+      throw new Error("只能移除自己课题组中的成员")
     }
     await ctx.db.delete(assignment._id as any)
   },
 })
+
+/** Updates the leader-set subtitle of one member in the teacher's own group. */
+export const setTeacherGroupMemberSubtitle = mutationGeneric({
+  args: {
+    sessionToken: v.string(),
+    groupId: v.optional(v.id("researchGroups")),
+    userId: v.id("users"),
+    subtitle: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const group = await resolveManagedResearchGroup(ctx, actor, args.groupId)
+    const assignment = await ctx.db
+      .query("studentResearchGroupAssignments")
+      .withIndex("by_studentUserId", (index: any) => index.eq("studentUserId", args.userId))
+      .first() as StoredStudentResearchGroupAssignment | null
+    if (!assignment) throw new Error("该账号不在你的课题组中")
+
+    if (String(group._id) !== String(assignment.researchGroupId)) {
+      throw new Error("只能修改自己课题组成员的说明")
+    }
+    await ctx.db.patch(assignment._id as any, {
+      subtitle: args.subtitle?.trim() || undefined,
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+export const setTeacherGroupMemberOrder = mutationGeneric({
+  args: {
+    sessionToken: v.string(),
+    groupId: v.optional(v.id("researchGroups")),
+    orderedUserIds: v.array(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const group = await resolveManagedResearchGroup(ctx, actor, args.groupId)
+    const assignments = await ctx.db
+      .query("studentResearchGroupAssignments")
+      .withIndex("by_researchGroupId", (index: any) => index.eq("researchGroupId", group._id))
+      .collect() as StoredStudentResearchGroupAssignment[]
+    const activeAssignments = (await Promise.all(assignments.map(async (assignment) => ({
+      assignment,
+      member: await ctx.db.get(assignment.studentUserId),
+    }))))
+      .filter(({ member }) => isEnabledScopeAccount(member))
+      .map(({ assignment }) => assignment)
+    const persistedSet = new Set(activeAssignments.map((assignment) => String(assignment.studentUserId)))
+    const proposedSet = new Set(args.orderedUserIds.map(String))
+    if (
+      proposedSet.size !== args.orderedUserIds.length
+      || proposedSet.size !== persistedSet.size
+      || [...persistedSet].some((userId) => !proposedSet.has(userId))
+    ) {
+      throw new Error("RESEARCH_GROUP_MEMBER_ORDER_SET_MISMATCH")
+    }
+    const assignmentByUserId = new Map(
+      activeAssignments.map((assignment) => [String(assignment.studentUserId), assignment]),
+    )
+    const now = Date.now()
+    for (const item of compactResearchGroupMemberOrder(args.orderedUserIds)) {
+      const assignment = assignmentByUserId.get(String(item.userId))
+      if (!assignment || assignment.sortOrder === item.sortOrder) continue
+      await ctx.db.patch(assignment._id as any, {
+        sortOrder: item.sortOrder,
+        updatedAt: now,
+      })
+    }
+  },
+})
+
+export const setTeacherGroupPublicationVisibility = mutationGeneric({
+  args: {
+    sessionToken: v.string(),
+    groupId: v.optional(v.id("researchGroups")),
+    publicationId: v.id("publications"),
+    visible: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const group = await resolveManagedResearchGroup(ctx, actor, args.groupId)
+    const publication = await ctx.db.get(args.publicationId)
+    if (!publication) throw new Error("未找到文章")
+    const candidates = await resolveResearchGroupPublicationCandidates(ctx, String(group._id))
+    if (!candidates.some((candidate) => candidate.publicationId === String(args.publicationId))) {
+      throw new Error("RESEARCH_GROUP_PUBLICATION_NOT_RELATED")
+    }
+    const existing = await ctx.db
+      .query("researchGroupPublicationVisibilityOverrides")
+      .withIndex("by_group_publication", (index: any) => (
+        index.eq("researchGroupId", group._id).eq("publicationId", args.publicationId)
+      ))
+      .first()
+    if (existing) {
+      if (existing.visible === args.visible) return
+      await ctx.db.patch(existing._id, {
+        visible: args.visible,
+        changedByUserId: actor._id,
+        updatedAt: Date.now(),
+      })
+      return
+    }
+    const now = Date.now()
+    await ctx.db.insert("researchGroupPublicationVisibilityOverrides", {
+      researchGroupId: group._id,
+      publicationId: args.publicationId,
+      visible: args.visible,
+      changedByUserId: actor._id,
+      createdAt: now,
+      updatedAt: now,
+    })
+  },
+})
+
+export const updateTeacherGroupProfile = mutationGeneric({
+  args: {
+    sessionToken: v.string(),
+    groupId: v.optional(v.id("researchGroups")),
+    profile: v.object({
+      nameZh: v.string(),
+      nameEn: v.string(),
+      summaryZh: v.optional(v.string()),
+      summaryEn: v.optional(v.string()),
+      descriptionZh: v.optional(v.string()),
+      descriptionEn: v.optional(v.string()),
+      researchAreas: v.array(v.string()),
+      recruitmentZh: v.optional(v.string()),
+      recruitmentEn: v.optional(v.string()),
+      publicLinks: v.array(v.object({
+        label: v.string(),
+        href: v.string(),
+      })),
+      visibility: v.union(v.literal("public"), v.literal("hidden")),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const group = await resolveManagedResearchGroup(ctx, actor, args.groupId)
+    const normalized = normalizeResearchGroupProfile(args.profile)
+    const patch: Record<string, unknown> = {}
+    for (const field of [
+      "nameZh",
+      "nameEn",
+      "summaryZh",
+      "summaryEn",
+      "descriptionZh",
+      "descriptionEn",
+      "researchAreas",
+      "recruitmentZh",
+      "recruitmentEn",
+      "publicLinks",
+      "visibility",
+    ] as const) {
+      if (JSON.stringify(group[field]) !== JSON.stringify(normalized[field])) {
+        patch[field] = normalized[field]
+      }
+    }
+    if (Object.keys(patch).length === 0) return
+    await ctx.db.patch(group._id as any, {
+      ...patch,
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+/** Publishes or hides the teacher's own group in the public directory. */
+export const setTeacherGroupVisibility = mutationGeneric({
+  args: {
+    sessionToken: v.string(),
+    groupId: v.optional(v.id("researchGroups")),
+    visibility: v.union(v.literal("public"), v.literal("hidden")),
+  },
+  handler: async (ctx, args) => {
+    const actor = await getUserBySession(ctx, args.sessionToken)
+    const group = await resolveManagedResearchGroup(ctx, actor, args.groupId)
+    await ctx.db.patch(group._id as any, {
+      visibility: args.visibility,
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+// Compatibility aliases retained for the original student-only management UI.
+export const assignTeacherGroupStudent = assignTeacherGroupMember
+export const removeTeacherGroupStudent = removeTeacherGroupMember
 
 /**
  * A super-admin-only selector for explicit directory-to-account links. It

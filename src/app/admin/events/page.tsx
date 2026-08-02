@@ -169,7 +169,9 @@ export default function EventsPage() {
                     <TableCell>
                       <Badge className={statusColors.published}>{statusLabels.published}</Badge>
                     </TableCell>
-                    <TableCell className="text-gray-500">{new Date(event.createdAt).toLocaleDateString("zh-CN")}</TableCell>
+                    <TableCell className="text-gray-500">
+                      {event.createdAt ? new Date(event.createdAt).toLocaleDateString("zh-CN") : "-"}
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

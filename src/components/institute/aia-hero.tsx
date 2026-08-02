@@ -30,7 +30,7 @@ export function AIAHero() {
 
         <h1
           id="aia-gateway-title"
-          className="aia-serif mt-12 max-w-4xl text-balance text-5xl font-semibold leading-[1.12] tracking-tight text-[hsl(var(--aia-ink))] sm:text-6xl md:text-7xl"
+          className="aia-serif mt-12 max-w-4xl text-balance text-5xl font-semibold leading-[1.24] tracking-tight text-[hsl(var(--aia-ink))] sm:text-6xl sm:leading-[1.24] md:text-7xl md:leading-[1.24]"
         >
           北京大学人工智能研究院综合服务系统
         </h1>

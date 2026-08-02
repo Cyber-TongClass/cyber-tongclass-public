@@ -7,12 +7,16 @@ type ResearchOutputListProps = {
   outputs: readonly PublicResearchOutput[]
   heading?: string
   emptyMessage?: string
+  showSummary?: boolean
+  underlineTitleLinks?: boolean
 }
 
 export function ResearchOutputList({
   outputs,
   heading = "相关成果",
   emptyMessage = "暂未发布可公开展示的相关成果。",
+  showSummary = true,
+  underlineTitleLinks = true,
 }: ResearchOutputListProps) {
   return (
     <section aria-labelledby="research-output-title" className="border aia-border-rule p-6 sm:p-7">
@@ -41,9 +45,20 @@ export function ResearchOutputList({
                 ) : null}
               </div>
               <h3 className="aia-serif mt-2 text-base font-semibold text-[hsl(var(--aia-ink))]">
-                {output.href ? <Link href={output.href} className="aia-link">{output.title}</Link> : output.title}
+                {output.href ? (
+                  <Link
+                    href={output.href}
+                    className={underlineTitleLinks
+                      ? "aia-link aia-focus"
+                      : "aia-focus transition-colors hover:text-[hsl(var(--aia-red))]"}
+                  >
+                    {output.title}
+                  </Link>
+                ) : output.title}
               </h3>
-              <p className="aia-text-muted mt-2 text-sm leading-6">{output.summary}</p>
+              {showSummary ? (
+                <p className="aia-text-muted mt-2 text-sm leading-6">{output.summary}</p>
+              ) : null}
             </li>
           ))}
         </ul>

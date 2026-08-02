@@ -38,8 +38,8 @@ export function ReimbursementFileUploadField({
         disabled={disabled}
         onChange={(event) => onFileChange(event.target.files?.[0] || null)}
       />
-      <p className="text-xs text-slate-500">{file ? `${file.name} · ${formatFileSize(file.size)}` : description}</p>
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      <p className="aia-text-muted text-xs">{file ? `${file.name} · ${formatFileSize(file.size)}` : description}</p>
+      {error ? <p role="status" className="text-xs text-[hsl(var(--aia-red))]">{error}</p> : null}
     </div>
   )
 }

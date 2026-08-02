@@ -16,14 +16,7 @@ import { useAiaNotifications, useMyPublicProfileDestination } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { withReturnTo } from "@/lib/safe-local-path"
 import { cn } from "@/lib/utils"
-
-const navigation = [
-  { name: "研究院", href: "/institute" },
-  { name: "人员", href: "/people" },
-  { name: "团队", href: "/groups" },
-  { name: "研究", href: "/research" },
-  { name: "动态", href: "/updates" },
-]
+import { siteCopy } from "@/config/site-copy"
 
 const isActivePath = (pathname: string, href: string) =>
   pathname === href || (href !== "/tong-class" && pathname.startsWith(href + "/"))
@@ -54,7 +47,7 @@ export function AiaNavbar() {
   }
 
   const navigationLinks = (mobile = false) =>
-    navigation.map((item, itemIndex) => {
+    siteCopy.navigation.aia.map((item, itemIndex) => {
       const active = isActivePath(pathname, item.href)
 
       if (mobile) {
@@ -100,11 +93,11 @@ export function AiaNavbar() {
         <Link
           href="/"
           className="aia-focus flex min-w-0 items-center gap-3"
-          aria-label="北京大学人工智能研究院 AIA 首页"
+          aria-label={siteCopy.brand.aiaHomeLabel}
         >
           <Image
             src="/brand/aia/aia-seal.png"
-            alt="北京大学人工智能研究院 AIA 标识"
+            alt={siteCopy.brand.aiaLogoAlt}
             width={40}
             height={40}
             priority
@@ -112,15 +105,15 @@ export function AiaNavbar() {
           />
           <span className="min-w-0 leading-tight">
             <span className="aia-serif block truncate text-lg font-semibold tracking-[0.08em] text-[hsl(var(--aia-ink))]">
-              AIA
+              {siteCopy.brand.aiaShort}
             </span>
             <span className="aia-text-muted hidden truncate text-xs tracking-wide sm:block">
-              北京大学人工智能研究院
+              {siteCopy.brand.aiaName}
             </span>
           </span>
         </Link>
 
-        <nav className="hidden items-end gap-6 lg:flex" aria-label="AIA 主导航">
+        <nav className="hidden items-end gap-6 lg:flex" aria-label={siteCopy.navigation.aiaDesktopLabel}>
           {navigationLinks()}
         </nav>
 
@@ -128,7 +121,7 @@ export function AiaNavbar() {
           <Link
             href="/search"
             className="aia-focus inline-flex min-h-11 min-w-11 items-center justify-center text-[hsl(var(--aia-ink))] transition-colors hover:text-[hsl(var(--aia-red))]"
-            aria-label="站内搜索"
+            aria-label={siteCopy.common.search}
           >
             <Search className="h-4 w-4" aria-hidden="true" />
           </Link>
@@ -136,10 +129,10 @@ export function AiaNavbar() {
             href="/portal"
             className="aia-kicker aia-focus transition-colors hover:text-[hsl(var(--aia-red-deep))]"
           >
-            内网
+            {siteCopy.common.intranet}
           </Link>
           {isAuthenticated ? (
-            <NotificationBell unreadCount={unreadNotificationCount} href={withReturnTo("/notifications", pathname)} label="通知" />
+            <NotificationBell unreadCount={unreadNotificationCount} href={withReturnTo("/notifications", pathname)} label={siteCopy.common.notifications} />
           ) : null}
           {isAuthenticated && currentUser ? (
             <DropdownMenu>
@@ -147,7 +140,7 @@ export function AiaNavbar() {
                 <button
                   type="button"
                   className="aia-focus inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border aia-border-rule bg-white text-sm font-semibold text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))]"
-                  aria-label="打开账户菜单"
+                  aria-label={siteCopy.common.openAccountMenu}
                 >
                   {currentUserPhoto ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -169,26 +162,26 @@ export function AiaNavbar() {
                 <DropdownMenuItem asChild>
                   <Link href="/my-publications">
                     <BookOpen className="mr-2 h-4 w-4" />
-                    个人学术
+                    {siteCopy.common.personalAcademic}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/settings">
                     <Settings className="mr-2 h-4 w-4" />
-                    账户设置
+                    {siteCopy.common.accountSettings}
                   </Link>
                 </DropdownMenuItem>
                 {isAdmin && (
                   <DropdownMenuItem asChild>
                     <Link href="/admin">
                       <Shield className="mr-2 h-4 w-4" />
-                      管理后台
+                      {siteCopy.common.adminConsole}
                     </Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onSelect={() => logout("/")}>
                   <LogOut className="mr-2 h-4 w-4" />
-                  退出登录
+                  {siteCopy.common.logout}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -198,7 +191,7 @@ export function AiaNavbar() {
               className="aia-focus inline-flex items-center gap-2 border aia-border-rule px-3.5 py-2 text-sm font-medium tracking-wide text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]"
             >
               <LogIn className="h-4 w-4" aria-hidden="true" />
-              登录
+              {siteCopy.common.login}
             </Link>
           ) : null}
         </div>
@@ -207,7 +200,7 @@ export function AiaNavbar() {
           ref={mobileMenuButtonRef}
           type="button"
           className="aia-focus inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center p-2 text-[hsl(var(--aia-ink))] transition-colors hover:text-[hsl(var(--aia-red))] lg:hidden"
-          aria-label={isMobileMenuOpen ? "关闭 AIA 导航菜单" : "打开 AIA 导航菜单"}
+          aria-label={isMobileMenuOpen ? siteCopy.navigation.closeAiaMenu : siteCopy.navigation.openAiaMenu}
           aria-controls={mobileMenuId}
           aria-expanded={isMobileMenuOpen}
           onClick={() => setIsMobileMenuOpen((isOpen) => !isOpen)}
@@ -222,7 +215,7 @@ export function AiaNavbar() {
           className="border-t aia-border-rule bg-[hsl(var(--aia-paper))] px-4 pb-5 pt-2 lg:hidden"
           onKeyDown={handleMobileMenuKeyDown}
         >
-          <nav className="container-custom flex flex-col px-0" aria-label="AIA 移动导航">
+          <nav className="container-custom flex flex-col px-0" aria-label={siteCopy.navigation.aiaMobileLabel}>
             {navigationLinks(true)}
             <Link
               href="/search"
@@ -230,20 +223,20 @@ export function AiaNavbar() {
               className="aia-focus mt-3 flex min-h-11 items-center gap-2 border aia-border-rule px-3 py-3 text-base font-medium text-[hsl(var(--aia-ink))]"
             >
               <Search className="h-4 w-4" aria-hidden="true" />
-              站内搜索
+              {siteCopy.common.search}
             </Link>
             <Link
               href="/portal"
               onClick={closeMobileMenu}
               className="aia-kicker aia-focus mt-4 inline-flex px-1 transition-colors hover:text-[hsl(var(--aia-red-deep))]"
             >
-              内网入口
+              {siteCopy.common.intranetEntry}
             </Link>
             {isAuthenticated && currentUser ? (
               <div className="mt-4 flex flex-col gap-2">
                 <Link href={withReturnTo("/notifications", pathname)} onClick={closeMobileMenu} className="aia-focus flex items-center gap-2 border aia-border-rule px-3 py-3 text-base font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]">
                   <Bell className="h-4 w-4" aria-hidden="true" />
-                  通知
+                  {siteCopy.common.notifications}
                   {unreadNotificationCount > 0 ? <span className="ml-auto rounded-full bg-[hsl(var(--aia-red))] px-2 py-0.5 text-xs text-white">{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</span> : null}
                 </Link>
                 {profileDestination ? (
@@ -265,16 +258,16 @@ export function AiaNavbar() {
                 ) : null}
                 <Link href="/my-publications" onClick={closeMobileMenu} className="aia-focus flex items-center gap-2 border aia-border-rule px-3 py-3 text-base font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]">
                   <BookOpen className="h-4 w-4" />
-                  个人学术
+                  {siteCopy.common.personalAcademic}
                 </Link>
                 <Link href="/settings" onClick={closeMobileMenu} className="aia-focus flex items-center gap-2 border aia-border-rule px-3 py-3 text-base font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]">
                   <Settings className="h-4 w-4" />
-                  账户设置
+                  {siteCopy.common.accountSettings}
                 </Link>
                 {isAdmin && (
                   <Link href="/admin" onClick={closeMobileMenu} className="aia-focus flex items-center gap-2 border aia-border-rule px-3 py-3 text-base font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]">
                     <Shield className="h-4 w-4" />
-                    管理后台
+                    {siteCopy.common.adminConsole}
                   </Link>
                 )}
                 <button
@@ -286,7 +279,7 @@ export function AiaNavbar() {
                   className="aia-focus flex w-full items-center gap-2 border aia-border-rule px-3 py-3 text-left text-base font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]"
                 >
                   <LogOut className="h-4 w-4" />
-                  退出登录
+                  {siteCopy.common.logout}
                 </button>
               </div>
             ) : !isLoading && showLoginAction ? (
@@ -296,7 +289,7 @@ export function AiaNavbar() {
                 className="aia-focus mt-4 inline-flex items-center gap-2 border aia-border-rule px-3 py-3 text-base font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]"
               >
                 <LogIn className="h-4 w-4" aria-hidden="true" />
-                登录
+                {siteCopy.common.login}
               </Link>
             ) : null}
           </nav>

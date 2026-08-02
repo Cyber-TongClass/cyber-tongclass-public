@@ -10,6 +10,7 @@ import type {
 import { AiaRule } from "@/components/institute/editorial/rule"
 import { ResearchOutputList } from "@/components/institute/research-output-list"
 import { SafeReturnLink } from "@/components/navigation/safe-return-link"
+import { getSafeExternalUrl } from "@/lib/safe-external-url"
 import { withReturnTo } from "@/lib/safe-local-path"
 
 type PublicGroupMember = {
@@ -17,13 +18,50 @@ type PublicGroupMember = {
   roleLabel?: string
 }
 
+type RosterEntry = {
+  name: string
+  subtitle?: string
+  profileHref?: string
+}
+
 type ResearchGroupProfileProps = {
   group: PublicResearchGroup
   leader?: PublicDirectoryPerson
   members?: readonly PublicDirectoryPerson[]
   memberRoles?: readonly PublicGroupMember[]
+  roster?: readonly RosterEntry[]
   outputs?: readonly PublicResearchOutput[]
   updates?: readonly PublicDirectoryUpdate[]
+}
+
+type OrderedPublicGroupMember = PublicGroupMember & {
+  isLeader: boolean
+}
+
+function buildOrderedPublicGroupMembers({
+  leader,
+  memberRoles,
+}: {
+  leader?: PublicDirectoryPerson
+  memberRoles: readonly PublicGroupMember[]
+}): OrderedPublicGroupMember[] {
+  const orderedMembers: OrderedPublicGroupMember[] = []
+
+  if (leader?.visibility === "public") {
+    const leaderMembership = memberRoles.find((member) => member.person.slug === leader.slug)
+    orderedMembers.push({
+      person: leader,
+      roleLabel: leaderMembership?.roleLabel ?? "公开负责人",
+      isLeader: true,
+    })
+  }
+
+  for (const member of memberRoles) {
+    if (member.person.slug === leader?.slug) continue
+    orderedMembers.push({ ...member, isLeader: false })
+  }
+
+  return orderedMembers
 }
 
 export function ResearchGroupProfile({
@@ -31,6 +69,7 @@ export function ResearchGroupProfile({
   leader,
   members = [],
   memberRoles,
+  roster = [],
   outputs = [],
   updates = [],
 }: ResearchGroupProfileProps) {
@@ -39,10 +78,12 @@ export function ResearchGroupProfile({
       .filter((member) => member.visibility === "public" && group.memberSlugs.includes(member.slug))
       .map((member) => ({ person: member }))
     : memberRoles.filter((member) => member.person.visibility === "public")
-  const publicMembers = membershipMembers.filter((member) => member.person.slug !== leader?.slug)
-  const leaderRoleLabel = memberRoles
-    ?.find((member) => member.person.slug === leader?.slug)
-    ?.roleLabel ?? "公开负责人"
+  const orderedPublicMembers = buildOrderedPublicGroupMembers({
+    leader,
+    memberRoles: membershipMembers,
+  })
+  const publicLeader = orderedPublicMembers[0]?.isLeader ? orderedPublicMembers[0] : undefined
+  const publicMembers = publicLeader ? orderedPublicMembers.slice(1) : orderedPublicMembers
   const relatedOutputs = outputs.filter((output) => output.groupSlugs.includes(group.slug))
   const relatedUpdates = updates.filter((update) => update.relatedGroupSlugs.includes(group.slug))
 
@@ -91,6 +132,36 @@ export function ResearchGroupProfile({
             </div>
           </section>
 
+          {group.publicLinks.length > 0 ? (
+            <section aria-labelledby="group-public-links" className="mt-10">
+              <h2 id="group-public-links" className="aia-serif text-lg font-semibold text-[hsl(var(--aia-ink))]">
+                公开链接
+              </h2>
+              <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-3" aria-label="团队公开链接">
+                {group.publicLinks.map((link) => {
+                  const safeHref = getSafeExternalUrl(link.href)
+                  return (
+                    <li key={`${link.label}-${link.href}`} className="aia-mono text-xs tracking-[0.05em]">
+                      {safeHref ? (
+                        <a
+                          href={safeHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="aia-link aia-focus inline-flex items-center gap-1.5"
+                        >
+                          {link.label}
+                          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                        </a>
+                      ) : (
+                        <span className="text-[hsl(var(--aia-muted))]">{link.label}</span>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          ) : null}
+
           <section aria-labelledby="group-recruitment-note" className="mt-10 border-l-2 border-[hsl(var(--aia-red))] pl-5">
             <h2 id="group-recruitment-note" className="aia-mono text-xs font-semibold uppercase tracking-[0.18em] text-[hsl(var(--aia-ink))]">
               公开说明
@@ -107,18 +178,18 @@ export function ResearchGroupProfile({
                 公开成员
               </h2>
             </div>
-            {leader && leader.visibility === "public" ? (
+            {publicLeader ? (
               <Link
-                href={withReturnTo(`/people/${leader.slug}`, `/groups/${group.slug}`)}
+                href={withReturnTo(`/people/${publicLeader.person.slug}`, `/groups/${group.slug}`)}
                 className="aia-focus group mt-5 block border aia-border-rule p-4 transition-colors hover:border-[hsl(var(--aia-red))]"
               >
                 <span className="aia-mono text-xs uppercase tracking-[0.12em] text-[hsl(var(--aia-red))]">
-                  {leaderRoleLabel}
+                  {publicLeader.roleLabel}
                 </span>
                 <span className="aia-serif mt-2 block text-base font-semibold text-[hsl(var(--aia-ink))] transition-colors group-hover:text-[hsl(var(--aia-red))]">
-                  {leader.nameZh}
+                  {publicLeader.person.nameZh}
                 </span>
-                <span className="aia-mono mt-1 block text-xs text-[hsl(var(--aia-muted))]">{leader.nameEn}</span>
+                <span className="aia-mono mt-1 block text-xs text-[hsl(var(--aia-muted))]">{publicLeader.person.nameEn}</span>
               </Link>
             ) : null}
             {publicMembers.length > 0 ? (
@@ -145,12 +216,42 @@ export function ResearchGroupProfile({
                   </li>
                 ))}
               </ul>
-            ) : (
+            ) : roster.length === 0 ? (
               <p className="aia-text-muted mt-5 text-sm leading-6">暂未发布可公开展示的成员资料。</p>
-            )}
+            ) : null}
+            {roster.length > 0 ? (
+              <div className="mt-6">
+                <h3 className="aia-mono text-xs font-semibold uppercase tracking-[0.18em] text-[hsl(var(--aia-ink))]">
+                  课题组成员
+                </h3>
+                <ul className="mt-3 border-t aia-border-rule" aria-label="课题组成员名单">
+                  {roster.map((entry) => (
+                    <li key={entry.name} className="flex items-baseline justify-between gap-3 border-b aia-border-rule py-3">
+                      {entry.profileHref ? (
+                        <Link
+                          href={withReturnTo(entry.profileHref, `/groups/${group.slug}`)}
+                          className="aia-link aia-focus aia-serif text-base font-semibold"
+                        >
+                          {entry.name}
+                        </Link>
+                      ) : (
+                        <span className="aia-serif text-base font-semibold text-[hsl(var(--aia-ink))]">{entry.name}</span>
+                      )}
+                      {entry.subtitle ? (
+                        <span className="aia-text-muted shrink-0 text-xs">{entry.subtitle}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
 
-          <ResearchOutputList outputs={relatedOutputs} />
+          <ResearchOutputList
+            outputs={relatedOutputs}
+            showSummary={false}
+            underlineTitleLinks={false}
+          />
         </div>
 
         <section aria-labelledby="group-updates-title" className="mt-10 border aia-border-rule p-6 sm:p-7">

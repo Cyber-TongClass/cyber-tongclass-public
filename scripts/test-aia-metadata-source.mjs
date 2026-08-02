@@ -52,11 +52,15 @@ test("AIA root metadata uses an internal canonical site URL and local identity",
     "absolute URLs must remain on the configured site origin",
   )
 
+  const copy = loadTypeScriptModule("src/config/site-copy.ts").siteCopy
+
   assert.match(layout, /from\s+["']@\/lib\/site-url["']/)
+  assert.match(layout, /from\s+["']@\/config\/site-copy["']/)
   assert.match(layout, /metadataBase:\s*siteUrl/)
-  assert.match(layout, /北京大学人工智能研究院综合服务系统/)
-  assert.match(layout, /Artificial Intelligence Agora/)
-  assert.match(layout, /The Integrated Services Platform of PKU IAI/)
+  assert.match(layout, /siteCopy\.metadata\.title/)
+  assert.match(copy.metadata.title, /北京大学人工智能研究院综合服务系统/)
+  assert.match(copy.metadata.title, /Artificial Intelligence Agora/)
+  assert.match(copy.metadata.description, /The Integrated Services Platform of PKU IAI/)
   assert.match(layout, /\/brand\/aia\/aia-seal\.png/)
   assert.doesNotMatch(layout, /alternates:\s*\{\s*canonical:\s*["']\/["']/)
   assert.match(readSource("src/app/page.tsx"), /canonical:\s*["']\/["']/)

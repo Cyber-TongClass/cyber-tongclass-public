@@ -1,15 +1,16 @@
 "use client"
 
 import {
-  toDirectoryResearchOutput,
   toDirectoryUpdate,
   toDirectoryPerson,
   toDirectoryResearchGroup,
   toDirectoryResearchGroupMember,
+  toEffectivePublicDirectoryResearchOutputs,
 } from "@/components/institute/live-directory-view-model"
 import { ResearchGroupProfile } from "@/components/institute/research-group-profile"
 import { SafeReturnLink } from "@/components/navigation/safe-return-link"
-import { usePublicInstituteResearch, usePublicInstituteUpdates, usePublicResearchGroup } from "@/lib/api"
+import { usePublicInstituteResearch, usePublicInstituteUpdates, usePublicResearchGroup, useUsers } from "@/lib/api"
+import { attachPublicRosterProfileHrefs } from "@/lib/research-group-roster"
 import type { PublicInstituteResearch, PublicInstituteUpdate, PublicResearchGroup } from "@/types/institute"
 
 type LiveResearchGroupProfileProps = {
@@ -34,8 +35,11 @@ export function LiveResearchGroupProfile({ slug }: LiveResearchGroupProfileProps
   const group = usePublicResearchGroup(slug) as PublicResearchGroup | null | undefined
   const research = usePublicInstituteResearch({ groupSlug: slug, limit: 100 }) as PublicInstituteResearch[] | undefined
   const updates = usePublicInstituteUpdates({ groupSlug: slug, limit: 100 }) as PublicInstituteUpdate[] | undefined
+  const publicTongClassProfiles = useUsers({ limit: 500 }) as
+    | { username: string; chineseName?: string; englishName: string }[]
+    | undefined
 
-  if (group === undefined || research === undefined || updates === undefined) {
+  if (group === undefined || research === undefined || updates === undefined || publicTongClassProfiles === undefined) {
     return (
       <div className="min-h-screen py-12 sm:py-16" aria-live="polite">
         <div className="container-custom max-w-5xl">
@@ -56,7 +60,8 @@ export function LiveResearchGroupProfile({ slug }: LiveResearchGroupProfileProps
       group={toDirectoryResearchGroup(group)}
       leader={group.leader ? toDirectoryPerson(group.leader) : undefined}
       memberRoles={(group.members ?? []).map(toDirectoryResearchGroupMember)}
-      outputs={research.map((item) => toDirectoryResearchOutput(item, `/groups/${slug}`))}
+      roster={attachPublicRosterProfileHrefs(group.roster ?? [], publicTongClassProfiles)}
+      outputs={toEffectivePublicDirectoryResearchOutputs(research, `/groups/${slug}`)}
       updates={updates.map((item) => toDirectoryUpdate(item, `/groups/${slug}`))}
     />
   )
