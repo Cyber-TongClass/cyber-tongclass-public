@@ -24,7 +24,7 @@ const isActivePath = (pathname: string, href: string) =>
 export function AiaNavbar() {
   const pathname = usePathname() || "/"
   const { currentUser, isAuthenticated, isLoading, isAdmin, logout } = useAuth()
-  const profileDestination = useMyPublicProfileDestination()
+  const profileDestination = useMyPublicProfileDestination({ enabled: isAuthenticated })
   const notifications = useAiaNotifications({ enabled: isAuthenticated })
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
@@ -47,7 +47,7 @@ export function AiaNavbar() {
   }
 
   const navigationLinks = (mobile = false) =>
-    siteCopy.navigation.aia.map((item, itemIndex) => {
+    siteCopy.navigation.aia.map((item) => {
       const active = isActivePath(pathname, item.href)
 
       if (mobile) {
@@ -58,14 +58,13 @@ export function AiaNavbar() {
             aria-current={active ? "page" : undefined}
             onClick={closeMobileMenu}
             className={cn(
-              "aia-focus flex items-baseline gap-4 border-b aia-border-rule px-1 py-3.5 transition-colors",
-              active ? "text-[hsl(var(--aia-red))]" : "text-[hsl(var(--aia-ink))] hover:text-[hsl(var(--aia-red))]",
+              "aia-focus flex min-h-12 items-center border-b aia-border-rule px-2 py-3.5 text-base font-medium transition-colors",
+              active
+                ? "bg-[hsl(var(--aia-tag))] text-[hsl(var(--aia-red))]"
+                : "text-[hsl(var(--aia-ink))] hover:bg-[hsl(var(--aia-warm))] hover:text-[hsl(var(--aia-red))]",
             )}
           >
-            <span className="aia-mono text-xs text-[hsl(var(--aia-muted))]" aria-hidden="true">
-              {String(itemIndex + 1).padStart(2, "0")}
-            </span>
-            <span className="aia-serif text-lg font-semibold tracking-wide">{item.name}</span>
+            {item.name}
           </Link>
         )
       }
@@ -76,10 +75,10 @@ export function AiaNavbar() {
           href={item.href}
           aria-current={active ? "page" : undefined}
           className={cn(
-            "aia-focus border-b pb-1 text-sm tracking-[0.14em] transition-colors",
+            "aia-focus px-3 py-2 text-sm font-medium transition-colors",
             active
-              ? "border-[hsl(var(--aia-red))] text-[hsl(var(--aia-red))]"
-              : "border-transparent text-[hsl(var(--aia-ink))] hover:border-[hsl(var(--aia-red)/0.5)] hover:text-[hsl(var(--aia-red))]",
+              ? "bg-[hsl(var(--aia-tag))] text-[hsl(var(--aia-red))]"
+              : "text-[hsl(var(--aia-ink))] hover:bg-[hsl(var(--aia-warm))] hover:text-[hsl(var(--aia-red))]",
           )}
         >
           {item.name}
@@ -88,8 +87,8 @@ export function AiaNavbar() {
     })
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b aia-border-rule bg-[hsl(var(--aia-paper)/0.97)] backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--aia-paper)/0.92)]">
-      <div className="container-custom flex min-h-16 items-center justify-between gap-6 py-2">
+    <header className="sticky top-0 z-50 w-full border-b border-t-[3px] border-b-[hsl(var(--aia-rule))] border-t-[hsl(var(--aia-red))] bg-white">
+      <div className="container-custom flex min-h-[4.25rem] items-center justify-between gap-6 py-2">
         <Link
           href="/"
           className="aia-focus flex min-w-0 items-center gap-3"
@@ -113,7 +112,7 @@ export function AiaNavbar() {
           </span>
         </Link>
 
-        <nav className="hidden items-end gap-6 lg:flex" aria-label={siteCopy.navigation.aiaDesktopLabel}>
+        <nav className="hidden items-center gap-1 lg:flex" aria-label={siteCopy.navigation.aiaDesktopLabel}>
           {navigationLinks()}
         </nav>
 
@@ -127,7 +126,7 @@ export function AiaNavbar() {
           </Link>
           <Link
             href="/portal"
-            className="aia-kicker aia-focus transition-colors hover:text-[hsl(var(--aia-red-deep))]"
+            className="aia-focus inline-flex min-h-10 items-center bg-[hsl(var(--aia-red))] px-4 text-sm font-semibold text-white transition-colors hover:bg-[hsl(var(--aia-red-deep))]"
           >
             {siteCopy.common.intranet}
           </Link>
@@ -212,7 +211,7 @@ export function AiaNavbar() {
       {isMobileMenuOpen ? (
         <div
           id={mobileMenuId}
-          className="border-t aia-border-rule bg-[hsl(var(--aia-paper))] px-4 pb-5 pt-2 lg:hidden"
+          className="border-t aia-border-rule bg-white px-4 pb-5 pt-2 lg:hidden"
           onKeyDown={handleMobileMenuKeyDown}
         >
           <nav className="container-custom flex flex-col px-0" aria-label={siteCopy.navigation.aiaMobileLabel}>
@@ -228,7 +227,7 @@ export function AiaNavbar() {
             <Link
               href="/portal"
               onClick={closeMobileMenu}
-              className="aia-kicker aia-focus mt-4 inline-flex px-1 transition-colors hover:text-[hsl(var(--aia-red-deep))]"
+              className="aia-focus mt-4 inline-flex min-h-11 items-center justify-center bg-[hsl(var(--aia-red))] px-4 text-sm font-semibold text-white transition-colors hover:bg-[hsl(var(--aia-red-deep))]"
             >
               {siteCopy.common.intranetEntry}
             </Link>

@@ -57,7 +57,7 @@ const graduateNavigation = siteCopy.navigation.graduate.map((item) => ({
 export function TongClassNavbar() {
   const pathname = usePathname() || tongClassHomePath()
   const { currentUser, isAuthenticated, isAdmin, logout } = useAuth()
-  const profileDestination = useMyPublicProfileDestination()
+  const profileDestination = useMyPublicProfileDestination({ enabled: isAuthenticated })
   const isGraduate = currentUser?.identityType === "graduate"
   const notifications = useAiaNotifications({ enabled: isAuthenticated })
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)

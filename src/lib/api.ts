@@ -484,11 +484,11 @@ export function usePublicInstitutePerson(slug?: string | null) {
   return useQuery(getPublicInstitutePersonRef, slug ? { slug } : "skip")
 }
 
-export function useMyPublicProfileDestination() {
+export function useMyPublicProfileDestination(options?: { enabled?: boolean }) {
   const sessionToken = useTongClassSessionToken()
   return useQuery(
     getMyPublicProfileDestinationRef,
-    sessionToken ? ({ sessionToken } as any) : "skip",
+    options?.enabled !== false && sessionToken ? ({ sessionToken } as any) : "skip",
   ) as { href: string; label: string } | null | undefined
 }
 

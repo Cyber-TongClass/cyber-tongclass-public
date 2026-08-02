@@ -37,7 +37,7 @@ function isDesktopLastGridRow(index: number, total: number) {
 export function PortalClient() {
   const copy = siteCopy.portal
   const { currentUser, isAdmin, isLoading, isAuthenticated } = useAuth()
-  const profileDestination = useMyPublicProfileDestination()
+  const profileDestination = useMyPublicProfileDestination({ enabled: isAuthenticated })
   const contentPermissions = useMyContentPermissions()
 
   const loginHref = "/login?next=%2Fportal%2Flist"
