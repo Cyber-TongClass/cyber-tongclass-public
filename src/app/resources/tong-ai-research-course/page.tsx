@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ArrowLeft, ArrowUpRight, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { tongAiResearchCoursePdfs } from "@/lib/resources/tong-ai-research-course"
+import { tongAiResearchCoursePdfs } from "@/lib/resources/tong-init-course"
 
 export default function TongAiResearchCoursePage() {
   return (
