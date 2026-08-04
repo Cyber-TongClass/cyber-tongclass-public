@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button"
 
 const publicResources = [
   {
+    id: "tong-ai-research-course",
+    title: "ToNG 通班人工智能科研先导课",
+    description: "ToNG: Tutorials on Necessary Groundwork 课程相关资源和参考资料。",
+    href: "/resources/tong-ai-research-course",
+    image: "https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?auto=format&fit=crop&w=800&q=80",
+  },
+  {
     id: "survival-guide",
     title: "通班生存指南",
     description: "写给北大通班学生的人工智能专业学习指南，涵盖入学指南、课程选择、编程入门、资源推荐、科研入门建议等内容，由历届通班学生参与编写维护。",
