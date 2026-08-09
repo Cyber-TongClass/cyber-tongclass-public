@@ -20,4 +20,9 @@ export const tongAiResearchCoursePdfs: CoursePdf[] = [
     description: "自学有道：文档、搜索与AI",
     href: "/resources/tong-init-course/slides-lec0.pdf",
   },
+  {
+    title: "第 1 讲 课件",
+    description: "计算机的结构与硬件",
+    href: "/resources/tong-init-course/slides-lec1.pdf",
+  },
 ]
