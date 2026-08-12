@@ -243,20 +243,25 @@ export function useSignIn() {
 // ==================== 用户相关 ====================
 
 export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number | boolean; limit?: number; classMembersOnly?: boolean }) {
+  const sessionToken = useTongClassSessionToken()
   const queryArgs = useMemo(() => {
-    if (!args) return {}
-    const { skip, ...rest } = args
+    const { skip, ...rest } = args || {}
     return {
       ...rest,
       ...(typeof skip === "number" ? { skip } : {}),
+      sessionToken: sessionToken || undefined,
     }
-  }, [args])
+  }, [args, sessionToken])
 
-  return useQuery(api.users.list, args?.skip === true ? "skip" : queryArgs)
+  return useQuery(api.users.list, args?.skip === true ? "skip" : (queryArgs as any))
 }
 
 export function useUserById(id?: string | null) {
-  return useQuery(api.users.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.users.getById,
+    id ? ({ id: id as any, sessionToken: sessionToken || undefined } as any) : "skip"
+  )
 }
 
 export function useUserByProfileSlug(slug?: string | null) {
@@ -274,28 +279,57 @@ export function useUserByProfileSlug(slug?: string | null) {
 }
 
 export function useCreateUser() {
-  return useMutation(api.users.create)
+  const create = useMutation(api.users.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateUser() {
-  return useMutation(api.users.update)
+  const update = useMutation(api.users.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useUpdateUserRole() {
-  return useMutation(api.users.updateRole)
+  const updateRole = useMutation(api.users.updateRole)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return updateRole({ ...args, sessionToken } as any)
+  }, [updateRole])
 }
 
 export function useUpdatePasswordWithCurrent() {
-  return useMutation(api.users.updatePasswordWithCurrent)
+  const updatePassword = useMutation(api.users.updatePasswordWithCurrent)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return updatePassword({ ...args, sessionToken } as any)
+  }, [updatePassword])
 }
 
 export function useResetPasswordAsSuperAdmin() {
-  return useMutation(api.users.resetPasswordAsSuperAdmin)
+  const resetPassword = useMutation(api.users.resetPasswordAsSuperAdmin)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return resetPassword({ ...args, sessionToken } as any)
+  }, [resetPassword])
 }
 
 export function useDeleteUser() {
   const remove = useMutation(api.users.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function useSimpleLogin() {
@@ -313,24 +347,46 @@ export function useNews(args?: { category?: string; skip?: number; limit?: numbe
 }
 
 export function useAllNews(args?: { category?: string; skip?: number; limit?: number }) {
-  return useQuery(api.news.listAll, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.news.listAll,
+    sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip"
+  )
 }
 
 export function useNewsById(id?: string | null) {
-  return useQuery(api.news.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.news.getById,
+    id ? ({ id: id as any, sessionToken: sessionToken || undefined } as any) : "skip"
+  )
 }
 
 export function useCreateNews() {
-  return useMutation(api.news.create)
+  const create = useMutation(api.news.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateNews() {
-  return useMutation(api.news.update)
+  const update = useMutation(api.news.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useDeleteNews() {
   const remove = useMutation(api.news.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function useNewsCount(args?: { category?: string }) {
@@ -478,16 +534,30 @@ export function useEventById(id?: string | null) {
 }
 
 export function useCreateEvent() {
-  return useMutation(api.events.create)
+  const create = useMutation(api.events.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateEvent() {
-  return useMutation(api.events.update)
+  const update = useMutation(api.events.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useDeleteEvent() {
   const remove = useMutation(api.events.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function useEventsCount() {
@@ -509,16 +579,30 @@ export function usePublicationById(id?: string | null) {
 }
 
 export function useCreatePublication() {
-  return useMutation(api.publications.create)
+  const create = useMutation(api.publications.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdatePublication() {
-  return useMutation(api.publications.update)
+  const update = useMutation(api.publications.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useDeletePublication() {
   const remove = useMutation(api.publications.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function usePublicationsCount(args?: { category?: string; year?: number }) {
@@ -887,16 +971,30 @@ export function useCourseByName(name?: string | null) {
 }
 
 export function useCreateCourse() {
-  return useMutation(api.courses.create)
+  const create = useMutation(api.courses.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateCourse() {
-  return useMutation(api.courses.update)
+  const update = useMutation(api.courses.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useDeleteCourse() {
   const remove = useMutation(api.courses.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 // ==================== 课程评价相关 ====================
@@ -926,11 +1024,18 @@ export function useAllCourseReviews(args?: {
   status?: "pending" | "approved" | "rejected"
 }) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(api.courseReviews.listByCourseAll, { ...(args || {}), sessionToken: sessionToken || undefined } as any)
+  return useQuery(
+    api.courseReviews.listByCourseAll,
+    sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip"
+  )
 }
 
 export function usePendingReviews(args?: { skip?: number; limit?: number }) {
-  return useQuery(api.courseReviews.listPending, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.courseReviews.listPending,
+    sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip"
+  )
 }
 
 export function useCourseListWithReviews() {
@@ -938,40 +1043,83 @@ export function useCourseListWithReviews() {
 }
 
 export function useCreateCourseReview() {
-  return useMutation(api.courseReviews.create)
+  const create = useMutation(api.courseReviews.create)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return create({ ...args, sessionToken } as any)
+  }, [create])
 }
 
 export function useUpdateCourseReview() {
-  return useMutation(api.courseReviews.update)
+  const update = useMutation(api.courseReviews.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useEditReviewTag() {
-  return useMutation(api.courseReviews.editTag)
+  const edit = useMutation(api.courseReviews.editTag)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return edit({ ...args, sessionToken } as any)
+  }, [edit])
 }
 
 export function useApproveCourseReview() {
-  return useMutation(api.courseReviews.approve)
+  const approve = useMutation(api.courseReviews.approve)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return approve({ ...args, sessionToken } as any)
+  }, [approve])
 }
 
 export function useRejectCourseReview() {
-  return useMutation(api.courseReviews.reject)
+  const reject = useMutation(api.courseReviews.reject)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return reject({ ...args, sessionToken } as any)
+  }, [reject])
 }
 
 export function useDeleteCourseReview() {
   const remove = useMutation(api.courseReviews.remove)
-  return useCallback((input: IdLike) => remove(toIdArg(input) as any), [remove])
+  return useCallback((input: IdLike) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...toIdArg(input), sessionToken } as any)
+  }, [remove])
 }
 
 export function useAssignReviewsByTags() {
-  return useMutation(api.courseReviews.assignByTags)
+  const assign = useMutation(api.courseReviews.assignByTags)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return assign({ ...args, sessionToken } as any)
+  }, [assign])
 }
 
 export function useReviewTags() {
-  return useQuery(api.courseReviews.listTags)
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    api.courseReviews.listTags,
+    sessionToken ? ({ sessionToken } as any) : "skip"
+  )
 }
 
 export function useSetReviewTagColor() {
-  return useMutation(api.courseReviews.setTagColor)
+  const setColor = useMutation(api.courseReviews.setTagColor)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setColor({ ...args, sessionToken } as any)
+  }, [setColor])
 }
 
 export function useCommonReviewTags() {
@@ -1323,15 +1471,30 @@ export function useCC2026ListAll() {
 }
 
 export function useCC2026Set() {
-  return useMutation(api.cc2026.set)
+  const set = useMutation(api.cc2026.set)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return set({ ...args, sessionToken } as any)
+  }, [set])
 }
 
 export function useCC2026BatchSet() {
-  return useMutation(api.cc2026.batchSet)
+  const batchSet = useMutation(api.cc2026.batchSet)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return batchSet({ ...args, sessionToken } as any)
+  }, [batchSet])
 }
 
 export function useCC2026Remove() {
-  return useMutation(api.cc2026.remove)
+  const remove = useMutation(api.cc2026.remove)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return remove({ ...args, sessionToken } as any)
+  }, [remove])
 }
 
 export function useCC2026MyRegistrations() {

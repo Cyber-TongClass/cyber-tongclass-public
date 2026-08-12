@@ -28,8 +28,8 @@ type PublicationAuthorEditorProps = {
   error?: string
 }
 
-function normalize(value: string) {
-  return value.trim().toLowerCase()
+function normalize(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : ""
 }
 
 function buildRow(author?: PublicationAuthor): AuthorRow {
