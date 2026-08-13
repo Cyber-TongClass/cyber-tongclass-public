@@ -511,7 +511,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_group_publication", ["researchGroupId", "publicationId"])
-    .index("by_group", ["researchGroupId"]),
+    .index("by_group", ["researchGroupId"])
+    .index("by_publication", ["publicationId"]),
 
   publicationAuthorships: defineTable({
     publicationId: v.id("publications"),

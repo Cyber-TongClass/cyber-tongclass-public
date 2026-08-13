@@ -215,3 +215,101 @@ export function validateAndPlanPublicationAuthorshipSync(args: {
     ...planPublicationAuthorshipSync(args.publicationId, validated, args.existing, args.now),
   }
 }
+
+export async function resolvePublicationAuthors(
+  ctx: any,
+  inputs: readonly PublicationAuthorInputLike[],
+) {
+  const slugs = Array.from(new Set(
+    inputs.flatMap((input) => {
+      const slug = normalizeSlug(input.institutePersonSlug)
+      return slug ? [slug] : []
+    }),
+  )).sort(compareCodeUnits)
+  const people = await Promise.all(slugs.map(async (slug) => {
+    const person = await ctx.db
+      .query("institutePeople")
+      .withIndex("by_slug", (index: any) => index.eq("slug", slug))
+      .unique()
+    if (!person) return undefined
+    return {
+      personId: String(person._id),
+      slug: person.slug,
+      kind: person.kind,
+      ...(person.accountUserId
+        ? { accountUserId: String(person.accountUserId) }
+        : {}),
+      hidden: person.visibility !== "public",
+    }
+  }))
+
+  return validatePublicationAuthorInputs(
+    inputs,
+    people.filter((person): person is InstitutePersonCandidate => Boolean(person)),
+  )
+}
+
+export async function syncPublicationAuthorships(
+  ctx: any,
+  publicationId: string,
+  validated: readonly ValidatedPublicationAuthorInput[],
+  now: number,
+) {
+  const rows = await ctx.db
+    .query("publicationAuthorships")
+    .withIndex("by_publication_order", (index: any) => (
+      index.eq("publicationId", publicationId)
+    ))
+    .collect()
+  const existing = rows.map((row: any): ExistingAuthorship => ({
+    id: String(row._id),
+    naturalKey: row.naturalKey,
+    personId: String(row.personId),
+    role: row.role,
+    authorOrder: row.authorOrder,
+    isPrimary: row.isPrimary === true,
+  }))
+  const plan = planPublicationAuthorshipSync(publicationId, validated, existing, now)
+
+  for (const creation of plan.creates) {
+    await ctx.db.insert("publicationAuthorships", creation)
+  }
+  for (const update of plan.updates) {
+    await ctx.db.patch(update.id, {
+      role: update.role,
+      authorOrder: update.authorOrder,
+      isPrimary: update.isPrimary,
+      updatedAt: update.updatedAt,
+    })
+  }
+  for (const deletion of plan.deletes) {
+    await ctx.db.delete(deletion.id)
+  }
+
+  return plan
+}
+
+export async function deletePublicationRelations(ctx: any, publicationId: string) {
+  const authorships = await ctx.db
+    .query("publicationAuthorships")
+    .withIndex("by_publication_order", (index: any) => (
+      index.eq("publicationId", publicationId)
+    ))
+    .collect()
+  const mentions = await ctx.db
+    .query("contentMentions")
+    .withIndex("by_content", (index: any) => (
+      index.eq("contentType", "publication").eq("contentId", publicationId)
+    ))
+    .collect()
+  const visibilityOverrides = await ctx.db
+    .query("researchGroupPublicationVisibilityOverrides")
+    .withIndex("by_publication", (index: any) => (
+      index.eq("publicationId", publicationId)
+    ))
+    .collect()
+
+  for (const relation of [...authorships, ...mentions, ...visibilityOverrides]) {
+    await ctx.db.delete(relation._id)
+  }
+}

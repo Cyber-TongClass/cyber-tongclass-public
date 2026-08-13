@@ -1,7 +1,52 @@
 import assert from "node:assert/strict"
+import { readFile } from "node:fs/promises"
 import test from "node:test"
 
 const authorships = await import("../convex/lib/publicationAuthorships.ts")
+
+function createFakeContext({ queryRows = {}, uniqueRows = {}, nextInsertIds = [] } = {}) {
+  const calls = []
+  let insertIndex = 0
+  const db = {
+    query(table) {
+      calls.push(["query", table])
+      return {
+        withIndex(index, applyIndex) {
+          const clauses = []
+          const indexBuilder = {
+            eq(field, value) {
+              clauses.push([field, value])
+              return indexBuilder
+            },
+          }
+          applyIndex(indexBuilder)
+          calls.push(["withIndex", table, index, clauses])
+          return {
+            async unique() {
+              calls.push(["unique", table, index, clauses])
+              return uniqueRows[`${table}:${index}:${JSON.stringify(clauses)}`] ?? null
+            },
+            async collect() {
+              calls.push(["collect", table, index, clauses])
+              return queryRows[`${table}:${index}:${JSON.stringify(clauses)}`] ?? []
+            },
+          }
+        },
+      }
+    },
+    async insert(table, value) {
+      calls.push(["insert", table, value])
+      return nextInsertIds[insertIndex++] ?? `${table}-inserted-${insertIndex}`
+    },
+    async patch(id, value) {
+      calls.push(["patch", id, value])
+    },
+    async delete(id) {
+      calls.push(["delete", id])
+    },
+  }
+  return { ctx: { db }, calls }
+}
 
 function snapshot(name, metadata = {}) {
   const normalized = {
@@ -390,4 +435,179 @@ test("combined helper returns normalized snapshots and the sync plan", () => {
     snapshot("Teacher A", { institutePersonSlug: "teacher-a" }),
   ])
   assert.equal(result.creates[0].naturalKey, "pub-1:person-a")
+})
+
+test("schema provides a publication-first index for bounded visibility cleanup", async () => {
+  const schemaSource = await readFile(
+    new URL("../convex/schema.ts", import.meta.url),
+    "utf8",
+  )
+
+  assert.match(
+    schemaSource,
+    /researchGroupPublicationVisibilityOverrides:[\s\S]*?\.index\("by_publication", \["publicationId"\]\)/,
+  )
+})
+
+test("resolves each normalized institute slug with an exact unique lookup", async () => {
+  const lookupKey = "institutePeople:by_slug:[[\"slug\",\"teacher-a\"]]"
+  const { ctx, calls } = createFakeContext({
+    uniqueRows: {
+      [lookupKey]: {
+        _id: "person-a",
+        slug: "teacher-a",
+        kind: "teacher",
+        visibility: "public",
+        accountUserId: "user-a",
+      },
+    },
+  })
+  const inputs = [{
+    snapshot: snapshot("Teacher A", {
+      userId: "user-a",
+      institutePersonSlug: "teacher-a",
+      corresponding: true,
+    }),
+    name: " Teacher A ",
+    coFirst: false,
+    corresponding: true,
+    tongClassUserId: " user-a ",
+    institutePersonSlug: " TEACHER-A ",
+  }]
+
+  const resolved = await authorships.resolvePublicationAuthors(ctx, inputs)
+
+  assert.deepEqual(resolved, [{
+    ...inputs[0],
+    name: "Teacher A",
+    tongClassUserId: "user-a",
+    institutePersonSlug: "teacher-a",
+    personId: "person-a",
+  }])
+  assert.deepEqual(calls, [
+    ["query", "institutePeople"],
+    ["withIndex", "institutePeople", "by_slug", [["slug", "teacher-a"]]],
+    ["unique", "institutePeople", "by_slug", [["slug", "teacher-a"]]],
+  ])
+})
+
+test("sync loads one publication index and executes the stable insert patch delete plan", async () => {
+  const queryKey = "publicationAuthorships:by_publication_order:[[\"publicationId\",\"pub-1\"]]"
+  const { ctx, calls } = createFakeContext({
+    queryRows: {
+      [queryKey]: [
+        {
+          _id: "row-b",
+          naturalKey: "pub-1:person-b",
+          personId: "person-b",
+          role: "corresponding_author",
+          authorOrder: 2,
+          isPrimary: true,
+        },
+        {
+          _id: "row-stale",
+          naturalKey: "pub-1:person-stale",
+          personId: "person-stale",
+          role: "author",
+          authorOrder: 7,
+          isPrimary: false,
+        },
+      ],
+    },
+  })
+  const validated = [
+    {
+      snapshot: "Teacher A",
+      name: "Teacher A",
+      coFirst: false,
+      corresponding: true,
+      personId: "person-a",
+    },
+    {
+      snapshot: "Graduate B",
+      name: "Graduate B",
+      coFirst: false,
+      corresponding: false,
+      personId: "person-b",
+    },
+  ]
+
+  const result = await authorships.syncPublicationAuthorships(
+    ctx,
+    "pub-1",
+    validated,
+    123,
+  )
+
+  assert.deepEqual(result, {
+    creates: [{
+      naturalKey: "pub-1:person-a",
+      publicationId: "pub-1",
+      personId: "person-a",
+      role: "corresponding_author",
+      authorOrder: 0,
+      isPrimary: true,
+      createdAt: 123,
+      updatedAt: 123,
+    }],
+    updates: [{
+      id: "row-b",
+      naturalKey: "pub-1:person-b",
+      role: "author",
+      authorOrder: 1,
+      isPrimary: false,
+      updatedAt: 123,
+    }],
+    deletes: [{ id: "row-stale", naturalKey: "pub-1:person-stale" }],
+  })
+  assert.deepEqual(calls, [
+    ["query", "publicationAuthorships"],
+    ["withIndex", "publicationAuthorships", "by_publication_order", [["publicationId", "pub-1"]]],
+    ["collect", "publicationAuthorships", "by_publication_order", [["publicationId", "pub-1"]]],
+    ["insert", "publicationAuthorships", result.creates[0]],
+    ["patch", "row-b", {
+      role: "author",
+      authorOrder: 1,
+      isPrimary: false,
+      updatedAt: 123,
+    }],
+    ["delete", "row-stale"],
+  ])
+})
+
+test("delete cleanup stays bounded to publication relation indexes", async () => {
+  const authorshipKey = "publicationAuthorships:by_publication_order:[[\"publicationId\",\"pub-1\"]]"
+  const mentionKey = "contentMentions:by_content:[[\"contentType\",\"publication\"],[\"contentId\",\"pub-1\"]]"
+  const overrideKey = "researchGroupPublicationVisibilityOverrides:by_publication:[[\"publicationId\",\"pub-1\"]]"
+  const { ctx, calls } = createFakeContext({
+    queryRows: {
+      [authorshipKey]: [{ _id: "authorship-1" }],
+      [mentionKey]: [{ _id: "mention-1" }, { _id: "mention-2" }],
+      [overrideKey]: [{ _id: "override-1" }],
+    },
+  })
+
+  await authorships.deletePublicationRelations(ctx, "pub-1")
+
+  assert.deepEqual(calls, [
+    ["query", "publicationAuthorships"],
+    ["withIndex", "publicationAuthorships", "by_publication_order", [["publicationId", "pub-1"]]],
+    ["collect", "publicationAuthorships", "by_publication_order", [["publicationId", "pub-1"]]],
+    ["query", "contentMentions"],
+    ["withIndex", "contentMentions", "by_content", [
+      ["contentType", "publication"],
+      ["contentId", "pub-1"],
+    ]],
+    ["collect", "contentMentions", "by_content", [
+      ["contentType", "publication"],
+      ["contentId", "pub-1"],
+    ]],
+    ["query", "researchGroupPublicationVisibilityOverrides"],
+    ["withIndex", "researchGroupPublicationVisibilityOverrides", "by_publication", [["publicationId", "pub-1"]]],
+    ["collect", "researchGroupPublicationVisibilityOverrides", "by_publication", [["publicationId", "pub-1"]]],
+    ["delete", "authorship-1"],
+    ["delete", "mention-1"],
+    ["delete", "mention-2"],
+    ["delete", "override-1"],
+  ])
 })
