@@ -16,11 +16,14 @@ import {
   canonicalizeExternalNewsUrl,
   decideExternalNewsIngest,
   decideExternalReview,
+  externalNewsSyncLimits,
   externalNewsIdentity,
   intersectActiveReviewers,
+  shouldExecuteExternalNewsSync,
   sourceSnapshotHash,
   type ExternalNewsFailureCode,
   type ExternalNewsSourceKey,
+  type ExternalNewsSyncTrigger,
 } from "./lib/externalNewsModel"
 import { fetchExternalNewsHtml, mapWithConcurrency } from "./lib/externalNewsFetch"
 import {
@@ -432,15 +435,20 @@ export const ingestFetchedItem = internalMutationGeneric({
   },
 })
 
-async function runSync(ctx: any, runId: Id<"externalNewsSyncRuns">) {
+async function runSync(
+  ctx: any,
+  runId: Id<"externalNewsSyncRuns">,
+  trigger: ExternalNewsSyncTrigger,
+) {
   const settings = await ctx.runQuery(getRunConfigurationRef, {})
-  if (!settings?.enabled) {
+  if (!shouldExecuteExternalNewsSync(trigger, settings)) {
     await ctx.runMutation(finishRunRef, { runId, discoveredCount: 0, draftCount: 0, failureCount: 0 })
     return
   }
   let discoveredCount = 0
   let draftCount = 0
   let failureCount = 0
+  const limits = externalNewsSyncLimits(trigger)
 
   for (const source of EXTERNAL_NEWS_SOURCES) {
     let sourceDiscovered = 0
@@ -449,15 +457,16 @@ async function runSync(ctx: any, runId: Id<"externalNewsSyncRuns">) {
     try {
       const items = new Map<string, { title: string; url: string; sourcePublishedAt?: number; coverImageUrl?: string }>()
       let pageUrl: string | undefined = source.listUrl
-      for (let page = 0; page < 5 && pageUrl; page += 1) {
+      for (let page = 0; page < limits.maxPages && pageUrl; page += 1) {
         const html = await fetchExternalNewsHtml(pageUrl)
         const parsed = parseExternalNewsList(source.key, html, pageUrl)
         for (const item of parsed.items) items.set(item.url, item)
         pageUrl = parsed.nextPageUrl
       }
-      sourceDiscovered = items.size
-      discoveredCount += items.size
-      const outcomes = await mapWithConcurrency([...items.values()], 2, async (item) => {
+      const selectedItems = [...items.values()].slice(0, limits.maxItemsPerSource)
+      sourceDiscovered = selectedItems.length
+      discoveredCount += selectedItems.length
+      const outcomes = await mapWithConcurrency(selectedItems, 2, async (item) => {
         try {
           const html = await fetchExternalNewsHtml(item.url)
           const detail = parseExternalNewsDetail(source.key, html, item.url)
@@ -501,15 +510,18 @@ async function runSync(ctx: any, runId: Id<"externalNewsSyncRuns">) {
 }
 
 export const executeRun = internalActionGeneric({
-  args: { runId: v.id("externalNewsSyncRuns") },
-  handler: async (ctx, args) => await runSync(ctx, args.runId),
+  args: {
+    runId: v.id("externalNewsSyncRuns"),
+    trigger: v.union(v.literal("cron"), v.literal("manual")),
+  },
+  handler: async (ctx, args) => await runSync(ctx, args.runId, args.trigger),
 })
 
 export const runScheduled = internalActionGeneric({
   args: {},
   handler: async (ctx) => {
     const runId = await ctx.runMutation(beginRunRef, { trigger: "cron" })
-    await runSync(ctx, runId)
+    await runSync(ctx, runId, "cron")
     return runId
   },
 })
@@ -519,7 +531,7 @@ export const runNow = actionGeneric({
   handler: async (ctx, args) => {
     const actor = await ctx.runQuery(requireSuperAdminRef, { sessionToken: args.sessionToken })
     const runId = await ctx.runMutation(beginRunRef, { trigger: "manual", requestedBy: actor.userId })
-    await ctx.scheduler.runAfter(0, executeRunRef, { runId })
+    await ctx.scheduler.runAfter(0, executeRunRef, { runId, trigger: "manual" })
     return runId
   },
 })

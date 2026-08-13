@@ -35,6 +35,22 @@ export type ExternalNewsIngestDecision =
   | "record_update"
   | "adopt_historical"
 
+export type ExternalNewsSyncTrigger = "cron" | "manual"
+
+export function externalNewsSyncLimits(trigger: ExternalNewsSyncTrigger) {
+  return trigger === "manual"
+    ? { maxPages: 1, maxItemsPerSource: 1 }
+    : { maxPages: 5, maxItemsPerSource: Infinity }
+}
+
+export function shouldExecuteExternalNewsSync(
+  trigger: ExternalNewsSyncTrigger,
+  settings: null | { enabled: boolean },
+): boolean {
+  if (!settings) return false
+  return trigger === "manual" || settings.enabled
+}
+
 const TRACKING_PARAMETER = /^(?:utm_.+|spm|from|source|fbclid|gclid)$/i
 
 export function canonicalizeExternalNewsUrl(value: string): string {

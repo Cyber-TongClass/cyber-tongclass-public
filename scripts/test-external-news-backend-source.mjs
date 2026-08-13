@@ -20,6 +20,9 @@ for (const exportedName of [
 }
 
 assert.match(workflow, /EXTERNAL_NEWS_SOURCES/, "the action must use only fixed source descriptors")
+assert.match(workflow, /externalNewsSyncLimits\(trigger\)/, "sync limits must depend on the run trigger")
+assert.match(workflow, /page < limits\.maxPages/, "manual sync must be able to stop after the first source page")
+assert.match(workflow, /slice\(0, limits\.maxItemsPerSource\)/, "manual sync must cap each source to its newest item")
 assert.doesNotMatch(workflow, /args:\s*\{[^}]*url:\s*v\.string\(\)/s, "no action may accept an arbitrary fetch URL")
 assert.match(workflow, /stage:\s*"source_review"/, "source review tasks must be explicit")
 assert.match(review, /stage:\s*"publication_approval"/, "publication approval tasks must be explicit")

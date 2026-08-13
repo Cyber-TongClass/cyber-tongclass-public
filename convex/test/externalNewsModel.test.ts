@@ -6,9 +6,23 @@ import {
   decideExternalReview,
   externalNewsIdentity,
   intersectActiveReviewers,
+  externalNewsSyncLimits,
+  shouldExecuteExternalNewsSync,
   sourceSnapshotHash,
 // @ts-ignore -- Node's strip-types test runner requires the explicit extension.
 } from "../lib/externalNewsModel.ts"
+
+test("manual runs ignore the automatic sync switch while cron runs respect it", () => {
+  assert.equal(shouldExecuteExternalNewsSync("manual", { enabled: false }), true)
+  assert.equal(shouldExecuteExternalNewsSync("cron", { enabled: false }), false)
+  assert.equal(shouldExecuteExternalNewsSync("cron", { enabled: true }), true)
+  assert.equal(shouldExecuteExternalNewsSync("manual", null), false)
+})
+
+test("manual runs fetch only the newest item from the first page of each source", () => {
+  assert.deepEqual(externalNewsSyncLimits("manual"), { maxPages: 1, maxItemsPerSource: 1 })
+  assert.deepEqual(externalNewsSyncLimits("cron"), { maxPages: 5, maxItemsPerSource: Infinity })
+})
 
 test("canonical identity removes fragments, tracking parameters, and duplicate slashes", () => {
   const canonical = canonicalizeExternalNewsUrl(
