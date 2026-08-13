@@ -8,10 +8,11 @@ import test from "node:test"
 
 const root = path.resolve(import.meta.dirname, "..")
 const outDir = mkdtempSync(path.join(tmpdir(), "oa-word-fill-"))
-execFileSync(path.join(root, "node_modules/.bin/esbuild"), [path.join(root, "src/lib/server/oa-word-fill.ts"), path.join(root, "src/lib/server/oa-word-export-data.ts"), "--bundle", "--platform=node", "--format=cjs", `--outdir=${outDir}`])
+execFileSync(path.join(root, "node_modules/.bin/esbuild"), [path.join(root, "src/lib/server/oa-word-fill.ts"), path.join(root, "src/lib/server/oa-word-export-data.ts"), path.join(root, "src/lib/server/oa-word-compiler.ts"), "--bundle", "--platform=node", "--format=cjs", `--outdir=${outDir}`])
 const require = createRequire(import.meta.url)
 const fill = require(path.join(outDir, "oa-word-fill.js"))
 const exportData = require(path.join(outDir, "oa-word-export-data.js"))
+const compiler = require(path.join(outDir, "oa-word-compiler.js"))
 const { buildSimpleZip } = require(path.join(root, "src/lib/server/simple-zip.ts"))
 const pkgDir = mkdtempSync(path.join(tmpdir(), "pkg-")); execFileSync(path.join(root, "node_modules/.bin/esbuild"), [path.join(root, "src/lib/server/ooxml-package.ts"), "--bundle", "--platform=node", "--format=cjs", `--outdir=${pkgDir}`]); const pkgModule = require(path.join(pkgDir, "ooxml-package.js"))
 const types = `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
@@ -65,6 +66,34 @@ test("marks only selected option-level choice targets and preserves option text 
   assert.match(xml, /<w:r><w:t>甲<\/w:t><\/w:r>/)
   assert.match(xml, /<w:r><w:t>乙<\/w:t><\/w:r>/)
   assert.equal((xml.match(/<w:color w:val="2468AC"\/>/g) || []).length, 2)
+})
+
+test("legacy mark_choice compiles and fills only markers without replacing its paragraph", () => {
+  const sourceBody = `<w:p><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/></w:rPr><w:t>类型：○教学 ○科研 ○管理</w:t></w:r></w:p>`
+  const input = docx(sourceBody)
+  const sourceXml = pkgModule.readOoxmlPackage(input).readText("word/document.xml")
+  const locator = compiler.inspectWordXmlPart(sourceXml).find((node) => node.localName === "p")
+  const field = { fieldId: "legacy_choice", label: "类型", answerType: "single_choice", required: true, options: ["教学", "科研", "管理"] }
+  const manifest = {
+    syntaxVersion: 1,
+    compilerVersion: "test",
+    fields: [field],
+    suggestions: [],
+    anchors: [{ fieldId: field.fieldId, kind: "radio_group", partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash, output: { mode: "mark_choice" } }],
+  }
+
+  const compiled = compiler.compileWordTemplate(input, manifest)
+  const output = fill.fillWordTemplate(compiled.bytes, { fields: [field], answers: { legacy_choice: "科研" } })
+  const xml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+
+  assert.match(xml, /类型：/)
+  assert.match(xml, /教学/)
+  assert.match(xml, /科研/)
+  assert.match(xml, /管理/)
+  assert.match(xml, /oa-choice:legacy_choice:0[\s\S]*?<w:t>☐<\/w:t>/)
+  assert.match(xml, /oa-choice:legacy_choice:1[\s\S]*?<w:t>☒<\/w:t>/)
+  assert.match(xml, /oa-choice:legacy_choice:2[\s\S]*?<w:t>☐<\/w:t>/)
+  assert.doesNotMatch(xml, /oa-field:legacy_choice/)
 })
 
 test("rejects overlong and malicious answers", () => {

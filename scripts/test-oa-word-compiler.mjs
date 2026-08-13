@@ -75,7 +75,7 @@ test("paragraph-after retains the instruction and clones compatible paragraph an
   assert.ok(resultXml.indexOf("oa-field:main_practice") < resultXml.indexOf("后续说明"))
 })
 
-test("choice compiles safe option-level marker SDTs while preserving option text", () => {
+test("choice compiles safe option-level marker SDTs across runs while preserving option text", () => {
   const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>类别：</w:t></w:r><w:r><w:rPr><w:color w:val="2468AC"/></w:rPr><w:t>□</w:t></w:r><w:r><w:t>甲</w:t></w:r><w:r><w:rPr><w:color w:val="2468AC"/></w:rPr><w:t>□</w:t></w:r><w:r><w:t>乙</w:t></w:r></w:p></w:body></w:document>`
   const field = { fieldId: "category", label: "类别", answerType: "single_choice", required: true, options: ["甲", "乙"] }
   const anchor = versionTwoAnchor(sourceXml, field.fieldId, "choice", "radio_group")
@@ -87,6 +87,24 @@ test("choice compiles safe option-level marker SDTs while preserving option text
   assert.match(resultXml, /<w:r><w:t>甲<\/w:t><\/w:r>/)
   assert.match(resultXml, /<w:r><w:t>乙<\/w:t><\/w:r>/)
   assert.equal((resultXml.match(/<w:color w:val="2468AC"\/>/g) || []).length, 2)
+})
+
+test("choice safely splits markers and option text that share one styled run", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:rFonts w:eastAsia="楷体"/><w:color w:val="13579B"/></w:rPr><w:t>类型：○教学 ○科研 ○管理</w:t></w:r></w:p></w:body></w:document>`
+  const field = { fieldId: "category", label: "类型", answerType: "single_choice", required: true, options: ["教学", "科研", "管理"] }
+  const anchor = versionTwoAnchor(sourceXml, field.fieldId, "choice", "radio_group")
+  const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+  const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+
+  assert.match(resultXml, /oa-choice:category:0/)
+  assert.match(resultXml, /oa-choice:category:1/)
+  assert.match(resultXml, /oa-choice:category:2/)
+  assert.match(resultXml, /类型：/)
+  assert.match(resultXml, /教学/)
+  assert.match(resultXml, /科研/)
+  assert.match(resultXml, /管理/)
+  assert.equal((resultXml.match(/<w:rFonts w:eastAsia="楷体"\/>/g) || []).length, 7)
+  assert.equal((resultXml.match(/<w:color w:val="13579B"\/>/g) || []).length, 7)
 })
 
 test("inline-run replaces the confirmed run while retaining its run style", () => {
@@ -122,7 +140,7 @@ test("uses all five explicit V2 write targets and preserves legacy V1 mappings",
   }
 
   const legacyLocator = compiler.inspectWordXmlPart(xml).find((node) => node.localName === "p")
-  for (const [mode, expected] of [["append", /姓名：.*oa-field:legacy/], ["mark_choice", /oa-field:legacy/]]) {
+  for (const [mode, expected] of [["append", /姓名：.*oa-field:legacy/]]) {
     const manifest = { syntaxVersion: 1, compilerVersion: "test", fields: [{ fieldId: "legacy", label: "旧字段", answerType: "text", required: false }], suggestions: [], anchors: [{ fieldId: "legacy", kind: "label_blank", partName: "word/document.xml", path: legacyLocator.path, contextHash: legacyLocator.contextHash, output: { mode } }] }
     assert.match(pkgModule.readOoxmlPackage(compiler.compileWordTemplate(bytes, manifest).bytes).readText("word/document.xml"), expected)
   }
@@ -137,4 +155,18 @@ test("uses all five explicit V2 write targets and preserves legacy V1 mappings",
     const manifest = { syntaxVersion: 1, compilerVersion: "test", fields: [{ fieldId: "legacy", label: "旧字段", answerType: "text", required: false }], suggestions: [], anchors: [{ fieldId: "legacy", kind: legacyCase.kind, partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash, output: { mode: legacyCase.mode } }] }
     assert.match(pkgModule.readOoxmlPackage(compiler.compileWordTemplate(docx(sourceXml), manifest).bytes).readText("word/document.xml"), legacyCase.expected)
   }
+
+  const legacyChoiceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>类型：○教学 ○科研</w:t></w:r></w:p></w:body></w:document>`
+  const legacyChoiceLocator = compiler.inspectWordXmlPart(legacyChoiceXml).find((node) => node.localName === "p")
+  const legacyChoiceManifest = {
+    syntaxVersion: 1,
+    compilerVersion: "test",
+    fields: [{ fieldId: "legacy_choice", label: "类型", answerType: "single_choice", required: false, options: ["教学", "科研"] }],
+    suggestions: [],
+    anchors: [{ fieldId: "legacy_choice", kind: "radio_group", partName: "word/document.xml", path: legacyChoiceLocator.path, contextHash: legacyChoiceLocator.contextHash, output: { mode: "mark_choice" } }],
+  }
+  const legacyChoiceResult = pkgModule.readOoxmlPackage(compiler.compileWordTemplate(docx(legacyChoiceXml), legacyChoiceManifest).bytes).readText("word/document.xml")
+  assert.match(legacyChoiceResult, /oa-choice:legacy_choice:0/)
+  assert.match(legacyChoiceResult, /oa-choice:legacy_choice:1/)
+  assert.doesNotMatch(legacyChoiceResult, /oa-field:legacy_choice/)
 })

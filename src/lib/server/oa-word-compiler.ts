@@ -79,7 +79,12 @@ function createSdt(
 }
 
 function explicitWriteTarget(anchor: OADocumentAnchor) {
-  return anchor.structural?.writeTarget
+  if (anchor.structural?.writeTarget) return anchor.structural.writeTarget
+  if (anchor.output.mode === "mark_choice") return "choice"
+  if (anchor.output.mode === "repeat_row") return "repeat-row"
+  if (anchor.output.mode === "append") return "inline-run"
+  if (anchor.output.mode === "replace" && anchor.kind === "table_cell") return "table-cell"
+  return undefined
 }
 
 function firstRunProperties(element: WordXmlElement) {
@@ -104,32 +109,68 @@ function insertParagraphAfter(document: WordXmlDocument, target: WordXmlElement,
   parent.insertBefore(paragraph, target.nextSibling)
 }
 
+function runText(run: WordXmlElement) {
+  return descendantElements(run, "t").map((item) => item.textContent || "").join("")
+}
+
+function choiceMarkerMatches(value: string) {
+  return [...value.matchAll(/[□☐○◯☒☑●■]/g)]
+}
+
+function createStyledTextRun(document: WordXmlDocument, prototype: WordXmlElement, value: string) {
+  const run = createWordElement(document, "r")
+  const runProperties = childElements(prototype, "rPr")[0]
+  if (runProperties) run.appendChild(cloneElementDeep(runProperties))
+  const text = createWordElement(document, "t")
+  if (/^\s|\s$|\s{2}/.test(value)) text.setAttribute("xml:space", "preserve")
+  text.appendChild(document.createTextNode(value))
+  run.appendChild(text)
+  return run
+}
+
 function compileChoice(document: WordXmlDocument, target: WordXmlElement, anchor: OADocumentAnchor, field: OADocumentManifestField) {
   const options = field.options || []
-  const markerRuns = descendantElements(target, "r").filter((run) => {
-    const text = descendantElements(run, "t").map((item) => item.textContent || "").join("").trim()
-    return /^[□☐○◯☒☑●■]$/.test(text)
-  })
-  if (!options.length || markerRuns.length !== options.length) {
+  const runs = descendantElements(target, "r")
+  const markerCount = runs.reduce((count, run) => count + choiceMarkerMatches(runText(run)).length, 0)
+  if (!options.length || markerCount !== options.length) {
     throw new Error(`选项字段“${field.label}”无法安全匹配选项标记`)
   }
-  markerRuns.forEach((run, index) => {
+  let optionIndex = 0
+  for (const run of runs) {
+    const value = runText(run)
+    const markerMatches = choiceMarkerMatches(value)
+    if (!markerMatches.length) continue
+    const supportedChildren = childElements(run).every((child) => {
+      const localName = child.localName || child.nodeName.split(":").at(-1)
+      return localName === "rPr" || localName === "t"
+    })
+    if (!supportedChildren) throw new Error(`选项字段“${field.label}”包含无法安全拆分的复杂标记`)
     const parent = run.parentNode
     if (!parent) throw new Error(`选项锚点定位已失效：${anchor.path}`)
-    const { sdt, content } = createSdt(
-      document,
-      field,
-      anchor,
-      false,
-      false,
-      `oa-choice:${field.fieldId}:${index}`,
-      undefined,
-      `|choice:${index}`,
-    )
-    content.removeChild(content.firstChild!)
-    parent.replaceChild(sdt, run)
-    content.appendChild(run)
-  })
+    let offset = 0
+    for (const match of markerMatches) {
+      const markerOffset = match.index
+      if (markerOffset > offset) parent.insertBefore(createStyledTextRun(document, run, value.slice(offset, markerOffset)), run)
+      const markerRun = createStyledTextRun(document, run, match[0])
+      const { sdt, content } = createSdt(
+        document,
+        field,
+        anchor,
+        false,
+        false,
+        `oa-choice:${field.fieldId}:${optionIndex}`,
+        undefined,
+        `|choice:${optionIndex}`,
+      )
+      content.removeChild(content.firstChild!)
+      content.appendChild(markerRun)
+      parent.insertBefore(sdt, run)
+      optionIndex += 1
+      offset = markerOffset + match[0].length
+    }
+    if (offset < value.length) parent.insertBefore(createStyledTextRun(document, run, value.slice(offset)), run)
+    parent.removeChild(run)
+  }
 }
 
 function updateExistingSdt(target: WordXmlElement, field: OADocumentManifestField, anchor: OADocumentAnchor) {
