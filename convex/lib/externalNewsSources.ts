@@ -82,39 +82,45 @@ function hasClass(node: HtmlNode, className: string): boolean {
   return (node.attrs.class ?? "").split(/\s+/).includes(className)
 }
 
-// Keep selectors in four named adapters: one source can fail closed without
-// broadening selectors for the other columns.
-const newsAdapter: SourceAdapter = {
-  listRoot: (node) => node.tag === "ul" && hasClass(node, "news-list"),
-  listItem: (node) => node.tag === "li",
-  detailTitle: (node) => node.tag === "h1" && hasClass(node, "news-title"),
-  detailDate: (node) => hasClass(node, "news-date"),
-  detailContent: (node) => node.tag === "main" && hasClass(node, "news-content"),
+function isAiaListItem(node: HtmlNode): boolean {
+  if (node.tag !== "div" || !hasClass(node, "lists")) return false
+  const textColumn = first(node, (candidate) => candidate.tag === "div" && hasClass(candidate, "liststext2"))
+  return Boolean(textColumn && first(textColumn, (candidate) => candidate.tag === "div" && hasClass(candidate, "listtext_tit")))
 }
 
-const noticesAdapter: SourceAdapter = {
-  listRoot: (node) => node.tag === "div" && hasClass(node, "notice-list"),
-  listItem: (node) => node.tag === "article",
-  detailTitle: (node) => node.tag === "h1" && hasClass(node, "notice-title"),
-  detailDate: (node) => hasClass(node, "notice-date"),
-  detailContent: (node) => node.tag === "div" && hasClass(node, "notice-content"),
+function isAiaListRoot(node: HtmlNode): boolean {
+  return node.tag === "div"
+    && hasClass(node, "col-md-12")
+    && Boolean(first(node, isAiaListItem))
 }
 
-const researchProgressAdapter: SourceAdapter = {
-  listRoot: (node) => node.tag === "section" && hasClass(node, "research-list"),
-  listItem: (node) => node.tag === "div" && hasClass(node, "research-item"),
-  detailTitle: (node) => node.tag === "h1" && hasClass(node, "research-title"),
-  detailDate: (node) => hasClass(node, "research-date"),
-  detailContent: (node) => node.tag === "article" && hasClass(node, "research-content"),
+function isAiaDetailTitle(node: HtmlNode): boolean {
+  return node.tag === "h1" && node.attrs.align?.toLowerCase() === "center"
 }
 
-const academicLecturesAdapter: SourceAdapter = {
-  listRoot: (node) => node.tag === "section" && hasClass(node, "lecture-list"),
-  listItem: (node) => node.tag === "div" && hasClass(node, "lecture-item"),
-  detailTitle: (node) => node.tag === "h1" && hasClass(node, "lecture-title"),
-  detailDate: (node) => hasClass(node, "lecture-date"),
-  detailContent: (node) => node.tag === "article" && hasClass(node, "lecture-content"),
+function isAiaDetailDate(node: HtmlNode): boolean {
+  return node.tag === "h3" && textContent(node).includes("发布时间")
 }
+
+function isAiaDetailContent(node: HtmlNode): boolean {
+  return node.tag === "div" && hasClass(node, "v_news_content")
+}
+
+// The four live columns currently share the same AIA CMS template. Keep a
+// separately addressable adapter per source so a future one-column redesign
+// can still fail closed without loosening the other three.
+const liveAiaAdapter: SourceAdapter = {
+  listRoot: isAiaListRoot,
+  listItem: isAiaListItem,
+  detailTitle: isAiaDetailTitle,
+  detailDate: isAiaDetailDate,
+  detailContent: isAiaDetailContent,
+}
+
+const newsAdapter: SourceAdapter = { ...liveAiaAdapter }
+const noticesAdapter: SourceAdapter = { ...liveAiaAdapter }
+const researchProgressAdapter: SourceAdapter = { ...liveAiaAdapter }
+const academicLecturesAdapter: SourceAdapter = { ...liveAiaAdapter }
 
 function adapterFor(sourceKey: ExternalNewsSourceKey): SourceAdapter {
   switch (sourceKey) {
@@ -145,10 +151,13 @@ function parseListWithAdapter(adapter: SourceAdapter, html: string, pageUrl: str
   if (!root) throw new Error("list_parse_failed: missing_list_container")
   const itemNodes = findAll(root, adapter.listItem)
   const items = itemNodes.map((item, index) => {
-    const anchor = first(item, (node) => node.tag === "a" && Boolean(node.attrs.href))
+    const titleContainer = first(item, (node) => node.tag === "div" && hasClass(node, "listtext_tit"))
+    const anchor = titleContainer
+      ? first(titleContainer, (node) => node.tag === "a" && Boolean(node.attrs.href))
+      : undefined
     const title = anchor ? textContent(anchor) : ""
     if (!anchor || !title) throw new Error(`list_parse_failed: missing_item_${index + 1}`)
-    const image = first(anchor, (node) => node.tag === "img")
+    const image = first(item, (node) => node.tag === "img")
     return {
       title,
       url: requiredUrl(anchor.attrs.href, pageUrl, "list_parse_failed"),
@@ -158,7 +167,10 @@ function parseListWithAdapter(adapter: SourceAdapter, html: string, pageUrl: str
   })
   if (items.length === 0) throw new Error("list_parse_failed: empty_list")
 
-  const next = first(tree, (node) => node.tag === "a" && hasClass(node, "next") && Boolean(node.attrs.href))
+  const nextContainer = first(root, (node) => node.tag === "span" && hasClass(node, "p_next"))
+  const next = nextContainer
+    ? first(nextContainer, (node) => node.tag === "a" && Boolean(node.attrs.href))
+    : undefined
   return {
     items,
     nextPageUrl: next ? requiredUrl(next.attrs.href, pageUrl, "list_parse_failed") : undefined,

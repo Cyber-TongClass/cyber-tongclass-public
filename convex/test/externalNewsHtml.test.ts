@@ -12,7 +12,7 @@ import {
 import { parseHtmlTree, safeAbsoluteContentUrl, sanitizedMarkdown } from "../lib/externalNewsHtml.ts"
 
 for (const source of EXTERNAL_NEWS_SOURCES) {
-  test(`${source.key} parses relative URLs, dates, images, and pagination`, async () => {
+  test(`${source.key} parses the live AIA list structure, dates, and pagination`, async () => {
     const html = await readFile(
       new URL(`./fixtures/external-news/${source.fixturePrefix}-list.html`, import.meta.url),
       "utf8",
@@ -22,7 +22,7 @@ for (const source of EXTERNAL_NEWS_SOURCES) {
     assert.equal(result.items.length, 2)
     assert.match(result.items[0].url, /^https:\/\/www\.ai\.pku\.edu\.cn\//)
     assert.ok(result.items[0].sourcePublishedAt)
-    assert.match(result.items[0].coverImageUrl ?? "", /^https:\/\/www\.ai\.pku\.edu\.cn\//)
+    assert.equal(result.items[0].coverImageUrl, undefined)
     assert.ok(result.nextPageUrl)
   })
 
@@ -39,6 +39,22 @@ for (const source of EXTERNAL_NEWS_SOURCES) {
     assert.match(result.coverImageUrl ?? "", /^https:\/\/www\.ai\.pku\.edu\.cn\//)
   })
 }
+
+test("AIA list parser ignores similarly named navigation outside the verified result root", () => {
+  const source = EXTERNAL_NEWS_SOURCES[0]
+  const html = `
+    <nav><div class="lists"><a href="/evil-navigation.htm">导航链接</a></div></nav>
+    <div class="col-md-12">
+      <div class="lists clearfix"><div class="liststext2 fr">
+        <div class="listtext_tit"><a href="../info/1086/4130.htm">真实新闻</a></div>
+        <div class="listtext_cont">2026-08-05</div>
+      </div></div>
+    </div>`
+
+  const result = parseExternalNewsList(source.key, html, source.listUrl)
+  assert.equal(result.items.length, 1)
+  assert.equal(result.items[0].title, "真实新闻")
+})
 
 test("malformed detail fails with a bounded parser code", async () => {
   const source = EXTERNAL_NEWS_SOURCES[0]
