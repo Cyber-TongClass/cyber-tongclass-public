@@ -157,6 +157,22 @@ function fillDocument(document: WordXmlDocument, submission: FillWordSubmission,
     fillSdtElement(sdt, value)
     filled += 1
   }
+  for (const sdt of descendantElements(within || document, "sdt")) {
+    const match = /^oa-choice:([a-zA-Z][a-zA-Z0-9_-]{0,127}):(\d+)$/.exec(sdtTag(sdt))
+    if (!match) continue
+    const field = fields.get(match[1])
+    const optionIndex = Number(match[2])
+    const option = field?.options?.[optionIndex]
+    let selected = false
+    if (field && option !== undefined) {
+      const value = submission.answers[field.fieldId]
+      if (field.answerType === "single_choice") selected = normalized.get(field.fieldId) === option
+      else if (field.answerType === "multiple_choice") selected = Array.isArray(value) && value.includes(option)
+      else throw new Error(`字段“${field.label}”不是选项字段`)
+    }
+    fillSdtElement(sdt, selected ? "☒" : "☐")
+    filled += 1
+  }
   return filled
 }
 

@@ -42,6 +42,31 @@ test("fills trusted scalar and multi-choice values with escaping and line breaks
   assert.equal(pkg.readText("word/styles.xml"), "UNCHANGED")
 })
 
+test("fills styled paragraph-after narratives with Word breaks and retained formatting", () => {
+  const input = docx(`<w:p><w:pPr><w:pStyle w:val="Narrative"/><w:spacing w:line="360"/></w:pPr><w:sdt><w:sdtPr><w:tag w:val="oa-field:multi"/></w:sdtPr><w:sdtContent><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="24"/></w:rPr><w:t> </w:t></w:r></w:sdtContent></w:sdt></w:p>`)
+  const output = fill.fillWordTemplate(input, { fields, answers: { multi: "第一段\n第二段" } })
+  const xml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+
+  assert.match(xml, /<w:pPr><w:pStyle w:val="Narrative"\/><w:spacing w:line="360"\/><\/w:pPr>/)
+  assert.match(xml, /第一段/)
+  assert.match(xml, /<w:r><w:rPr><w:rFonts w:eastAsia="宋体"\/><w:sz w:val="24"\/><\/w:rPr><w:br\/><\/w:r>/)
+  assert.match(xml, /第二段/)
+  assert.equal((xml.match(/<w:rFonts w:eastAsia="宋体"\/>/g) || []).length, 3)
+})
+
+test("marks only selected option-level choice targets and preserves option text and marker style", () => {
+  const choice = fields.find((field) => field.fieldId === "choice")
+  const input = docx(`<w:p><w:r><w:t>类别：</w:t></w:r><w:sdt><w:sdtPr><w:tag w:val="oa-choice:choice:0"/></w:sdtPr><w:sdtContent><w:r><w:rPr><w:color w:val="2468AC"/></w:rPr><w:t>□</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t>甲</w:t></w:r><w:sdt><w:sdtPr><w:tag w:val="oa-choice:choice:1"/></w:sdtPr><w:sdtContent><w:r><w:rPr><w:color w:val="2468AC"/></w:rPr><w:t>□</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t>乙</w:t></w:r></w:p>`)
+  const output = fill.fillWordTemplate(input, { fields: [choice], answers: { choice: "乙" } })
+  const xml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+
+  assert.match(xml, /oa-choice:choice:0[\s\S]*?<w:t>☐<\/w:t>/)
+  assert.match(xml, /oa-choice:choice:1[\s\S]*?<w:t>☒<\/w:t>/)
+  assert.match(xml, /<w:r><w:t>甲<\/w:t><\/w:r>/)
+  assert.match(xml, /<w:r><w:t>乙<\/w:t><\/w:r>/)
+  assert.equal((xml.match(/<w:color w:val="2468AC"\/>/g) || []).length, 2)
+})
+
 test("rejects overlong and malicious answers", () => {
   const input = docx(`<w:p>${sdt("text")}</w:p>`)
   assert.throws(() => fill.fillWordTemplate(input, { fields, answers: { text: "x".repeat(21) } }), /长度/)

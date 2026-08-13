@@ -8,6 +8,7 @@ import {
 import { readOoxmlPackage } from "@/lib/server/ooxml-package"
 import {
   childElements,
+  cloneElementDeep,
   createWordElement,
   descendantElements,
   findElementByStructuralPath,
@@ -36,8 +37,9 @@ function stableNumericId(fieldId: string, partName: string, path: string) {
   return String(createHash("sha256").update(`${fieldId}|${partName}|${path}`).digest().readUInt32BE(0) & 0x7fffffff)
 }
 
-function createPlaceholderContent(document: WordXmlDocument, block: boolean) {
+function createPlaceholderContent(document: WordXmlDocument, block: boolean, runProperties?: WordXmlElement) {
   const run = createWordElement(document, "r")
+  if (runProperties) run.appendChild(cloneElementDeep(runProperties))
   const text = createWordElement(document, "t")
   text.setAttribute("xml:space", "preserve")
   text.appendChild(document.createTextNode(" "))
@@ -48,23 +50,86 @@ function createPlaceholderContent(document: WordXmlDocument, block: boolean) {
   return paragraph
 }
 
-function createSdt(document: WordXmlDocument, field: OADocumentManifestField, anchor: OADocumentAnchor, block: boolean, repeat = false) {
+function createSdt(
+  document: WordXmlDocument,
+  field: OADocumentManifestField,
+  anchor: OADocumentAnchor,
+  block: boolean,
+  repeat = false,
+  tagValue = `${repeat ? "oa-repeat" : "oa-field"}:${field.fieldId}`,
+  runProperties?: WordXmlElement,
+  idDiscriminator = "",
+) {
   const sdt = createWordElement(document, "sdt")
   const properties = createWordElement(document, "sdtPr")
   const alias = createWordElement(document, "alias")
   setWordAttribute(alias, "val", field.label)
   const tag = createWordElement(document, "tag")
-  setWordAttribute(tag, "val", `${repeat ? "oa-repeat" : "oa-field"}:${field.fieldId}`)
+  setWordAttribute(tag, "val", tagValue)
   const id = createWordElement(document, "id")
-  setWordAttribute(id, "val", stableNumericId(field.fieldId, anchor.partName, anchor.path))
+  setWordAttribute(id, "val", stableNumericId(field.fieldId, anchor.partName, `${anchor.path}${idDiscriminator}`))
   properties.appendChild(alias)
   properties.appendChild(tag)
   properties.appendChild(id)
   const content = createWordElement(document, "sdtContent")
-  content.appendChild(createPlaceholderContent(document, block))
+  content.appendChild(createPlaceholderContent(document, block, runProperties))
   sdt.appendChild(properties)
   sdt.appendChild(content)
   return { sdt, content }
+}
+
+function explicitWriteTarget(anchor: OADocumentAnchor) {
+  return anchor.structural?.writeTarget
+}
+
+function firstRunProperties(element: WordXmlElement) {
+  const localName = element.localName || element.nodeName.split(":").at(-1)
+  const firstRun = localName === "r" ? element : descendantElements(element, "r")[0]
+  return firstRun ? childElements(firstRun, "rPr")[0] : undefined
+}
+
+function insertParagraphAfter(document: WordXmlDocument, target: WordXmlElement, anchor: OADocumentAnchor, field: OADocumentManifestField) {
+  const parent = target.parentNode
+  if (!parent) throw new Error(`段落锚点定位已失效：${anchor.path}`)
+  const styleSourcePath = anchor.structural?.styleSourcePath
+  const styleSource = styleSourcePath ? findElementByStructuralPath(document, styleSourcePath) : target
+  if (!styleSource || (styleSource.localName || styleSource.nodeName.split(":").at(-1)) !== "p") {
+    throw new Error(`段落样式来源已失效：${styleSourcePath || anchor.path}`)
+  }
+  const paragraph = createWordElement(document, "p")
+  const paragraphProperties = childElements(styleSource, "pPr")[0]
+  if (paragraphProperties) paragraph.appendChild(cloneElementDeep(paragraphProperties))
+  const { sdt } = createSdt(document, field, anchor, false, false, `oa-field:${field.fieldId}`, firstRunProperties(styleSource))
+  paragraph.appendChild(sdt)
+  parent.insertBefore(paragraph, target.nextSibling)
+}
+
+function compileChoice(document: WordXmlDocument, target: WordXmlElement, anchor: OADocumentAnchor, field: OADocumentManifestField) {
+  const options = field.options || []
+  const markerRuns = descendantElements(target, "r").filter((run) => {
+    const text = descendantElements(run, "t").map((item) => item.textContent || "").join("").trim()
+    return /^[□☐○◯☒☑●■]$/.test(text)
+  })
+  if (!options.length || markerRuns.length !== options.length) {
+    throw new Error(`选项字段“${field.label}”无法安全匹配选项标记`)
+  }
+  markerRuns.forEach((run, index) => {
+    const parent = run.parentNode
+    if (!parent) throw new Error(`选项锚点定位已失效：${anchor.path}`)
+    const { sdt, content } = createSdt(
+      document,
+      field,
+      anchor,
+      false,
+      false,
+      `oa-choice:${field.fieldId}:${index}`,
+      undefined,
+      `|choice:${index}`,
+    )
+    content.removeChild(content.firstChild!)
+    parent.replaceChild(sdt, run)
+    content.appendChild(run)
+  })
 }
 
 function updateExistingSdt(target: WordXmlElement, field: OADocumentManifestField, anchor: OADocumentAnchor) {
@@ -89,6 +154,46 @@ function updateExistingSdt(target: WordXmlElement, field: OADocumentManifestFiel
 function wrapTarget(document: WordXmlDocument, target: WordXmlElement, anchor: OADocumentAnchor, field: OADocumentManifestField) {
   if (anchor.kind === "content_control" || target.localName === "sdt" || target.nodeName.endsWith(":sdt")) {
     updateExistingSdt(target, field, anchor)
+    return
+  }
+  const writeTarget = explicitWriteTarget(anchor)
+  if (writeTarget === "paragraph-after") {
+    insertParagraphAfter(document, target, anchor, field)
+    return
+  }
+  if (writeTarget === "choice") {
+    compileChoice(document, target, anchor, field)
+    return
+  }
+  if (writeTarget === "repeat-row") {
+    const parent = target.parentNode
+    if (!parent) throw new Error(`重复行定位已失效：${anchor.path}`)
+    const { sdt, content } = createSdt(document, field, anchor, true, true)
+    content.removeChild(content.firstChild!)
+    parent.replaceChild(sdt, target)
+    content.appendChild(target)
+    return
+  }
+  if (writeTarget === "table-cell") {
+    const localName = target.localName || target.nodeName.split(":").at(-1)
+    if (localName !== "tc") throw new Error(`表格单元格锚点类型无效：${anchor.path}`)
+    const { sdt } = createSdt(document, field, anchor, true)
+    const properties = childElements(target, "tcPr")[0]
+    for (const child of [...childElements(target)]) if (child !== properties) target.removeChild(child)
+    target.appendChild(sdt)
+    return
+  }
+  if (writeTarget === "inline-run") {
+    const localName = target.localName || target.nodeName.split(":").at(-1)
+    if (localName === "p") {
+      const { sdt } = createSdt(document, field, anchor, false, false, `oa-field:${field.fieldId}`, firstRunProperties(target))
+      target.appendChild(sdt)
+      return
+    }
+    const parent = target.parentNode
+    if (!parent) throw new Error(`行内锚点定位已失效：${anchor.path}`)
+    const { sdt } = createSdt(document, field, anchor, false, false, `oa-field:${field.fieldId}`, firstRunProperties(target))
+    parent.replaceChild(sdt, target)
     return
   }
   if (anchor.kind === "repeat_row" || anchor.output.mode === "repeat_row") {

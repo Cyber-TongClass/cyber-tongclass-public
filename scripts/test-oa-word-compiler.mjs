@@ -20,6 +20,26 @@ const types = `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.
 const rels = `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`
 const bytes = buildSimpleZip([{ name: "[Content_Types].xml", data: types }, { name: "_rels/.rels", data: rels }, { name: "word/document.xml", data: xml }, { name: "word/styles.xml", data: "UNCHANGED" }])
 
+function docx(documentXml) {
+  return buildSimpleZip([{ name: "[Content_Types].xml", data: types }, { name: "_rels/.rels", data: rels }, { name: "word/document.xml", data: documentXml }, { name: "word/styles.xml", data: "UNCHANGED" }])
+}
+
+function versionTwoAnchor(sourceXml, fieldId, writeTarget, kind = "label_blank") {
+  const locator = compiler.inspectWordXmlPart(sourceXml).find((node) => node.localName === (writeTarget === "table-cell" ? "tc" : writeTarget === "repeat-row" ? "tr" : "p"))
+  const structural = { partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash, writeTarget }
+  return {
+    fieldId,
+    kind,
+    partName: structural.partName,
+    path: structural.path,
+    contextHash: structural.contextHash,
+    output: { mode: writeTarget === "repeat-row" ? "repeat_row" : writeTarget === "choice" ? "mark_choice" : writeTarget === "inline-run" ? "append" : "replace" },
+    visual: { page: 1, x: 0.1, y: 0.1, width: 0.8, height: 0.1, pageWidth: 595, pageHeight: 842, rotation: 0, coordinateSpace: "normalized-pdf" },
+    bindingCandidateId: `candidate_${fieldId}`,
+    structural,
+  }
+}
+
 test("compiles stable SDTs into targeted parts and preserves untouched entries", () => {
   const locator = compiler.inspectWordXmlPart(xml).find((node) => node.localName === "p")
   const manifest = { syntaxVersion: 1, compilerVersion: "test", fields: [{ fieldId: "field_name", label: `姓名 & \"称呼\"`, answerType: "text", required: true }], suggestions: [], anchors: [{ fieldId: "field_name", kind: "label_blank", partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash, output: { mode: "append" } }] }
@@ -38,4 +58,83 @@ test("rejects stale locators and unresolved manifests", () => {
   const base = { syntaxVersion: 1, compilerVersion: "test", fields: [{ fieldId: "field_name", label: "姓名", answerType: "text", required: true }], suggestions: [], anchors: [{ fieldId: "field_name", kind: "label_blank", partName: "word/document.xml", path: locator.path, contextHash: "0000000000000000", output: { mode: "append" } }] }
   assert.throws(() => compiler.compileWordTemplate(bytes, base), /已变化|定位/)
   assert.throws(() => compiler.compileWordTemplate(bytes, { ...base, anchors: [{ ...base.anchors[0], contextHash: locator.contextHash }], suggestions: [{ id: "x", kind: "label_blank", label: "x", inferredAnswerType: "text", confidence: "low", reviewState: "unresolved", evidence: ["x"], conflictIds: [], partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash }] }), /未解决/)
+})
+
+test("paragraph-after retains the instruction and clones compatible paragraph and run styles into a sibling block SDT", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Narrative"/><w:spacing w:line="360"/><w:ind w:firstLine="420"/></w:pPr><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="24"/></w:rPr><w:t>主要做法（不超过500字）：</w:t></w:r></w:p><w:p><w:r><w:t>后续说明</w:t></w:r></w:p></w:body></w:document>`
+  const field = { fieldId: "main_practice", label: "主要做法", answerType: "textarea", required: true }
+  const anchor = versionTwoAnchor(sourceXml, field.fieldId, "paragraph-after")
+  const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+  const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+
+  assert.match(resultXml, /主要做法（不超过500字）：/)
+  assert.match(resultXml, /<w:p><w:pPr><w:pStyle w:val="Narrative"\/><w:spacing w:line="360"\/><w:ind w:firstLine="420"\/><\/w:pPr><w:sdt>/)
+  assert.match(resultXml, /oa-field:main_practice/)
+  assert.match(resultXml, /<w:r><w:rPr><w:rFonts w:eastAsia="宋体"\/><w:sz w:val="24"\/><\/w:rPr><w:t xml:space="preserve"> <\/w:t><\/w:r>/)
+  assert.ok(resultXml.indexOf("主要做法（不超过500字）：") < resultXml.indexOf("oa-field:main_practice"))
+  assert.ok(resultXml.indexOf("oa-field:main_practice") < resultXml.indexOf("后续说明"))
+})
+
+test("choice compiles safe option-level marker SDTs while preserving option text", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>类别：</w:t></w:r><w:r><w:rPr><w:color w:val="2468AC"/></w:rPr><w:t>□</w:t></w:r><w:r><w:t>甲</w:t></w:r><w:r><w:rPr><w:color w:val="2468AC"/></w:rPr><w:t>□</w:t></w:r><w:r><w:t>乙</w:t></w:r></w:p></w:body></w:document>`
+  const field = { fieldId: "category", label: "类别", answerType: "single_choice", required: true, options: ["甲", "乙"] }
+  const anchor = versionTwoAnchor(sourceXml, field.fieldId, "choice", "radio_group")
+  const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+  const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+
+  assert.match(resultXml, /oa-choice:category:0/)
+  assert.match(resultXml, /oa-choice:category:1/)
+  assert.match(resultXml, /<w:r><w:t>甲<\/w:t><\/w:r>/)
+  assert.match(resultXml, /<w:r><w:t>乙<\/w:t><\/w:r>/)
+  assert.equal((resultXml.match(/<w:color w:val="2468AC"\/>/g) || []).length, 2)
+})
+
+test("inline-run replaces the confirmed run while retaining its run style", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>姓名：</w:t></w:r><w:r><w:rPr><w:u w:val="single"/><w:rFonts w:eastAsia="楷体"/></w:rPr><w:t>____</w:t></w:r></w:p></w:body></w:document>`
+  const locator = compiler.inspectWordXmlPart(sourceXml).filter((node) => node.localName === "r")[1]
+  const field = { fieldId: "name", label: "姓名", answerType: "text", required: true }
+  const structural = { partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash, writeTarget: "inline-run" }
+  const anchor = {
+    fieldId: field.fieldId, kind: "underline", partName: structural.partName, path: structural.path, contextHash: structural.contextHash,
+    output: { mode: "append" }, visual: { page: 1, x: 0.1, y: 0.1, width: 0.8, height: 0.1, pageWidth: 595, pageHeight: 842, rotation: 0, coordinateSpace: "normalized-pdf" },
+    bindingCandidateId: "candidate_name", structural,
+  }
+  const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+  const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+
+  assert.match(resultXml, /oa-field:name/)
+  assert.match(resultXml, /<w:rPr><w:u w:val="single"\/><w:rFonts w:eastAsia="楷体"\/><\/w:rPr>/)
+  assert.doesNotMatch(resultXml, /____/)
+})
+
+test("uses all five explicit V2 write targets and preserves legacy V1 mappings", () => {
+  const cases = [
+    { writeTarget: "table-cell", kind: "table_cell", source: `<w:tbl><w:tr><w:tc><w:tcPr><w:tcW w:w="2400"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>`, expected: /<w:tcPr><w:tcW w:w="2400"\/><\/w:tcPr><w:sdt>/ },
+    { writeTarget: "inline-run", kind: "underline", source: `<w:p><w:r><w:t>姓名：</w:t></w:r></w:p>`, expected: /姓名：.*oa-field:field_target/ },
+    { writeTarget: "repeat-row", kind: "repeat_row", source: `<w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>`, expected: /oa-repeat:field_target/ },
+  ]
+  for (const { writeTarget, kind, source, expected } of cases) {
+    const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${source}</w:body></w:document>`
+    const field = { fieldId: "field_target", label: "目标", answerType: "text", required: false }
+    const anchor = versionTwoAnchor(sourceXml, field.fieldId, writeTarget, kind)
+    const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+    assert.match(pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml"), expected)
+  }
+
+  const legacyLocator = compiler.inspectWordXmlPart(xml).find((node) => node.localName === "p")
+  for (const [mode, expected] of [["append", /姓名：.*oa-field:legacy/], ["mark_choice", /oa-field:legacy/]]) {
+    const manifest = { syntaxVersion: 1, compilerVersion: "test", fields: [{ fieldId: "legacy", label: "旧字段", answerType: "text", required: false }], suggestions: [], anchors: [{ fieldId: "legacy", kind: "label_blank", partName: "word/document.xml", path: legacyLocator.path, contextHash: legacyLocator.contextHash, output: { mode } }] }
+    assert.match(pkgModule.readOoxmlPackage(compiler.compileWordTemplate(bytes, manifest).bytes).readText("word/document.xml"), expected)
+  }
+
+  const legacyCases = [
+    { mode: "replace", kind: "table_cell", source: `<w:tbl><w:tr><w:tc><w:tcPr><w:tcW w:w="1200"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>`, localName: "tc", expected: /<w:tcPr><w:tcW w:w="1200"\/><\/w:tcPr><w:sdt>/ },
+    { mode: "repeat_row", kind: "repeat_row", source: `<w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>`, localName: "tr", expected: /oa-repeat:legacy/ },
+  ]
+  for (const legacyCase of legacyCases) {
+    const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${legacyCase.source}</w:body></w:document>`
+    const locator = compiler.inspectWordXmlPart(sourceXml).find((node) => node.localName === legacyCase.localName)
+    const manifest = { syntaxVersion: 1, compilerVersion: "test", fields: [{ fieldId: "legacy", label: "旧字段", answerType: "text", required: false }], suggestions: [], anchors: [{ fieldId: "legacy", kind: legacyCase.kind, partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash, output: { mode: legacyCase.mode } }] }
+    assert.match(pkgModule.readOoxmlPackage(compiler.compileWordTemplate(docx(sourceXml), manifest).bytes).readText("word/document.xml"), legacyCase.expected)
+  }
 })
