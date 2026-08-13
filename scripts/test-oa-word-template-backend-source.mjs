@@ -25,6 +25,8 @@ test("Word template backend exposes the immutable version lifecycle", async () =
   assert.match(code, /oa-form-template-derived/)
   assert.match(code, /item\?\.reviewState === "unresolved"/)
   assert.match(code, /item\.conflictIds\.length > 0/)
+  assert.doesNotMatch(code, /actor\.role === "admin"\s*\|\|\s*actor\.role === "super_admin"/)
+  assert.match(code, /actor\.role === "super_admin"\s*\|\|\s*String\(form\.createdBy\) === String\(actor\._id\)/)
 })
 
 test("OA submissions snapshot the active document template version", async () => {

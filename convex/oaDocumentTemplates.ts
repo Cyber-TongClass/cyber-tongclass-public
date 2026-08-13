@@ -14,8 +14,9 @@ async function requireManagedForm(ctx: any, sessionToken: string, formId: any) {
   const actor = await getUserBySession(ctx, sessionToken)
   const form = await ctx.db.get(formId)
   if (!form) throw new Error("表单不存在")
-  const isAdmin = actor.role === "admin" || actor.role === "super_admin"
-  if (!isAdmin && String(form.createdBy) !== String(actor._id)) {
+  const canManage = actor.role === "super_admin"
+    || String(form.createdBy) === String(actor._id)
+  if (!canManage) {
     throw new Error("无权管理该 Word 模板")
   }
   return { actor, form }
@@ -234,8 +235,7 @@ export const getExportAccess = query({
     if (!submission) return null
     const form = await ctx.db.get(submission.formId)
     if (!form) return null
-    const isManager = actor.role === "admin"
-      || actor.role === "super_admin"
+    const isManager = actor.role === "super_admin"
       || String(form.createdBy) === String(actor._id)
     if (args.batch && !isManager) throw new Error("批量导出需要表单管理权限")
     if (!isManager && String(submission.submitterId) !== String(actor._id)) {
