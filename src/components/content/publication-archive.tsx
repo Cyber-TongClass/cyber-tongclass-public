@@ -16,11 +16,13 @@ import {
 } from "@/components/ui/select"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
 import { getSafeExternalUrl } from "@/lib/safe-external-url"
+import type { PublicPublicationAuthor } from "@/types"
 
 export type PublicationArchiveItem = {
   id: string
   title: string
   authors: string[]
+  authorDetails?: PublicPublicationAuthor[]
   venue: string
   year: number
   abstract: string
@@ -122,7 +124,7 @@ function PublicationCard({ publication, detailHref, showYear = false }: Publicat
           </Link>
 
           <p className="text-sm text-[hsl(var(--aia-muted))]">
-            <PublicationAuthorsList authors={publication.authors} />
+            <PublicationAuthorsList authors={publication.authors} authorDetails={publication.authorDetails} />
           </p>
         </div>
 

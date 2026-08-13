@@ -63,7 +63,7 @@ export function LivePersonProfile({ slug }: LivePersonProfileProps) {
     <PersonProfile
       person={directoryPerson}
       groups={relatedGroups}
-      outputs={research.map((item) => toDirectoryResearchOutput(item, `/people/${slug}`))}
+      outputs={research.map((item) => toDirectoryResearchOutput(item, `/people/${slug}`, slug))}
       updates={updates.map((item) => toDirectoryUpdate(item, `/people/${slug}`))}
     />
   )

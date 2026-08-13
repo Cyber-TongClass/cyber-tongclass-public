@@ -113,6 +113,7 @@ export function toDirectoryResearchGroup(
 export function toDirectoryResearchOutput(
   item: PublicInstituteResearch,
   returnTo: string,
+  personSlug?: string,
 ): PublicResearchOutput {
   return {
     id: item.id,
@@ -123,6 +124,13 @@ export function toDirectoryResearchOutput(
     contributorSlugs: (item.people || []).map((person) => person.slug),
     groupSlugs: (item.researchGroups || []).map((group) => group.slug),
     isDemo: false,
+    isCorrespondingContributor: personSlug
+      ? item.authorDetails.some((author) => (
+        author.profile?.kind === "institute_person"
+        && author.profile.slug === personSlug
+        && author.corresponding
+      ))
+      : undefined,
     href: withReturnTo(`/tong-class/publications/${item.id}`, returnTo),
   }
 }

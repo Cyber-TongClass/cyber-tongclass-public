@@ -279,7 +279,7 @@ export function TongClassPublicationArchive({
                               </Link>
 
                               <p className="text-sm text-slate-500">
-                                <PublicationAuthorsList authors={publication.authors} />
+                                <PublicationAuthorsList authors={publication.authors} authorDetails={publication.authorDetails} />
                               </p>
                             </div>
 

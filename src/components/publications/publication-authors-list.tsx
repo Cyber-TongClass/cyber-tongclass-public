@@ -3,25 +3,28 @@
 import Link from "next/link"
 import { Mail } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { parsePublicationAuthor } from "@/lib/publication-authors"
+import { parsePublicationAuthor, toPublicPublicationAuthor } from "@/lib/publication-authors"
+import type { PublicPublicationAuthor } from "@/types"
 
 type PublicationAuthorsListProps = {
   authors: string[]
+  authorDetails?: PublicPublicationAuthor[]
   emphasizedUserId?: string
   className?: string
 }
 
-export function PublicationAuthorsList({ authors, emphasizedUserId, className }: PublicationAuthorsListProps) {
+export function PublicationAuthorsList({ authors, authorDetails, emphasizedUserId, className }: PublicationAuthorsListProps) {
   return (
     <span className={className}>
       {authors.map((rawAuthor, index) => {
-        const author = parsePublicationAuthor(rawAuthor)
-        const isEmphasized = emphasizedUserId && author.userId && String(author.userId) === String(emphasizedUserId)
+        const legacyAuthor = parsePublicationAuthor(rawAuthor)
+        const author = authorDetails?.[index] || toPublicPublicationAuthor(legacyAuthor)
+        const isEmphasized = emphasizedUserId && legacyAuthor.userId && String(legacyAuthor.userId) === String(emphasizedUserId)
         const content = (
           <>
             <span
               className={cn(
-                author.isTongClass && author.userId && "underline underline-offset-2 decoration-primary/60",
+                author.profile && "underline underline-offset-2 decoration-primary/60",
                 isEmphasized && "font-extrabold text-slate-700"
               )}
             >
@@ -29,17 +32,23 @@ export function PublicationAuthorsList({ authors, emphasizedUserId, className }:
             </span>
             {author.coFirst && <sup className="ml-0.5 text-[0.65em] font-bold">*</sup>}
             {author.corresponding && (
-              <sup className="ml-0.5 inline-flex translate-y-[-0.2em]">
-                <Mail className="h-3 w-3" aria-label="Corresponding author" />
-              </sup>
+              <span className="ml-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+                <Mail className="h-3 w-3" aria-hidden="true" />
+                通讯作者
+              </span>
             )}
           </>
         )
 
         return (
           <span key={`${rawAuthor}-${index}`}>
-            {author.isTongClass && author.userId ? (
-              <Link href={`/tong-class/members/${author.username || author.userId}`} className="text-slate-900 hover:text-primary">
+            {author.profile ? (
+              <Link
+                href={author.profile.kind === "institute_person"
+                  ? `/people/${encodeURIComponent(author.profile.slug)}`
+                  : `/tong-class/members/${encodeURIComponent(author.profile.slug)}`}
+                className="text-slate-900 hover:text-primary"
+              >
                 {content}
               </Link>
             ) : (

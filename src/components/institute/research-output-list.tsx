@@ -1,4 +1,4 @@
-import { BookOpenText } from "lucide-react"
+import { BookOpenText, Mail } from "lucide-react"
 import Link from "next/link"
 
 import type { PublicResearchOutput } from "@/components/institute/demo-directory-data"
@@ -38,6 +38,12 @@ export function ResearchOutputList({
                 <span>{output.kind}</span>
                 <span aria-hidden="true">·</span>
                 <span>{output.year}</span>
+                {output.isCorrespondingContributor ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Mail className="h-3 w-3" aria-hidden="true" />
+                    通讯作者
+                  </span>
+                ) : null}
                 {output.isDemo ? (
                   <span className="border border-dashed aia-border-rule px-2 py-0.5 text-[0.7rem] uppercase tracking-[0.12em]">
                     演示数据

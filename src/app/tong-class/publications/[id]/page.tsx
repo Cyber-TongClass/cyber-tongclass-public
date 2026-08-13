@@ -101,7 +101,7 @@ export default function PublicationDetailPage() {
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight mb-5">{publication.title}</h1>
 
             <p className="text-base text-slate-600 mb-4">
-              <PublicationAuthorsList authors={publication.authors} />
+              <PublicationAuthorsList authors={publication.authors} authorDetails={publication.authorDetails} />
             </p>
 
             <div className="flex flex-wrap items-center gap-4 text-sm">

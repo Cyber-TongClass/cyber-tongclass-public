@@ -16,6 +16,7 @@ export default function PublicationsPage() {
         id: String(publication._id),
         title: publication.title,
         authors: publication.authors,
+        authorDetails: publication.authorDetails,
         venue: publication.venue,
         year: publication.year,
         abstract: publication.abstract,

@@ -102,6 +102,18 @@ export function PersonProfile({
           </section>
         </article>
 
+        {person.kind === "teacher" ? (
+          <div className="mt-12">
+            <ResearchOutputList
+              outputs={relatedOutputs}
+              heading="相关论文"
+              emptyMessage="暂未发布与该教师直接关联的论文。"
+              showSummary={false}
+              underlineTitleLinks={false}
+            />
+          </div>
+        ) : null}
+
         {person.kind !== "teacher" ? (
           <>
             <div className="mt-12 grid gap-10 lg:grid-cols-[1fr_1.35fr]">

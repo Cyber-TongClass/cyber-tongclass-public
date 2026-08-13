@@ -50,6 +50,7 @@ export type PublicResearchOutput = {
   contributorSlugs: readonly string[]
   groupSlugs: readonly string[]
   isDemo: boolean
+  isCorrespondingContributor?: boolean
   href?: `/${string}`
 }
 
