@@ -899,6 +899,7 @@ export default defineSchema({
     .index("by_published_category", ["isPublished", "category"]),
 
   oaForms: defineTable({
+    systemKey: v.optional(v.literal("teacher_recognition")),
     slug: v.string(),
     title: v.string(),
     description: v.optional(v.string()),
@@ -921,6 +922,7 @@ export default defineSchema({
     targetScope: v.optional(oaUserScope),
     approvalSteps: v.optional(v.array(oaApprovalStep)),
     workflowDefinition: v.optional(oaWorkflowDefinition),
+    activeDocumentTemplateVersionId: v.optional(v.id("oaDocumentTemplateVersions")),
     createdBy: v.id("users"),
     updatedBy: v.optional(v.id("users")),
     publishedAt: v.optional(v.number()),
@@ -928,6 +930,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_slug", ["slug"])
+    .index("by_systemKey", ["systemKey"])
     .index("by_status_category", ["status", "category"])
     .index("by_creator_createdAt", ["createdBy", "createdAt"])
     .index("by_updatedAt", ["updatedAt"]),
@@ -941,6 +944,7 @@ export default defineSchema({
     submitterEmail: v.optional(v.string()),
     answers: v.any(),
     formSnapshot: v.optional(v.any()),
+    documentTemplateVersionId: v.optional(v.id("oaDocumentTemplateVersions")),
     reviewStatus: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"), v.literal("needs_changes")),
     adminNote: v.optional(v.string()),
     reviewerId: v.optional(v.id("users")),
@@ -1025,6 +1029,85 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_submission_createdAt", ["submissionId", "createdAt"]),
+
+  teacherRecognitionSettings: defineTable({
+    singletonKey: v.literal("default"),
+    reviewerUserGroupIds: v.array(v.id("userGroups")),
+    systemFormId: v.id("oaForms"),
+    updatedByUserId: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_singletonKey", ["singletonKey"]),
+
+  teacherRecognitionCategories: defineTable({
+    key: v.string(),
+    label: v.string(),
+    sortOrder: v.number(),
+    status: v.union(v.literal("active"), v.literal("retired")),
+    createdByUserId: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_status_order", ["status", "sortOrder"]),
+
+  teacherRecognitionDrafts: defineTable({
+    teacherId: v.id("users"),
+    reportingYear: v.number(),
+    categoryId: v.id("teacherRecognitionCategories"),
+    categoryLabelSnapshot: v.string(),
+    name: v.string(),
+    organization: v.string(),
+    startDate: v.string(),
+    endDate: v.optional(v.string()),
+    explanation: v.optional(v.string()),
+    proof: v.array(v.object({
+      storageId: v.string(),
+      fileName: v.string(),
+      mimeType: v.string(),
+      size: v.number(),
+    })),
+    version: v.number(),
+    submittedSubmissionId: v.optional(v.id("oaFormSubmissions")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_teacher_updatedAt", ["teacherId", "updatedAt"])
+    .index("by_submittedSubmissionId", ["submittedSubmissionId"]),
+
+  oaDocumentTemplateVersions: defineTable({
+    formId: v.id("oaForms"),
+    version: v.number(),
+    naturalKey: v.string(),
+    sourceType: v.union(v.literal("doc"), v.literal("docx")),
+    sourceFileName: v.string(),
+    sourceMimeType: v.string(),
+    sourceSize: v.number(),
+    sourceSha256: v.string(),
+    sourceStorageId: v.string(),
+    workingStorageId: v.optional(v.string()),
+    compiledStorageId: v.optional(v.string()),
+    previewStorageId: v.optional(v.string()),
+    compilerVersion: v.string(),
+    syntaxVersion: v.string(),
+    status: v.union(
+      v.literal("uploaded"),
+      v.literal("analyzed"),
+      v.literal("reviewed"),
+      v.literal("compiled"),
+      v.literal("archived"),
+      v.literal("failed"),
+    ),
+    manifest: v.any(),
+    warnings: v.array(v.any()),
+    capabilities: v.any(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_form_version", ["formId", "version"])
+    .index("by_naturalKey", ["naturalKey"])
+    .index("by_form_createdAt", ["formId", "createdAt"]),
 
   reviewerAccounts: defineTable({
     username: v.string(),

@@ -6,12 +6,18 @@ const R2_KEY_PART_PATTERN = /^[a-z0-9._-]+$/
 export type R2Purpose =
   | "academic-exchange-paper"
   | "oa-form-attachment"
+  | "teacher-recognition-proof"
+  | "oa-form-template"
+  | "oa-form-template-derived"
   | "techday-poster"
   | "techday-reimbursement-attachment"
 
 const R2_PURPOSES = new Set<R2Purpose>([
   "academic-exchange-paper",
   "oa-form-attachment",
+  "teacher-recognition-proof",
+  "oa-form-template",
+  "oa-form-template-derived",
   "techday-poster",
   "techday-reimbursement-attachment",
 ])
