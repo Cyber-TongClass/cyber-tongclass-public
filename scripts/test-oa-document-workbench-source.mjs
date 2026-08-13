@@ -32,6 +32,7 @@ test("canvas renders a real authenticated page image with normalized editable ov
   assert.match(canvas, /draggable=\{false\}/)
   assert.match(canvas, /pointerId/)
   assert.match(canvas, /setPointerCapture/)
+  assert.match(canvas, /touch-none/)
   assert.match(canvas, /Escape/)
   assert.match(canvas, /cancelDraw/)
   assert.match(canvas, /mode.*select.*draw/s)
@@ -48,6 +49,8 @@ test("canvas renders a real authenticated page image with normalized editable ov
   assert.match(overlay, /bottom-right/)
   assert.match(overlay, /min-h-11|min-w-11/)
   assert.match(overlay, /pointer-events-none absolute inset-[028]/)
+  assert.match(overlay, /touch-none/)
+  assert.match(overlay, /tabIndex=\{-1\}/)
 })
 
 test("workbench has AIA states, page controls, edit decisions, and publish blocking", async () => {

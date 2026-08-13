@@ -20,14 +20,14 @@ const tone: Record<OADocumentSuggestionReviewState, string> = {
 }
 
 const handles: Array<{ id: OADocumentResizeHandle; className: string; cursor: string }> = [
-  { id: "top-left", className: "-left-1.5 -top-1.5", cursor: "cursor-nwse-resize" },
-  { id: "top", className: "left-1/2 -top-1.5 -translate-x-1/2", cursor: "cursor-ns-resize" },
-  { id: "top-right", className: "-right-1.5 -top-1.5", cursor: "cursor-nesw-resize" },
-  { id: "right", className: "-right-1.5 top-1/2 -translate-y-1/2", cursor: "cursor-ew-resize" },
-  { id: "bottom-right", className: "-bottom-1.5 -right-1.5", cursor: "cursor-nwse-resize" },
-  { id: "bottom", className: "-bottom-1.5 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
-  { id: "bottom-left", className: "-bottom-1.5 -left-1.5", cursor: "cursor-nesw-resize" },
-  { id: "left", className: "-left-1.5 top-1/2 -translate-y-1/2", cursor: "cursor-ew-resize" },
+  { id: "top-left", className: "left-0 top-0 -translate-x-1/2 -translate-y-1/2", cursor: "cursor-nwse-resize" },
+  { id: "top", className: "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2", cursor: "cursor-ns-resize" },
+  { id: "top-right", className: "right-0 top-0 translate-x-1/2 -translate-y-1/2", cursor: "cursor-nesw-resize" },
+  { id: "right", className: "right-0 top-1/2 translate-x-1/2 -translate-y-1/2", cursor: "cursor-ew-resize" },
+  { id: "bottom-right", className: "bottom-0 right-0 translate-x-1/2 translate-y-1/2", cursor: "cursor-nwse-resize" },
+  { id: "bottom", className: "bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2", cursor: "cursor-ns-resize" },
+  { id: "bottom-left", className: "bottom-0 left-0 -translate-x-1/2 translate-y-1/2", cursor: "cursor-nesw-resize" },
+  { id: "left", className: "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2", cursor: "cursor-ew-resize" },
 ]
 
 type DragState = {
@@ -130,14 +130,14 @@ export function OADocumentOverlay({
         onPointerUp={stopDrag}
         onPointerCancel={stopDrag}
         className={cn(
-          "aia-focus group pointer-events-auto absolute -inset-2 min-h-11 min-w-11",
+          "aia-focus group pointer-events-auto absolute inset-0 min-h-11 min-w-11 touch-none bg-transparent",
           selected && "outline outline-2 outline-offset-2 outline-[hsl(var(--aia-ink))]",
         )}
       >
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute inset-2 border-2 transition-[border-width,background-color] group-hover:border-[3px]",
+            "pointer-events-none absolute inset-0 border-2 transition-[border-width,background-color] group-hover:border-[3px]",
             tone[state],
             selected && "border-[3px]",
           )}
@@ -156,13 +156,14 @@ export function OADocumentOverlay({
           {handles.map((handle) => (
             <button
               type="button"
+              tabIndex={-1}
               key={handle.id}
               aria-label={`${label} ${handle.id} 缩放手柄`}
               onPointerDown={(event) => startDrag(event, handle.id)}
               onPointerMove={moveDrag}
               onPointerUp={stopDrag}
               onPointerCancel={stopDrag}
-              className={cn("pointer-events-auto absolute z-20 grid min-h-11 min-w-11 place-items-center bg-transparent", handle.className, handle.cursor)}
+              className={cn("pointer-events-auto absolute z-20 grid min-h-11 min-w-11 touch-none place-items-center bg-transparent", handle.className, handle.cursor)}
             >
               <span aria-hidden="true" className="pointer-events-none h-3 w-3 border border-white bg-[hsl(var(--aia-ink))]" />
             </button>

@@ -66,7 +66,7 @@ export function OADocumentCanvas({
 
   const finishDraw = (event: PointerEvent<HTMLDivElement>) => {
     if (draw.current?.pointerId !== event.pointerId) return
-    const next = draft || visualFromPointer(draw.current.startX, draw.current.startY, event.clientX, event.clientY)
+    const next = visualFromPointer(draw.current.startX, draw.current.startY, event.clientX, event.clientY)
     draw.current = null
     setDraft(null)
     if (next) onDraw(next)
@@ -96,7 +96,7 @@ export function OADocumentCanvas({
         onPointerMove={moveDraw}
         onPointerUp={finishDraw}
         onPointerCancel={cancelDraw}
-        className="relative mx-auto max-w-[52rem] overflow-visible border aia-border-rule bg-white shadow-md"
+        className="relative mx-auto max-w-[52rem] touch-none overflow-visible border aia-border-rule bg-white shadow-md"
         style={{ aspectRatio: `${pageSize.width} / ${pageSize.height}`, cursor: mode === "draw" ? "crosshair" : "default" }}
       >
         {/* Blob-backed authenticated previews cannot be routed through Next Image optimization. */}
