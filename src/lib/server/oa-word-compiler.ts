@@ -118,7 +118,7 @@ function choiceMarkerMatches(value: string) {
 }
 
 function normalizeChoiceOptionText(value: string) {
-  return value.normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
+  return value.normalize("NFKC").replace(/[（(].*$/, "").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
 }
 
 function visibleChoiceOptions(runs: WordXmlElement[]) {

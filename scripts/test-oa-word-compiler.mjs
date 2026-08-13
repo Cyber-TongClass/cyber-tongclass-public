@@ -8,10 +8,10 @@ import test from "node:test"
 
 const root = path.resolve(import.meta.dirname, "..")
 const outDir = mkdtempSync(path.join(tmpdir(), "oa-word-compile-"))
-execFileSync(path.join(root, "node_modules/.bin/esbuild"), [path.join(root, "src/lib/server/oa-word-compiler.ts"), "--bundle", "--platform=node", "--format=cjs", `--outdir=${outDir}`])
+execFileSync(path.join(root, "node_modules/.bin/esbuild"), [path.join(root, "src/lib/server/oa-word-compiler.ts"), path.join(root, "src/lib/server/oa-word-detection.ts"), "--bundle", "--platform=node", "--format=cjs", `--outdir=${outDir}`])
 const require = createRequire(import.meta.url)
 const compiler = require(path.join(outDir, "oa-word-compiler.js"))
-const detection = require(path.join(outDir, "oa-word-compiler.js"))
+const detection = require(path.join(outDir, "oa-word-detection.js"))
 const { buildSimpleZip } = require(path.join(root, "src/lib/server/simple-zip.ts"))
 const pkgModule = (() => { const d = mkdtempSync(path.join(tmpdir(), "pkg-")); execFileSync(path.join(root, "node_modules/.bin/esbuild"), [path.join(root, "src/lib/server/ooxml-package.ts"), "--bundle", "--platform=node", "--format=cjs", `--outdir=${d}`]); return require(path.join(d, "ooxml-package.js")) })()
 
@@ -105,6 +105,29 @@ test("choice safely splits markers and option text that share one styled run", (
   assert.match(resultXml, /管理/)
   assert.equal((resultXml.match(/<w:rFonts w:eastAsia="楷体"\/>/g) || []).length, 7)
   assert.equal((resultXml.match(/<w:color w:val="13579B"\/>/g) || []).length, 7)
+})
+
+test("compiles detector-normalized choices whose visible labels include parenthetical notes", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>类型：○教学（推荐） ○科研(test note)</w:t></w:r></w:p></w:body></w:document>`
+  const input = docx(sourceXml)
+  const suggestion = detection.detectWordFormRegions(input).find((item) => item.kind === "radio_group")
+  assert.deepEqual(suggestion.options, ["教学", "科研"])
+  const field = { fieldId: suggestion.fieldId, label: suggestion.label, answerType: suggestion.inferredAnswerType, required: true, options: suggestion.options }
+  const anchor = {
+    fieldId: field.fieldId,
+    kind: suggestion.kind,
+    partName: suggestion.partName,
+    path: suggestion.path,
+    contextHash: suggestion.contextHash,
+    output: { mode: "mark_choice" },
+  }
+
+  const output = compiler.compileWordTemplate(input, { syntaxVersion: 1, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+  const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+  assert.match(resultXml, new RegExp(`oa-choice:${field.fieldId}:0`))
+  assert.match(resultXml, new RegExp(`oa-choice:${field.fieldId}:1`))
+  assert.match(resultXml, /教学（推荐）/)
+  assert.match(resultXml, /科研\(test note\)/)
 })
 
 test("choice rejects reordered, renamed, or non-unique visible options across run layouts", () => {
