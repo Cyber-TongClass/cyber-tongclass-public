@@ -324,7 +324,11 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
       if (anchorCountsByField.get(fieldId) !== 1) throw new Error(`字段 ${fieldId} 必须恰有一个锚点`)
     }
   }
+  const suggestionIds = new Set<string>()
   for (const suggestion of manifest.suggestions) {
+    assertIdentifier(suggestion.id, "建议 ID")
+    if (suggestionIds.has(suggestion.id)) throw new Error(`建议 ID 重复：${suggestion.id}`)
+    suggestionIds.add(suggestion.id)
     if (suggestion.visual) assertVisualAnchor(suggestion.visual)
     if (suggestion.bindingCandidateIds) {
       const suggestionCandidateIds = new Set<string>()

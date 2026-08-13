@@ -16,6 +16,12 @@ const geometry = createRequire(import.meta.url)(out)
 
 const page = { page: 2, pageWidth: 600, pageHeight: 800, rotation: 0 }
 
+function assertCoordinates(actual, expected) {
+  for (const coordinate of ["x", "y", "width", "height"]) {
+    assert.ok(Math.abs(actual[coordinate] - expected[coordinate]) < Number.EPSILON * 2, `${coordinate}: expected ${expected[coordinate]}, received ${actual[coordinate]}`)
+  }
+}
+
 test("converts client rectangles into zoom-independent normalized coordinates", () => {
   const rectangle = { left: 160, top: 260, width: 300, height: 200 }
   const renderedPage = { left: 100, top: 200, width: 600, height: 800 }
@@ -72,6 +78,82 @@ test("clamps rectangles to the page with a minimum normalized size", () => {
       coordinateSpace: "normalized-pdf",
     },
   )
+})
+
+test("resizes each edge while keeping the opposite edge fixed", () => {
+  const anchor = { ...page, x: 0.2, y: 0.3, width: 0.4, height: 0.3, coordinateSpace: "normalized-pdf" }
+  const expected = new Map([
+    ["left", { x: 0.3, y: 0.3, width: 0.3, height: 0.3 }],
+    ["right", { x: 0.2, y: 0.3, width: 0.5, height: 0.3 }],
+    ["top", { x: 0.2, y: 0.5, width: 0.4, height: 0.1 }],
+    ["bottom", { x: 0.2, y: 0.3, width: 0.4, height: 0.5 }],
+  ])
+  for (const [handle, coordinates] of expected) {
+    const result = geometry.resizeVisualAnchor(anchor, handle, 0.1, 0.2)
+    assertCoordinates(result, coordinates)
+  }
+})
+
+test("resizes all four corners on both axes", () => {
+  const anchor = { ...page, x: 0.2, y: 0.3, width: 0.4, height: 0.3, coordinateSpace: "normalized-pdf" }
+  const expected = new Map([
+    ["top-left", { x: 0.1, y: 0.1, width: 0.5, height: 0.5 }],
+    ["top-right", { x: 0.2, y: 0.1, width: 0.5, height: 0.5 }],
+    ["bottom-left", { x: 0.1, y: 0.3, width: 0.5, height: 0.5 }],
+    ["bottom-right", { x: 0.2, y: 0.3, width: 0.5, height: 0.5 }],
+  ])
+  for (const [handle, coordinates] of expected) {
+    const result = geometry.resizeVisualAnchor(anchor, handle, handle.includes("left") ? -0.1 : 0.1, handle.includes("top") ? -0.2 : 0.2)
+    assertCoordinates(result, coordinates)
+  }
+})
+
+test("clips resize handles at page and minimum-size boundaries without moving the opposite edge", () => {
+  const anchor = { ...page, x: 0.2, y: 0.3, width: 0.4, height: 0.3, coordinateSpace: "normalized-pdf" }
+  const expected = new Map([
+    ["left", { x: 0.595, y: 0.3, width: 0.005, height: 0.3 }],
+    ["right", { x: 0.2, y: 0.3, width: 0.005, height: 0.3 }],
+    ["top", { x: 0.2, y: 0.595, width: 0.4, height: 0.005 }],
+    ["bottom", { x: 0.2, y: 0.3, width: 0.4, height: 0.005 }],
+  ])
+  for (const [handle, coordinates] of expected) {
+    const result = geometry.resizeVisualAnchor(anchor, handle, handle === "left" ? 1 : -1, handle === "top" ? 1 : -1)
+    assertCoordinates(result, coordinates)
+  }
+
+  const pageClipped = geometry.resizeVisualAnchor(anchor, "bottom-right", 2, 2)
+  assertCoordinates(pageClipped, { x: 0.2, y: 0.3, width: 0.8, height: 0.7 })
+})
+
+test("rejects non-finite client geometry and non-positive rendered page dimensions", () => {
+  const rectangle = { left: 10, top: 20, width: 30, height: 40 }
+  const renderedPage = { left: 0, top: 0, width: 100, height: 100 }
+  for (const property of ["page", "pageWidth", "pageHeight", "rotation"]) {
+    assert.throws(
+      () => geometry.clientRectToVisualAnchor({ ...page, [property]: Number.NaN }, rectangle, renderedPage),
+      /有限数值/,
+    )
+  }
+  for (const property of ["left", "top", "width", "height"]) {
+    assert.throws(
+      () => geometry.clientRectToVisualAnchor(page, { ...rectangle, [property]: Number.POSITIVE_INFINITY }, renderedPage),
+      /有限数值/,
+    )
+    assert.throws(
+      () => geometry.clientRectToVisualAnchor(page, rectangle, { ...renderedPage, [property]: Number.NEGATIVE_INFINITY }),
+      /有限数值/,
+    )
+  }
+  for (const property of ["width", "height"]) {
+    assert.throws(
+      () => geometry.clientRectToVisualAnchor(page, rectangle, { ...renderedPage, [property]: 0 }),
+      /渲染页面尺寸/,
+    )
+    assert.throws(
+      () => geometry.clientRectToVisualAnchor(page, rectangle, { ...renderedPage, [property]: -1 }),
+      /渲染页面尺寸/,
+    )
+  }
 })
 
 test("computes same-page intersection and ranks deterministic candidate ties", () => {

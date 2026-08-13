@@ -235,6 +235,16 @@ test("binds each confirmed suggestion candidate to its corresponding field ancho
   assert.throws(() => domain.validateTemplateManifest(wrongField), /已确认建议.*候选 ID/)
 })
 
+test("requires safe unique suggestion IDs", () => {
+  const invalidId = versionTwoManifest()
+  invalidId.suggestions[0].id = "invalid suggestion id"
+  assert.throws(() => domain.validateTemplateManifest(invalidId), /建议 ID.*无效/)
+
+  const duplicateId = versionTwoManifest()
+  duplicateId.suggestions.push({ ...duplicateId.suggestions[0] })
+  assert.throws(() => domain.validateTemplateManifest(duplicateId), /建议 ID.*重复/)
+})
+
 test("derives deterministic safe field IDs", () => {
   assert.equal(domain.createStableDocumentFieldId("联系 邮箱", "word/document.xml|p[2]"), domain.createStableDocumentFieldId("联系 邮箱", "word/document.xml|p[2]"))
   assert.match(domain.createStableDocumentFieldId("联系 邮箱", "word/document.xml|p[2]"), /^field_[a-z0-9_]+_[0-9a-f]{8}$/)
