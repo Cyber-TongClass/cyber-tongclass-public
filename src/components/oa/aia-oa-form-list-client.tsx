@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { ArrowRight, ChevronDown, ChevronRight, Pin, Receipt, Search } from "lucide-react"
+import { ArrowRight, Award, ChevronDown, ChevronRight, Pin, Receipt, Search } from "lucide-react"
 
 import { AiaOAApprovalInboxClient } from "@/components/oa/aia-oa-approval-inbox-client"
 import { AiaOAMySubmissionsClient } from "@/components/oa/aia-oa-my-submissions-client"
@@ -100,6 +100,19 @@ function FixedReimbursementEntry({ customFormCount }: { customFormCount: number 
   )
 }
 
+function FixedTeacherRecognitionEntry() {
+  return (
+    <div className="mt-3">
+      <Link href="/services/teacher-recognitions" className="aia-focus group flex items-baseline gap-3 border-b aia-border-rule py-3">
+        <Award className="h-4 w-4 self-center text-[hsl(var(--aia-red))]" aria-hidden="true" />
+        <span className="aia-serif min-w-0 flex-1 text-base font-semibold tracking-tight transition-colors group-hover:text-[hsl(var(--aia-red))]">教师奖励申报</span>
+        <span className="aia-mono text-xs aia-text-muted">教师专属</span>
+        <ArrowRight className="h-3.5 w-3.5 self-center text-[hsl(var(--aia-rule))] group-hover:text-[hsl(var(--aia-red))]" aria-hidden="true" />
+      </Link>
+    </div>
+  )
+}
+
 /** Forms tab: admin-pinned forms versus the rest, behind a search box and a category filter. */
 function FormsPanel({ forms }: { forms: OAForm[] }) {
   const [query, setQuery] = useState("")
@@ -185,6 +198,7 @@ function FormsPanel({ forms }: { forms: OAForm[] }) {
             </ul>
           )}
           <FixedReimbursementEntry customFormCount={customReimbursementCount} />
+          <FixedTeacherRecognitionEntry />
         </section>
 
         <section aria-label="其他事项">
