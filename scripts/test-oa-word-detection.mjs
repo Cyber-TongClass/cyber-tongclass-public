@@ -83,3 +83,21 @@ test("attaches only unique server-issued PDF binding candidates", () => {
   assert.equal(ambiguous.visual, undefined)
   assert.deepEqual(ambiguous.bindingCandidateIds, ["binding_other", "binding_unique"])
 })
+
+test("emits and attaches paragraph-after narratives without requiring a trailing colon", () => {
+  const narrativeXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>主要做法（不超过200字）</w:t></w:r></w:p><w:p/></w:body></w:document>`
+  const source = docx(narrativeXml)
+  const initial = detection.detectWordFormRegions(source)
+  const narrative = initial.find((item) => item.kind === "label_blank" && item.label === "主要做法")
+  assert.ok(narrative)
+  assert.equal(narrative.inferredAnswerType, "textarea")
+  assert.equal(narrative.maxLength, 200)
+  assert.equal(narrative.reviewState, "unresolved")
+
+  const visual = { page: 1, x: 0.1, y: 0.2, width: 0.8, height: 0.1, pageWidth: 600, pageHeight: 800, rotation: 0, coordinateSpace: "normalized-pdf" }
+  const binding = { id: "binding_narrative", label: narrative.label, description: "paragraph after", partName: narrative.partName, path: narrative.path, contextHash: narrative.contextHash, writeTarget: "paragraph-after", visual }
+  const attached = detection.detectWordFormRegions(source, [binding]).find((item) => item.label === "主要做法")
+  assert.equal(attached.reviewState, "confirmed")
+  assert.deepEqual(attached.bindingCandidateIds, ["binding_narrative"])
+  assert.deepEqual(attached.visual, visual)
+})

@@ -94,6 +94,41 @@ test("maps unique Word nodes deterministically and uses document order for repea
   assert.ok(applications[1].path.endsWith("/p[7]"))
 })
 
+test("keeps generated answer rectangles fully inside the normalized page at the right edge", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>编号：</w:t></w:r><w:r><w:rPr><w:u/></w:rPr><w:t>___</w:t></w:r></w:p></w:body></w:document>`
+  const nodes = wordLayout.indexWordWritableNodes(pkg(sourceXml))
+  const pdf = pdfLayout.parsePdfBboxXml(bbox([[['编号', 570, 80, 600, 100]]]))
+  const result = matcher.matchWordNodesToPdf(nodes, pdf)
+  assert.equal(result.candidates.length, 1)
+  const visual = result.candidates[0].visual
+  assert.ok(visual.x >= 0 && visual.width >= 0.005)
+  assert.ok(visual.x + visual.width <= 1)
+  assert.ok(visual.y >= 0 && visual.y + visual.height <= 1)
+})
+
+test("uses table row order from geometry when Poppler word order is reversed", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>姓名</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr>
+    <w:tr><w:tc><w:p><w:r><w:t>姓名</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr>
+  </w:tbl></w:body></w:document>`
+  const nodes = wordLayout.indexWordWritableNodes(pkg(sourceXml)).filter((node) => node.kind === "table_cell")
+  const pdf = pdfLayout.parsePdfBboxXml(bbox([[['姓名', 30, 400, 70, 420], ['姓名', 30, 100, 70, 120]]]))
+  const result = matcher.matchWordNodesToPdf(nodes, pdf)
+  assert.equal(result.candidates.length, 2)
+  const byPath = [...result.candidates].sort((left, right) => left.path.localeCompare(right.path, "en"))
+  assert.deepEqual(byPath.map((candidate) => candidate.visual.y), [100 / 800, 400 / 800])
+})
+
+test("uses nearby writable geometry to disambiguate a repeated inline label", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>编号：</w:t></w:r><w:r><w:rPr><w:u/></w:rPr><w:t>___</w:t></w:r></w:p></w:body></w:document>`
+  const nodes = wordLayout.indexWordWritableNodes(pkg(sourceXml))
+  const pdf = pdfLayout.parsePdfBboxXml(bbox([[['编号', 570, 80, 600, 100], ['编号', 30, 160, 70, 180]]]))
+  const result = matcher.matchWordNodesToPdf(nodes, pdf)
+  assert.equal(result.candidates.length, 1)
+  assert.equal(result.candidates[0].visual.y, 160 / 800)
+  assert.ok(result.candidates[0].visual.width >= 0.05)
+})
+
 test("builds stable marker plans and validates unique marker geometry without mutating source packages", () => {
   const nodes = wordLayout.indexWordWritableNodes(pkg(xml)).filter((node) => node.label === "应用情况")
   const planA = matcher.createMarkerPlan(nodes)

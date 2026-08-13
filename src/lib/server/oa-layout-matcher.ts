@@ -37,15 +37,38 @@ function answerVisual(boxes: OAPdfTextBox[], node: OAWordWritableNode) {
   const remainingWidth = Math.max(0.005, 1 - label.x - label.width)
   const width = Math.min(Math.max(0.05, label.width * (node.writeTarget === "paragraph-after" ? 2 : 1)), remainingWidth)
   const below = node.writeTarget === "paragraph-after"
-  return {
+  const proposed = {
     ...label,
     x: below ? label.x : label.x + label.width,
     y: below ? Math.min(1 - label.height, label.y + label.height) : label.y,
     width: below ? Math.min(Math.max(0.2, label.width * 2), 1 - label.x) : width,
   }
+  const clampedWidth = Math.min(1, Math.max(0.005, proposed.width))
+  const clampedHeight = Math.min(1, Math.max(0.005, proposed.height))
+  return {
+    ...proposed,
+    x: Math.min(Math.max(0, proposed.x), 1 - clampedWidth),
+    y: Math.min(Math.max(0, proposed.y), 1 - clampedHeight),
+    width: clampedWidth,
+    height: clampedHeight,
+  }
 }
 
 interface ScoredMatch { boxes: OAPdfTextBox[]; score: number; startOrder: number }
+
+function geometryOrder(left: ScoredMatch, right: ScoredMatch) {
+  const leftVisual = unionVisual(left.boxes)
+  const rightVisual = unionVisual(right.boxes)
+  return leftVisual.page - rightVisual.page || leftVisual.y - rightVisual.y || leftVisual.x - rightVisual.x || left.startOrder - right.startOrder
+}
+
+function nearbyWritableScore(node: OAWordWritableNode, match: ScoredMatch) {
+  const visual = unionVisual(match.boxes)
+  const available = node.writeTarget === "paragraph-after"
+    ? 1 - visual.y - visual.height
+    : 1 - visual.x - visual.width
+  return Math.min(0.16, Math.max(0, available) * 0.32)
+}
 
 function scoredMatches(node: OAWordWritableNode, boxes: OAPdfTextBox[]): ScoredMatch[] {
   const target = normalized(node.label)
@@ -88,9 +111,17 @@ export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayou
     const orderedMatches = distinctMatches.some((match) => match.score >= 0.88)
       ? distinctMatches.filter((match) => match.score >= 0.88)
       : distinctMatches
-    const possible = orderedMatches
-      .sort((left, right) => left.startOrder - right.startOrder)
-      .map((match, matchIndex) => ({ ...match, score: Math.max(0, match.score - Math.abs(matchIndex - peerIndex) * 0.25) }))
+    const geometryMatches = orderedMatches.sort(geometryOrder)
+    const tablePeers = node.table
+      ? peers.filter((candidate) => candidate.table?.table === node.table?.table).sort((left, right) => (left.table!.row - right.table!.row) || (left.table!.cell - right.table!.cell) || left.order - right.order)
+      : []
+    const expectedIndex = tablePeers.length > 1 ? tablePeers.findIndex((candidate) => candidate.id === node.id) : peerIndex
+    const possible = geometryMatches
+      .map((match, matchIndex) => {
+        const tableOrderScore = tablePeers.length > 1 && matchIndex === expectedIndex ? 0.24 : 0
+        const documentOrderScore = !node.table && peers.length > 1 && matchIndex === expectedIndex ? 0.18 : 0
+        return { ...match, score: match.score + tableOrderScore + documentOrderScore + nearbyWritableScore(node, match) }
+      })
       .filter((match) => !usedStarts.has(match.startOrder))
       .sort((left, right) => right.score - left.score || left.startOrder - right.startOrder)
     const best = possible[0]

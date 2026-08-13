@@ -38,6 +38,8 @@ interface Candidate {
   options?: string[]
 }
 
+const PARAGRAPH_AFTER_LABELS = ["基本概况", "主要做法", "创新成效", "应用情况", "推广价值"]
+
 function stableId(candidate: Candidate) {
   return `region_${createHash("sha256").update(`${candidate.partName}|${candidate.path}|${candidate.kind}|${candidate.label.normalize("NFKC")}`).digest("hex").slice(0, 16)}`
 }
@@ -187,6 +189,17 @@ function detectPart(partName: string, xml: string) {
         ...base(paragraph), kind: "label_blank", label, inferredAnswerType: inferAnswerType(label), confidence: "medium",
         evidence: ["段落以标签冒号结尾"], ...hints,
       })
+    } else {
+      const paragraphAfterLabel = PARAGRAPH_AFTER_LABELS.find((label) => text.includes(label))
+      const boundedInstruction = /(?:不超过|最多|限)\s*\d{1,6}\s*(?:个?字|字符)/.test(text)
+      if (paragraphAfterLabel || boundedInstruction) {
+        const label = cleanLabel(paragraphAfterLabel || text)
+        const hints = instructionHints(text)
+        pushCandidate(candidates, {
+          ...base(paragraph), kind: "label_blank", label, inferredAnswerType: "textarea", confidence: "medium",
+          evidence: [paragraphAfterLabel ? "检测到叙述类填写说明段落" : "检测到带长度限制的填写说明段落", "答案应写入下一段而非说明文字"], ...hints,
+        })
+      }
     }
   }
 
