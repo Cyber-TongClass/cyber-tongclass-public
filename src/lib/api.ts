@@ -180,6 +180,7 @@ const teacherRecognitionReviewDetailRef = makeFunctionReference<"query">("teache
 const teacherRecognitionReviewActionRef = makeFunctionReference<"mutation">("teacherRecognitions:actOnReviewTask")
 const teacherRecognitionManagementRef = makeFunctionReference<"query">("teacherRecognitions:listForManagement")
 const teacherRecognitionProofUrlRef = makeFunctionReference<"query">("teacherRecognitions:getProofUrl")
+const teacherRecognitionPublicPersonRef = makeFunctionReference<"query">("teacherRecognitions:listPublicForPerson")
 const TECHDAY_AUTH_STORAGE_EVENT = "techday-auth-storage"
 const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
 
@@ -1450,6 +1451,20 @@ export function useTeacherRecognitionProofUrl(submissionId?: string | null, stor
     teacherRecognitionProofUrlRef,
     sessionToken && submissionId && storageId ? ({ sessionToken, submissionId, storageId } as any) : "skip",
   ) as string | null | undefined
+}
+
+export function usePublicTeacherRecognitions(slug?: string | null) {
+  return useQuery(
+    teacherRecognitionPublicPersonRef,
+    slug ? ({ slug } as any) : "skip",
+  ) as Array<{
+    reportingYear: number
+    categoryLabel: string
+    name: string
+    organization: string
+    startDate: string
+    endDate?: string
+  }> | undefined
 }
 
 // ==================== OA 表单 / 问卷申请 ====================

@@ -8,7 +8,7 @@ import {
 } from "@/components/institute/live-directory-view-model"
 import { PersonProfile } from "@/components/institute/person-profile"
 import { SafeReturnLink } from "@/components/navigation/safe-return-link"
-import { usePublicInstitutePerson, usePublicInstituteResearch, usePublicInstituteUpdates, usePublicResearchGroups } from "@/lib/api"
+import { usePublicInstitutePerson, usePublicInstituteResearch, usePublicInstituteUpdates, usePublicResearchGroups, usePublicTeacherRecognitions } from "@/lib/api"
 import type { PublicInstitutePerson, PublicInstituteResearch, PublicInstituteUpdate, PublicResearchGroup } from "@/types/institute"
 
 type LivePersonProfileProps = {
@@ -34,8 +34,9 @@ export function LivePersonProfile({ slug }: LivePersonProfileProps) {
   const groups = usePublicResearchGroups({ limit: 100 }) as PublicResearchGroup[] | undefined
   const research = usePublicInstituteResearch({ personSlug: slug, limit: 100 }) as PublicInstituteResearch[] | undefined
   const updates = usePublicInstituteUpdates({ personSlug: slug, limit: 100 }) as PublicInstituteUpdate[] | undefined
+  const recognitions = usePublicTeacherRecognitions(slug)
 
-  if (person === undefined || groups === undefined || research === undefined || updates === undefined) {
+  if (person === undefined || groups === undefined || research === undefined || updates === undefined || recognitions === undefined) {
     return (
       <div className="min-h-screen py-12 sm:py-16" aria-live="polite">
         <div className="container-custom max-w-5xl">
@@ -65,6 +66,7 @@ export function LivePersonProfile({ slug }: LivePersonProfileProps) {
       groups={relatedGroups}
       outputs={research.map((item) => toDirectoryResearchOutput(item, `/people/${slug}`, slug))}
       updates={updates.map((item) => toDirectoryUpdate(item, `/people/${slug}`))}
+      recognitions={recognitions}
     />
   )
 }

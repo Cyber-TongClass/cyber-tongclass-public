@@ -202,7 +202,7 @@ export default function OADocumentTemplatePage() {
             </div>
           </div>
         </section>
-      ) : manifest && versionId ? (
+      ) : manifest && versionId && version ? (
         <section className="mt-8">
           <OADocumentWorkbench
             key={versionId}

@@ -17,6 +17,14 @@ type PersonProfileProps = {
   groups?: readonly PublicResearchGroup[]
   outputs?: readonly PublicResearchOutput[]
   updates?: readonly PublicDirectoryUpdate[]
+  recognitions?: readonly {
+    reportingYear: number
+    categoryLabel: string
+    name: string
+    organization: string
+    startDate: string
+    endDate?: string
+  }[]
 }
 
 export function PersonProfile({
@@ -24,6 +32,7 @@ export function PersonProfile({
   groups = [],
   outputs = [],
   updates = [],
+  recognitions = [],
 }: PersonProfileProps) {
   const Icon = person.kind === "teacher" ? UserRound : GraduationCap
   const publicGroups = groups.filter(
@@ -103,15 +112,36 @@ export function PersonProfile({
         </article>
 
         {person.kind === "teacher" ? (
-          <div className="mt-12">
-            <ResearchOutputList
-              outputs={relatedOutputs}
-              heading="相关论文"
-              emptyMessage="暂未发布与该教师直接关联的论文。"
-              showSummary={false}
-              underlineTitleLinks={false}
-            />
-          </div>
+          <>
+            <section aria-labelledby="person-recognitions-title" className="mt-12">
+              <div className="flex items-baseline gap-3 border-b aia-border-rule pb-2">
+                <h2 id="person-recognitions-title" className="aia-serif text-xl font-semibold text-[hsl(var(--aia-ink))]">荣誉与专业服务</h2>
+                <span className="aia-mono text-xs aia-text-muted">{recognitions.length} 项</span>
+              </div>
+              {recognitions.length ? (
+                <ul>
+                  {recognitions.map((item, index) => (
+                    <li key={`${item.reportingYear}-${item.name}-${index}`} className="grid gap-1 border-b aia-border-rule py-4 sm:grid-cols-[5rem_minmax(0,1fr)]">
+                      <span className="aia-mono text-xs text-[hsl(var(--aia-red))]">{item.reportingYear}</span>
+                      <span>
+                        <strong className="aia-serif block text-base font-semibold text-[hsl(var(--aia-ink))]">{item.name}</strong>
+                        <span className="aia-text-muted mt-1 block text-sm">{item.categoryLabel} · {item.organization}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="aia-text-muted py-5 text-sm">暂未发布已审核通过的荣誉或专业服务。</p>}
+            </section>
+            <div className="mt-12">
+              <ResearchOutputList
+                outputs={relatedOutputs}
+                heading="相关论文"
+                emptyMessage="暂未发布与该教师直接关联的论文。"
+                showSummary={false}
+                underlineTitleLinks={false}
+              />
+            </div>
+          </>
         ) : null}
 
         {person.kind !== "teacher" ? (

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 
-import { useTeacherRecognitionCategories, useTeacherRecognitionManagement } from "@/lib/api"
+import { getTongClassStoredSessionToken, useTeacherRecognitionCategories, useTeacherRecognitionManagement } from "@/lib/api"
 import { getTeacherRecognitionStatusLabel } from "@/lib/teacher-recognition"
 
 export function TeacherRecognitionManagement() {
@@ -18,9 +18,32 @@ export function TeacherRecognitionManagement() {
     ...(status ? { status } : {}),
   }), [year, teacherQuery, categoryId, status])
   const data = useTeacherRecognitionManagement(filters) as any
+  const [exporting, setExporting] = useState(false)
+  const [exportMessage, setExportMessage] = useState("")
+
+  async function exportExcel() {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) return
+    setExporting(true); setExportMessage("")
+    try {
+      const response = await fetch("/api/teacher-recognitions/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify(filters),
+      })
+      if (!response.ok) throw new Error("导出失败")
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      anchor.href = url; anchor.download = "教师奖励统计.xlsx"; anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (error) { setExportMessage(error instanceof Error ? error.message : "导出失败") }
+    finally { setExporting(false) }
+  }
 
   return <div>
-    <div className="border-b aia-border-rule pb-5"><p className="aia-kicker">Management · Annual</p><h2 className="aia-serif mt-2 text-2xl font-semibold">年度统计</h2></div>
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b aia-border-rule pb-5"><div><p className="aia-kicker">Management · Annual</p><h2 className="aia-serif mt-2 text-2xl font-semibold">年度统计</h2></div><button type="button" onClick={exportExcel} disabled={exporting || data === undefined} className="aia-focus border aia-border-rule px-3 py-2 text-sm font-medium disabled:opacity-50">{exporting ? "正在生成…" : "导出 Excel"}</button></div>
+    {exportMessage ? <p role="status" className="mt-3 text-sm text-[hsl(var(--aia-red))]">{exportMessage}</p> : null}
     <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="text-xs aia-text-muted">年度<input value={year} onChange={(e) => setYear(e.target.value)} type="number" placeholder="全部" className="aia-focus mt-1 w-full border aia-border-rule bg-transparent px-3 py-2 text-sm" /></label>
       <label className="text-xs aia-text-muted">教师<input value={teacherQuery} onChange={(e) => setTeacherQuery(e.target.value)} placeholder="姓名 / 邮箱" className="aia-focus mt-1 w-full border aia-border-rule bg-transparent px-3 py-2 text-sm" /></label>
