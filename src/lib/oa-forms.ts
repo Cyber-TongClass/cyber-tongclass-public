@@ -27,6 +27,12 @@ export type OAFormField = {
   acceptedMimeTypes?: string[]
   maxFiles?: number
   maxFileSizeMB?: number
+  maxLength?: number
+  documentOutput?: {
+    mode: "replace" | "append" | "mark_choice" | "repeat_row"
+    multiline?: boolean
+    preservePrototype?: boolean
+  }
   columns?: OATableColumn[]
 }
 

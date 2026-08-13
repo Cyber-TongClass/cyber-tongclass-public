@@ -43,6 +43,12 @@ const oaFormField = v.object({
   acceptedMimeTypes: v.optional(v.array(v.string())),
   maxFiles: v.optional(v.number()),
   maxFileSizeMB: v.optional(v.number()),
+  maxLength: v.optional(v.number()),
+  documentOutput: v.optional(v.object({
+    mode: v.union(v.literal("replace"), v.literal("append"), v.literal("mark_choice"), v.literal("repeat_row")),
+    multiline: v.optional(v.boolean()),
+    preservePrototype: v.optional(v.boolean()),
+  })),
   columns: v.optional(v.array(oaTableColumn)),
 })
 

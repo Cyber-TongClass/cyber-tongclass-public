@@ -62,6 +62,12 @@ const fieldValidator = v.object({
   acceptedMimeTypes: v.optional(v.array(v.string())),
   maxFiles: v.optional(v.number()),
   maxFileSizeMB: v.optional(v.number()),
+  maxLength: v.optional(v.number()),
+  documentOutput: v.optional(v.object({
+    mode: v.union(v.literal("replace"), v.literal("append"), v.literal("mark_choice"), v.literal("repeat_row")),
+    multiline: v.optional(v.boolean()),
+    preservePrototype: v.optional(v.boolean()),
+  })),
   columns: v.optional(v.array(tableColumnValidator)),
 })
 
@@ -658,6 +664,12 @@ function sanitizeField(field: any) {
     acceptedMimeTypes: field.acceptedMimeTypes?.map((type: string) => normalizeText(type).toLowerCase()).filter(Boolean),
     maxFiles: field.maxFiles && field.maxFiles > 0 ? Math.floor(field.maxFiles) : undefined,
     maxFileSizeMB: field.maxFileSizeMB && field.maxFileSizeMB > 0 ? field.maxFileSizeMB : undefined,
+    maxLength: field.maxLength && field.maxLength > 0 ? Math.floor(field.maxLength) : undefined,
+    documentOutput: field.documentOutput ? {
+      mode: field.documentOutput.mode,
+      multiline: Boolean(field.documentOutput.multiline),
+      preservePrototype: Boolean(field.documentOutput.preservePrototype),
+    } : undefined,
     columns: field.columns?.map((column: any) => ({
       id: normalizeText(column.id),
       label: normalizeText(column.label),
@@ -787,6 +799,9 @@ async function normalizeAnswers(ctx: any, form: any, answers: Record<string, unk
       continue
     }
     if (isEmpty(value)) continue
+    if (field.maxLength && typeof value === "string" && value.length > field.maxLength) {
+      errors.push(`${field.label}不能超过 ${field.maxLength} 个字符`)
+    }
     if (field.type === "number" && (typeof value !== "number" || !Number.isFinite(value))) errors.push(`${field.label}必须是数字`)
     if (["select", "radio"].includes(field.type) && field.options?.length) {
       const allowed = allowedOptionValues(field)
