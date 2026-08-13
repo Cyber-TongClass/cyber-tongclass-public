@@ -298,6 +298,7 @@ export interface OAFormSubmission {
   approvalStepsSnapshot?: Array<{ id: string; title: string; completion?: "any" | "all" }>
   workflowDefinitionSnapshot?: OAWorkflowDefinition
   workflowError?: string
+  documentTemplateVersionId?: string
   workflowStartedAt?: number
   workflowCompletedAt?: number
   submittedAt: number

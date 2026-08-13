@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, CircleAlert, EyeOff, Plus, Trash2 } from "lucide-react"
+import { AlertCircle, Check, EyeOff, Plus, Trash2 } from "lucide-react"
 
 import type { OADocumentSuggestion } from "@/lib/oa-document-templates"
 import { cn } from "@/lib/utils"
@@ -67,7 +67,7 @@ export function OADocumentAnnotationPanel({
                     {String(index + 1).padStart(2, "0")} · {labels[suggestion.reviewState]}
                   </span>
                 </span>
-                {suggestion.reviewState === "conflict" ? <CircleAlert className="h-4 w-4 text-[hsl(var(--aia-red))]" aria-label="冲突" /> : null}
+                {suggestion.reviewState === "conflict" ? <AlertCircle className="h-4 w-4 text-[hsl(var(--aia-red))]" aria-label="冲突" /> : null}
               </span>
             </button>
             {activeRegionId === suggestion.id ? (

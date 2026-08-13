@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ChevronLeft, ChevronRight, Save } from "lucide-react"
+import { ChevronLeft, ChevronRight, FileCheck2, Save } from "lucide-react"
 
 import type { OADocumentSuggestion, OADocumentTemplateManifest } from "@/lib/oa-document-templates"
 import { countTemplateReviewStates, createStableDocumentFieldId } from "@/lib/oa-document-templates"
@@ -29,9 +29,15 @@ function newSuggestion(index: number): OADocumentSuggestion {
 export function OADocumentWorkbench({
   initialManifest,
   onSave,
+  onChange,
+  onCompile,
+  compiling = false,
 }: {
   initialManifest: OADocumentTemplateManifest
   onSave: (manifest: OADocumentTemplateManifest) => Promise<void>
+  onChange?: (manifest: OADocumentTemplateManifest) => void
+  onCompile?: (manifest: OADocumentTemplateManifest) => Promise<void>
+  compiling?: boolean
 }) {
   const [manifest, setManifest] = useState(initialManifest)
   const [activeRegionId, setActiveRegionId] = useState(initialManifest.suggestions[0]?.id)
@@ -41,22 +47,32 @@ export function OADocumentWorkbench({
   const counts = useMemo(() => countTemplateReviewStates(manifest.suggestions), [manifest.suggestions])
   const active = manifest.suggestions.find((item) => item.id === activeRegionId)
 
+  const commit = (next: OADocumentTemplateManifest) => {
+    setManifest(next)
+    onChange?.(next)
+  }
   const updateSuggestion = (next: OADocumentSuggestion) => {
-    setManifest((current) => ({ ...current, suggestions: current.suggestions.map((item) => item.id === next.id ? next : item) }))
+    commit({ ...manifest, suggestions: manifest.suggestions.map((item) => item.id === next.id ? next : item) })
   }
   const decide = (id: string, reviewState: "confirmed" | "ignored" | "deleted") => {
-    setManifest((current) => ({
-      ...current,
-      suggestions: current.suggestions.map((item) => item.id === id
+    commit({
+      ...manifest,
+      suggestions: manifest.suggestions.map((item) => item.id === id
         ? { ...item, reviewState, fieldId: reviewState === "confirmed" ? (item.fieldId || createStableDocumentFieldId(item.label, item.path)) : item.fieldId }
         : item),
-    }))
+    })
   }
   const save = async () => {
     setSaving(true); setMessage("")
     try { await onSave(manifest); setMessage("批注已保存。") }
     catch (error) { setMessage(error instanceof Error ? error.message : "保存失败，请重试。") }
     finally { setSaving(false) }
+  }
+  const compile = async () => {
+    if (!onCompile || counts.unresolved > 0 || counts.conflicts > 0) return
+    setMessage("")
+    try { await onCompile(manifest); setMessage("模板已编译并启用，字段已合并到收集表单。") }
+    catch (error) { setMessage(error instanceof Error ? error.message : "编译失败，请重试。") }
   }
 
   return (
@@ -72,6 +88,16 @@ export function OADocumentWorkbench({
         <button type="button" onClick={save} disabled={saving} className="aia-focus inline-flex items-center gap-2 border border-[hsl(var(--aia-ink))] px-3 py-2 text-sm disabled:opacity-50">
           <Save className="h-4 w-4" aria-hidden="true" />{saving ? "保存中…" : "保存批注"}
         </button>
+        {onCompile ? (
+          <button
+            type="button"
+            onClick={() => void compile()}
+            disabled={saving || compiling || counts.unresolved > 0 || counts.conflicts > 0}
+            className="aia-focus inline-flex items-center gap-2 bg-[hsl(var(--aia-ink))] px-3 py-2 text-sm text-[hsl(var(--aia-paper))] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <FileCheck2 className="h-4 w-4" aria-hidden="true" />{compiling ? "正在编译…" : "编译并启用"}
+          </button>
+        ) : null}
         {message ? <p role="status" className="w-full text-right text-xs aia-text-muted">{message}</p> : null}
       </header>
       <div className="grid lg:grid-cols-[5rem_minmax(0,1fr)_20rem]">
@@ -87,7 +113,7 @@ export function OADocumentWorkbench({
           onActivate={setActiveRegionId}
           onAdd={() => {
             const suggestion = newSuggestion(manifest.suggestions.length)
-            setManifest((current) => ({ ...current, suggestions: [...current.suggestions, suggestion] }))
+            commit({ ...manifest, suggestions: [...manifest.suggestions, suggestion] })
             setActiveRegionId(suggestion.id)
           }}
           onDecision={decide}

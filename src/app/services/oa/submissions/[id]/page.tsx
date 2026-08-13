@@ -4,6 +4,7 @@ import { useParams } from "next/navigation"
 import { useState } from "react"
 import { ArrowLeft, ExternalLink } from "lucide-react"
 import { OAFormRenderer } from "@/components/oa-forms/oa-form-renderer"
+import { OADocumentSingleExportActions } from "@/components/oa-documents/oa-document-export-actions"
 import { AiaOAAuthLoading, AiaOALoginRequired, AiaOAReviewStatusBadge, formatAiaOATime } from "@/components/oa/aia-oa-shared"
 import { SafeReturnLink } from "@/components/navigation/safe-return-link"
 import { useMyOAApprovalHistory, useMyOAFormSubmissions, useOAForm, useOAFormAttachmentUrl, useUpdateOAFormSubmission } from "@/lib/api"
@@ -489,6 +490,7 @@ export default function AiaOASubmissionDetailPage() {
                 {submission.formTitle || form.title}的第 {ordinal} 次提交
               </h1>
               <p className="aia-text-muted mt-2 text-sm">提交于 {formatAiaOATime(submission.submittedAt)}</p>
+              {submission.documentTemplateVersionId ? <OADocumentSingleExportActions submissionId={submission._id} /> : null}
             </div>
             <AiaOAReviewStatusBadge status={submission.reviewStatus} />
           </header>

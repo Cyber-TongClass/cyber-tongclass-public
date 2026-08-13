@@ -3,11 +3,12 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { ArrowLeft, Search } from "lucide-react"
+import { ArrowLeft, FileInput, Search } from "lucide-react"
 
 import { OaScopePicker } from "@/components/oa/oa-scope-picker"
 import { OAWorkflowEditor } from "@/components/oa/oa-workflow-editor"
 import { OAFormBuilder } from "@/components/oa-forms/oa-form-builder"
+import { OADocumentBatchExportActions } from "@/components/oa-documents/oa-document-export-actions"
 import { formatAiaOATime } from "@/components/oa/aia-oa-shared"
 import {
   useEditorVisibleOAForms,
@@ -64,11 +65,20 @@ const reviewStatusClass: Record<OAReviewStatus, string> = {
 function FormSubmissionsSection({ form }: { form: OAForm }) {
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<"all" | OAReviewStatus>("all")
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([])
   const submissions = useManageOAFormSubmissions({
     formId: form._id,
     status: status === "all" ? undefined : status,
     search: search.trim() || undefined,
   }) as OAFormSubmission[] | undefined
+  const visibleIds = submissions?.map((submission) => submission._id) || []
+  const visibleSelected = visibleIds.filter((id) => selectedSubmissionIds.includes(id))
+  const allVisibleSelected = visibleIds.length > 0 && visibleSelected.length === visibleIds.length
+  const toggle = (id: string, selected: boolean) => {
+    setSelectedSubmissionIds((current) => selected
+      ? [...new Set([...current, id])].slice(0, 100)
+      : current.filter((item) => item !== id))
+  }
 
   return (
     <section id="submissions" aria-labelledby="form-submissions-title" className="mt-12 scroll-mt-24 border-t aia-border-rule pt-8">
@@ -114,9 +124,34 @@ function FormSubmissionsSection({ form }: { form: OAForm }) {
         </p>
       ) : (
         <div className="mt-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <label className="aia-focus inline-flex items-center gap-2 text-xs text-[hsl(var(--aia-ink))]">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[hsl(var(--aia-red))]"
+                checked={allVisibleSelected}
+                onChange={(event) => setSelectedSubmissionIds((current) => event.target.checked
+                  ? [...new Set([...current, ...visibleIds])].slice(0, 100)
+                  : current.filter((id) => !visibleIds.includes(id)))}
+              />
+              选择当前列表（每次最多 100 份）
+            </label>
+            {selectedSubmissionIds.length ? (
+              <button type="button" className="aia-link aia-focus text-xs" onClick={() => setSelectedSubmissionIds([])}>清除选择</button>
+            ) : null}
+          </div>
+          <OADocumentBatchExportActions formId={form._id} submissionIds={selectedSubmissionIds} />
           {submissions.map((submission) => (
             <details key={submission._id} className="group border-t aia-border-rule last:border-b">
               <summary className="aia-focus flex cursor-pointer list-none flex-wrap items-baseline gap-x-4 gap-y-1 py-4 [&::-webkit-details-marker]:hidden">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 accent-[hsl(var(--aia-red))]"
+                  checked={selectedSubmissionIds.includes(submission._id)}
+                  aria-label={`选择${submission.submitterName}的提交`}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => toggle(submission._id, event.target.checked)}
+                />
                 <span className="aia-serif text-base font-semibold text-[hsl(var(--aia-ink))]">
                   {submission.submitterName}
                 </span>
@@ -224,10 +259,24 @@ export function ManageFormEditor({
       </div>
 
       <section aria-label="表单内容" className="mt-10 border-t aia-border-rule pt-8">
-        <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">表单内容</h2>
-        <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">
-          填写基本信息，并从组件面板插入填空、选择、表格、附件等字段。新表单保存后为草稿，回到列表页发布。
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">表单内容</h2>
+            <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">
+              填写基本信息，并从组件面板插入填空、选择、表格、附件等字段。新表单保存后为草稿，回到列表页发布。
+            </p>
+          </div>
+          {form ? (
+            <Link
+              href={`/forms/manage/${form._id}/document-template`}
+              className="aia-focus inline-flex shrink-0 items-center gap-2 border aia-border-rule px-3 py-2 text-sm font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]"
+            >
+              <FileInput className="h-4 w-4" aria-hidden="true" />
+              从 Word 导入 / 原格式模板
+            </Link>
+          ) : null}
+        </div>
+        {!form ? <p className="aia-mono mt-3 text-xs aia-text-muted">保存新表单后，即可导入 .docx 或 .doc 原格式模板。</p> : null}
         <div className="mt-5">
           <OAFormBuilder
             form={form ?? { ...createDefaultOAFormDraft("未命名表单"), category: "教学服务" }}

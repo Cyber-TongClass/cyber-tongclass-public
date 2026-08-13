@@ -93,6 +93,11 @@ const manageSetOAFormStatusRef = makeFunctionReference<"mutation">("oaForms:mana
 const manageSetOAFormPinnedRef = makeFunctionReference<"mutation">("oaForms:manageSetPinned")
 const manageRemoveOAFormRef = makeFunctionReference<"mutation">("oaForms:manageRemove")
 const manageListOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:manageListSubmissions")
+const generateOADocumentTemplateSourceUploadUrlRef = makeFunctionReference<"mutation">("oaDocumentTemplates:generateSourceUploadUrl")
+const createOrGetOADocumentTemplateVersionRef = makeFunctionReference<"mutation">("oaDocumentTemplates:createOrGetVersion")
+const getManageOADocumentTemplateVersionRef = makeFunctionReference<"query">("oaDocumentTemplates:getManageVersion")
+const saveOADocumentTemplateAnalysisRef = makeFunctionReference<"mutation">("oaDocumentTemplates:saveAnalysis")
+const activateOADocumentTemplateVersionRef = makeFunctionReference<"mutation">("oaDocumentTemplates:activateCompiledVersion")
 const generateOAFormUploadUrlRef = makeFunctionReference<"mutation">("oaForms:generateUploadUrl")
 const submitOAFormRef = makeFunctionReference<"mutation">("oaForms:submit")
 const updateOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:updateSubmission")
@@ -1583,6 +1588,76 @@ export function useManageOAFormSubmissions(args?: {
       ? ({ sessionToken, ...args, formId: args.formId as any } as any)
       : "skip",
   )
+}
+
+// ==================== OA 原格式 Word 模板 ====================
+
+export type OADocumentTemplateUploadTarget = string | {
+  storageId: string
+  uploadUrl: string
+  method?: "PUT" | "POST"
+  headers?: Record<string, string>
+}
+
+export function useGenerateOADocumentTemplateSourceUploadUrl() {
+  const generate = useMutation(generateOADocumentTemplateSourceUploadUrlRef)
+  return useCallback((args: { formId: string; fileName: string; mimeType: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return generate({ ...args, sessionToken, formId: args.formId as any } as any) as Promise<OADocumentTemplateUploadTarget>
+  }, [generate])
+}
+
+export function useCreateOrGetOADocumentTemplateVersion() {
+  const createVersion = useMutation(createOrGetOADocumentTemplateVersionRef)
+  return useCallback((args: {
+    formId: string
+    sourceType: "doc" | "docx"
+    sourceFileName: string
+    sourceMimeType: string
+    sourceSize: number
+    sourceSha256: string
+    sourceStorageId: string
+    compilerVersion: string
+    syntaxVersion: string
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return createVersion({ ...args, sessionToken, formId: args.formId as any } as any) as Promise<string>
+  }, [createVersion])
+}
+
+export function useOADocumentTemplateVersion(versionId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    getManageOADocumentTemplateVersionRef,
+    sessionToken && versionId ? ({ sessionToken, versionId: versionId as any } as any) : "skip",
+  )
+}
+
+export function useSaveOADocumentTemplateReview() {
+  const saveReview = useMutation(saveOADocumentTemplateAnalysisRef)
+  return useCallback((args: {
+    versionId: string
+    manifest: unknown
+    warnings: unknown[]
+    capabilities: unknown
+    workingStorageId?: string
+    previewStorageId?: string
+  }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return saveReview({ ...args, sessionToken, versionId: args.versionId as any } as any)
+  }, [saveReview])
+}
+
+export function useActivateOADocumentTemplateVersion() {
+  const activate = useMutation(activateOADocumentTemplateVersionRef)
+  return useCallback((args: { versionId: string; compiledStorageId: string; manifest: unknown }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return activate({ ...args, sessionToken, versionId: args.versionId as any } as any)
+  }, [activate])
 }
 
 /** Teacher-owned form publishing: each teacher only ever sees their own forms. */

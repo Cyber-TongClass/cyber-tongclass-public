@@ -194,6 +194,7 @@ export default function FormsManagePage() {
                       </button>
                     ) : null}
                     <Link href={`/forms/manage/${form._id}`} className={actionButtonClass}>编辑</Link>
+                    <Link href={`/forms/manage/${form._id}/document-template`} className={actionButtonClass}>原格式模板</Link>
                     {form.kind !== "reimbursement" || canManageReimbursement ? (
                       <Link href={`/forms/manage/${form._id}#submissions`} className={actionButtonClass}>提交记录</Link>
                     ) : null}
