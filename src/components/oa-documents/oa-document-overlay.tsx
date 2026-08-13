@@ -89,11 +89,17 @@ export function OADocumentOverlay({
       height: visual.height * page.height,
     }
     if (!exact.width || !exact.height) return undefined
-    const fx = (event.clientX - exact.left) / exact.width
-    const fy = (event.clientY - exact.top) / exact.height
-    if (fx > 0.25 && fx < 0.75 && fy > 0.25 && fy < 0.75) return undefined
-    const horizontal = fx <= 0.25 ? "left" : fx >= 0.75 ? "right" : ""
-    const vertical = fy <= 0.25 ? "top" : fy >= 0.75 ? "bottom" : ""
+    const hitWidth = Math.max(exact.width, 44)
+    const hitHeight = Math.max(exact.height, 44)
+    const hitLeft = exact.left + exact.width / 2 - hitWidth / 2
+    const hitTop = exact.top + exact.height / 2 - hitHeight / 2
+    const fx = (event.clientX - hitLeft) / hitWidth
+    const fy = (event.clientY - hitTop) / hitHeight
+    const moveHalfWidth = Math.min(0.3, Math.max(0.14, 14 / hitWidth))
+    const moveHalfHeight = Math.min(0.3, Math.max(0.14, 14 / hitHeight))
+    if (Math.abs(fx - 0.5) <= moveHalfWidth && Math.abs(fy - 0.5) <= moveHalfHeight) return undefined
+    const horizontal = fx < 0.5 - moveHalfWidth ? "left" : fx > 0.5 + moveHalfWidth ? "right" : ""
+    const vertical = fy < 0.5 - moveHalfHeight ? "top" : fy > 0.5 + moveHalfHeight ? "bottom" : ""
     return (vertical && horizontal ? `${vertical}-${horizontal}` : vertical || horizontal) as OADocumentResizeHandle
   }
 
