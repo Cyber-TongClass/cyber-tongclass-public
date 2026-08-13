@@ -159,7 +159,7 @@ test("rejects invalid version-two visual geometry", () => {
   }
 })
 
-test("requires both anchors and one unique candidate for every confirmed version-two field", () => {
+test("requires both anchors and one unique candidate for every version-two field", () => {
   for (const omitted of ["visual", "bindingCandidateId", "structural"]) {
     const manifest = versionTwoManifest()
     delete manifest.anchors[0][omitted]
@@ -168,7 +168,11 @@ test("requires both anchors and one unique candidate for every confirmed version
 
   const withoutConfirmedAnchor = versionTwoManifest()
   withoutConfirmedAnchor.anchors = []
-  assert.throws(() => domain.validateTemplateManifest(withoutConfirmedAnchor), /已确认字段.*锚点/)
+  assert.throws(() => domain.validateTemplateManifest(withoutConfirmedAnchor), /字段.*恰有一个锚点/)
+
+  const fieldWithoutSuggestionOrAnchor = versionTwoManifest()
+  fieldWithoutSuggestionOrAnchor.fields.push({ fieldId: "orphan", label: "无建议字段", answerType: "text", required: false })
+  assert.throws(() => domain.validateTemplateManifest(fieldWithoutSuggestionOrAnchor), /字段 orphan.*恰有一个锚点/)
 
   const duplicate = versionTwoManifest()
   duplicate.fields.push({ fieldId: "overview", label: "基本概况", answerType: "textarea", required: true })
@@ -188,6 +192,47 @@ test("requires both anchors and one unique candidate for every confirmed version
     structural: { ...structural, path: "/document/body[1]/p[8]", contextHash: "sha256:def" },
   })
   assert.throws(() => domain.validateTemplateManifest(duplicate), /候选 ID.*重复/)
+})
+
+test("requires version-two legacy locators to mirror the structural anchor", () => {
+  for (const [property, value] of [
+    ["partName", "word/header1.xml"],
+    ["path", "/document/body[1]/p[99]"],
+    ["contextHash", "sha256:different"],
+  ]) {
+    const manifest = versionTwoManifest()
+    manifest.anchors[0] = { ...manifest.anchors[0], [property]: value }
+    assert.throws(() => domain.validateTemplateManifest(manifest), /顶层结构定位.*一致/)
+  }
+})
+
+test("binds each confirmed suggestion candidate to its corresponding field anchor", () => {
+  const missingCandidateList = versionTwoManifest()
+  delete missingCandidateList.suggestions[0].bindingCandidateIds
+  assert.throws(() => domain.validateTemplateManifest(missingCandidateList), /已确认建议.*候选 ID/)
+
+  const wrongCandidate = versionTwoManifest()
+  wrongCandidate.suggestions[0].bindingCandidateIds = ["candidate_other_field"]
+  assert.throws(() => domain.validateTemplateManifest(wrongCandidate), /已确认建议.*候选 ID/)
+
+  const wrongField = versionTwoManifest()
+  wrongField.fields.push({ fieldId: "overview", label: "基本概况", answerType: "textarea", required: true })
+  wrongField.anchors.push({
+    ...wrongField.anchors[0],
+    fieldId: "overview",
+    partName: "word/header1.xml",
+    path: "/hdr[1]/p[1]",
+    contextHash: "sha256:overview",
+    bindingCandidateId: "candidate_overview",
+    structural: {
+      ...wrongField.anchors[0].structural,
+      partName: "word/header1.xml",
+      path: "/hdr[1]/p[1]",
+      contextHash: "sha256:overview",
+    },
+  })
+  wrongField.suggestions[0].fieldId = "overview"
+  assert.throws(() => domain.validateTemplateManifest(wrongField), /已确认建议.*候选 ID/)
 })
 
 test("derives deterministic safe field IDs", () => {

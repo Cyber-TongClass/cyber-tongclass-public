@@ -295,6 +295,7 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
   const anchorKeys = new Set<string>()
   const bindingCandidateIds = new Set<string>()
   const anchorCountsByField = new Map<string, number>()
+  const anchorsByField = new Map<string, OADocumentAnchor>()
   for (const anchor of manifest.anchors) {
     if (!fieldIds.has(anchor.fieldId)) throw new Error(`锚点引用不存在的字段：${anchor.fieldId}`)
     if (!REGION_KINDS.has(anchor.kind)) throw new Error("锚点区域类型无效")
@@ -305,6 +306,7 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
     if (anchorKeys.has(key)) throw new Error(`锚点自然键重复：${key}`)
     anchorKeys.add(key)
     anchorCountsByField.set(anchor.fieldId, (anchorCountsByField.get(anchor.fieldId) ?? 0) + 1)
+    anchorsByField.set(anchor.fieldId, anchor)
     if (manifest.syntaxVersion >= 2) {
       if (!anchor.visual || !anchor.bindingCandidateId || !anchor.structural) throw new Error(`字段 ${anchor.fieldId} 缺少完整双锚点`)
       assertVisualAnchor(anchor.visual)
@@ -312,6 +314,14 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
       if (bindingCandidateIds.has(anchor.bindingCandidateId)) throw new Error(`候选 ID 重复：${anchor.bindingCandidateId}`)
       bindingCandidateIds.add(anchor.bindingCandidateId)
       assertStructuralAnchor(anchor.structural)
+      if (anchor.partName !== anchor.structural.partName || anchor.path !== anchor.structural.path || anchor.contextHash !== anchor.structural.contextHash) {
+        throw new Error(`字段 ${anchor.fieldId} 的顶层结构定位必须与 structural 一致`)
+      }
+    }
+  }
+  if (manifest.syntaxVersion >= 2) {
+    for (const fieldId of fieldIds) {
+      if (anchorCountsByField.get(fieldId) !== 1) throw new Error(`字段 ${fieldId} 必须恰有一个锚点`)
     }
   }
   for (const suggestion of manifest.suggestions) {
@@ -326,7 +336,10 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
     }
     if (manifest.syntaxVersion >= 2 && suggestion.reviewState === "confirmed") {
       if (!suggestion.fieldId || !fieldIds.has(suggestion.fieldId)) throw new Error(`已确认建议 ${suggestion.id} 缺少有效字段`)
-      if (anchorCountsByField.get(suggestion.fieldId) !== 1) throw new Error(`已确认字段 ${suggestion.fieldId} 必须恰有一个锚点`)
+      const anchor = anchorsByField.get(suggestion.fieldId)
+      if (!anchor?.bindingCandidateId || !suggestion.bindingCandidateIds?.includes(anchor.bindingCandidateId)) {
+        throw new Error(`已确认建议 ${suggestion.id} 的候选 ID 必须绑定到字段 ${suggestion.fieldId} 的锚点`)
+      }
     }
   }
   return manifest
