@@ -12,6 +12,7 @@ test("Word template backend exposes the immutable version lifecycle", async () =
   const code = await source("convex/oaDocumentTemplates.ts")
   for (const name of [
     "generateSourceUploadUrl",
+    "generateDerivedUploadUrl",
     "createOrGetVersion",
     "getManageVersion",
     "saveAnalysis",

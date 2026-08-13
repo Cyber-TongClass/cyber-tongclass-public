@@ -687,7 +687,11 @@ export default defineSchema({
     // rejects accidental reuse of the same key for different draft content.
     idempotencyKey: v.optional(v.string()),
     requestFingerprint: v.optional(v.string()),
-    origin: v.optional(v.union(v.literal("manual"), v.literal("external_sync"))),
+    origin: v.optional(v.union(
+      v.literal("manual"),
+      v.literal("external_sync"),
+      v.literal("external_news_sync"),
+    )),
     workflowStage: v.optional(v.union(
       v.literal("source_review"),
       v.literal("publication_approval"),
@@ -726,6 +730,7 @@ export default defineSchema({
     status: v.union(
       v.literal("pending"),
       v.literal("approved"),
+      v.literal("accepted"),
       v.literal("rejected"),
       v.literal("changes_requested"),
       v.literal("skipped"),

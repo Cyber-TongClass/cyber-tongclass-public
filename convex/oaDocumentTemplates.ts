@@ -48,6 +48,26 @@ export const generateSourceUploadUrl = mutation({
   },
 })
 
+export const generateDerivedUploadUrl = mutation({
+  args: {
+    sessionToken: v.string(),
+    formId: v.id("oaForms"),
+    fileName: v.string(),
+    mimeType: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { actor } = await requireManagedForm(ctx, args.sessionToken, args.formId)
+    const target = await createR2UploadTarget({
+      purpose: "oa-form-template-derived",
+      ownerId: String(actor._id),
+      fileName: args.fileName,
+      contentType: args.mimeType,
+    })
+    if (!target) throw new Error("Word 派生文件需要配置对象存储")
+    return target
+  },
+})
+
 export const createOrGetVersion = mutation({
   args: {
     sessionToken: v.string(),
