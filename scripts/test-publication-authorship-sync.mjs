@@ -3,6 +3,34 @@ import { readFile } from "node:fs/promises"
 import test from "node:test"
 
 const authorships = await import("../convex/lib/publicationAuthorships.ts")
+const publicationsSource = await readFile(
+  new URL("../convex/publications.ts", import.meta.url),
+  "utf8",
+)
+const authorshipsSource = await readFile(
+  new URL("../convex/lib/publicationAuthorships.ts", import.meta.url),
+  "utf8",
+)
+
+function exportedSection(source, exportName, nextExportName) {
+  const start = source.indexOf(`export const ${exportName}`)
+  assert.notEqual(start, -1, `missing export ${exportName}`)
+  const end = nextExportName
+    ? source.indexOf(`export const ${nextExportName}`, start + 1)
+    : source.length
+  assert.notEqual(end, -1, `missing following export ${nextExportName}`)
+  return source.slice(start, end)
+}
+
+function assertCallOrder(source, labels) {
+  let previousIndex = -1
+  for (const label of labels) {
+    const index = source.indexOf(label)
+    assert.notEqual(index, -1, `missing call boundary: ${label}`)
+    assert.ok(index > previousIndex, `${label} must occur after the previous boundary`)
+    previousIndex = index
+  }
+}
 
 function createFakeContext({ queryRows = {}, uniqueRows = {}, nextInsertIds = [] } = {}) {
   const calls = []
@@ -610,4 +638,56 @@ test("delete cleanup stays bounded to publication relation indexes", async () =>
     ["delete", "mention-2"],
     ["delete", "override-1"],
   ])
+})
+
+test("publication author validator exposes the exact structured write fields", () => {
+  assert.match(authorshipsSource, /export const publicationAuthorInputValidator\s*=\s*v\.object\(\{[\s\S]*?snapshot:\s*v\.string\(\)[\s\S]*?name:\s*v\.string\(\)[\s\S]*?coFirst:\s*v\.boolean\(\)[\s\S]*?corresponding:\s*v\.boolean\(\)[\s\S]*?tongClassUserId:\s*v\.optional\(v\.id\("users"\)\)[\s\S]*?tongClassUsername:\s*v\.optional\(v\.string\(\)\)[\s\S]*?institutePersonSlug:\s*v\.optional\(v\.string\(\)\)[\s\S]*?\}\)/)
+})
+
+test("create validates exact snapshots before insert and syncs after insert", () => {
+  const source = exportedSection(publicationsSource, "create", "update")
+  assert.match(source, /authors:\s*v\.array\(v\.string\(\)\)/)
+  assert.match(source, /authorDetails:\s*v\.array\(publicationAuthorInputValidator\)/)
+  assert.match(source, /作者快照与结构化作者信息不一致/)
+  assertCallOrder(source, [
+    "resolvePublicationAuthors(ctx, args.authorDetails)",
+    "ctx.db.insert(\"publications\"",
+    "syncPublicationAuthorships(ctx, publicationId",
+  ])
+})
+
+test("update requires authors and details as a pair before patching", () => {
+  const source = exportedSection(publicationsSource, "update", "remove")
+  assert.match(source, /authors:\s*v\.optional\(v\.array\(v\.string\(\)\)\)/)
+  assert.match(source, /authorDetails:\s*v\.optional\(v\.array\(publicationAuthorInputValidator\)\)/)
+  assert.match(source, /作者列表与结构化作者信息必须同时提交/)
+  assert.match(source, /作者快照与结构化作者信息不一致/)
+  assertCallOrder(source, [
+    "resolvePublicationAuthors(ctx, args.authorDetails)",
+    "ctx.db.patch(id",
+    "syncPublicationAuthorships(ctx, id",
+  ])
+})
+
+test("remove cascades publication relations before deleting the publication", () => {
+  const source = exportedSection(publicationsSource, "remove", "count")
+  assertCallOrder(source, [
+    "assertPublicationWriteAccess(actor, publication.userId)",
+    "deletePublicationRelations(ctx, args.id)",
+    "ctx.db.delete(args.id)",
+  ])
+})
+
+test("signed-in teacher options use the exact public teacher index and safe projection", () => {
+  const source = exportedSection(
+    publicationsSource,
+    "listInstituteTeacherAuthorOptions",
+    "create",
+  )
+  assert.match(source, /getUserBySession\(ctx, args\.sessionToken\)/)
+  assert.match(source, /withIndex\("by_visibility_kind_order"[\s\S]*?\.eq\("visibility", "public"\)\.eq\("kind", "teacher"\)/)
+  assert.match(source, /filter\(\(person\) => Boolean\(person\.accountUserId\)\)/)
+  assert.match(source, /slug:\s*person\.slug[\s\S]*?nameZh:\s*person\.nameZh[\s\S]*?nameEn:\s*person\.nameEn/)
+  assert.doesNotMatch(source, /return[\s\S]*?accountUserId\s*:/)
+  assert.doesNotMatch(source, /return[\s\S]*?publicEmail\s*:/)
 })

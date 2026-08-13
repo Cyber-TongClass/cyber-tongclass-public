@@ -3,6 +3,12 @@ import { v } from "convex/values"
 import { ensurePublicationVenue } from "./publicationVenues"
 import { getUserBySession } from "./reviewer/lib"
 import { assertPublicationWriteAccess } from "./lib/contentAuthorization"
+import {
+  deletePublicationRelations,
+  publicationAuthorInputValidator,
+  resolvePublicationAuthors,
+  syncPublicationAuthorships,
+} from "./lib/publicationAuthorships"
 
 function publicPublicationDto(publication: any) {
   const {
@@ -107,12 +113,34 @@ export const getById = query({
   },
 })
 
+export const listInstituteTeacherAuthorOptions = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await getUserBySession(ctx, args.sessionToken)
+    const people = await ctx.db
+      .query("institutePeople")
+      .withIndex("by_visibility_kind_order", (index) => (
+        index.eq("visibility", "public").eq("kind", "teacher")
+      ))
+      .collect()
+
+    return people
+      .filter((person) => Boolean(person.accountUserId))
+      .map((person) => ({
+        slug: person.slug,
+        nameZh: person.nameZh,
+        nameEn: person.nameEn,
+      }))
+  },
+})
+
 // Create a new publication
 export const create = mutation({
   args: {
     sessionToken: v.string(),
     title: v.string(),
     authors: v.array(v.string()),
+    authorDetails: v.array(publicationAuthorInputValidator),
     venue: v.string(),
     year: v.number(),
     abstract: v.string(),
@@ -124,7 +152,13 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const actor = await getUserBySession(ctx, args.sessionToken)
     assertPublicationWriteAccess(actor, args.userId)
-    const { title, authors, venue, year, abstract, category, userId } = args
+    const { title, venue, year, abstract, category, userId } = args
+    const validatedAuthors = await resolvePublicationAuthors(ctx, args.authorDetails)
+    const authors = validatedAuthors.map((author) => author.snapshot)
+    if (JSON.stringify(args.authors) !== JSON.stringify(authors)) {
+      throw new Error("作者快照与结构化作者信息不一致")
+    }
+    const now = Date.now()
 
     const publicationId = await ctx.db.insert("publications", {
       title,
@@ -136,9 +170,10 @@ export const create = mutation({
       category,
       subCategory: args.subCategory,
       userId,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     })
+    await syncPublicationAuthorships(ctx, publicationId, validatedAuthors, now)
     await ensurePublicationVenue(ctx, venue, userId)
 
     return publicationId
@@ -152,6 +187,7 @@ export const update = mutation({
     id: v.id("publications"),
     title: v.optional(v.string()),
     authors: v.optional(v.array(v.string())),
+    authorDetails: v.optional(v.array(publicationAuthorInputValidator)),
     venue: v.optional(v.string()),
     year: v.optional(v.number()),
     abstract: v.optional(v.string()),
@@ -161,7 +197,12 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const actor = await getUserBySession(ctx, args.sessionToken)
-    const { id, sessionToken: _sessionToken, ...updates } = args
+    const {
+      id,
+      sessionToken: _sessionToken,
+      authorDetails: _authorDetails,
+      ...updates
+    } = args
     const publication = await ctx.db.get(id)
 
     if (!publication) {
@@ -169,10 +210,30 @@ export const update = mutation({
     }
     assertPublicationWriteAccess(actor, publication.userId)
 
+    const authorsProvided = args.authors !== undefined
+    const authorDetailsProvided = args.authorDetails !== undefined
+    if (authorsProvided !== authorDetailsProvided) {
+      throw new Error("作者列表与结构化作者信息必须同时提交")
+    }
+
+    let validatedAuthors
+    if (args.authors !== undefined && args.authorDetails !== undefined) {
+      validatedAuthors = await resolvePublicationAuthors(ctx, args.authorDetails)
+      const authors = validatedAuthors.map((author) => author.snapshot)
+      if (JSON.stringify(args.authors) !== JSON.stringify(authors)) {
+        throw new Error("作者快照与结构化作者信息不一致")
+      }
+      updates.authors = authors
+    }
+
+    const now = Date.now()
     await ctx.db.patch(id, {
       ...updates,
-      updatedAt: Date.now(),
+      updatedAt: now,
     })
+    if (validatedAuthors) {
+      await syncPublicationAuthorships(ctx, id, validatedAuthors, now)
+    }
     if (updates.venue !== undefined) {
       await ensurePublicationVenue(ctx, updates.venue, publication.userId)
     }
@@ -193,6 +254,7 @@ export const remove = mutation({
     }
     assertPublicationWriteAccess(actor, publication.userId)
 
+    await deletePublicationRelations(ctx, args.id)
     await ctx.db.delete(args.id)
     return args.id
   },

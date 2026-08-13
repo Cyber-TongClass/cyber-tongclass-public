@@ -1,4 +1,16 @@
-type PublicationAuthorInputLike = {
+import { v } from "convex/values"
+
+export const publicationAuthorInputValidator = v.object({
+  snapshot: v.string(),
+  name: v.string(),
+  coFirst: v.boolean(),
+  corresponding: v.boolean(),
+  tongClassUserId: v.optional(v.id("users")),
+  tongClassUsername: v.optional(v.string()),
+  institutePersonSlug: v.optional(v.string()),
+})
+
+export type PublicationAuthorInputLike = {
   snapshot: string
   name: string
   coFirst: boolean
