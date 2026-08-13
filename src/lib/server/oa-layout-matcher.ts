@@ -1,0 +1,138 @@
+import { createHash } from "node:crypto"
+import type { OADocumentBindingCandidate, OADocumentTemplateWarning, OADocumentVisualAnchor } from "@/lib/oa-document-templates"
+import type { OAPdfLayout, OAPdfPageInfo, OAPdfTextBox } from "@/lib/server/oa-pdf-layout"
+import type { OAWordWritableNode } from "@/lib/server/oa-word-layout-index"
+
+const MIN_SCORE = 0.72
+const MIN_LEAD = 0.12
+
+export interface OAMarkerPlanEntry {
+  nodeId: string
+  partName: string
+  path: string
+  marker: string
+}
+
+export interface OAMarkerResolution {
+  nodeId: string
+  marker: string
+  visual: OADocumentVisualAnchor
+}
+
+function normalized(value: string) {
+  return value.normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/[：:（）()_＿.·…\s]+/g, "").toLocaleLowerCase("en-US")
+}
+
+function unionVisual(boxes: OAPdfTextBox[]): OADocumentVisualAnchor {
+  const first = boxes[0]
+  const x = Math.min(...boxes.map((box) => box.x))
+  const y = Math.min(...boxes.map((box) => box.y))
+  const right = Math.max(...boxes.map((box) => box.x + box.width))
+  const bottom = Math.max(...boxes.map((box) => box.y + box.height))
+  return { page: first.page, x, y, width: right - x, height: bottom - y, pageWidth: first.pageWidth, pageHeight: first.pageHeight, rotation: first.rotation, coordinateSpace: "normalized-pdf" }
+}
+
+function answerVisual(boxes: OAPdfTextBox[], node: OAWordWritableNode) {
+  const label = unionVisual(boxes)
+  const remainingWidth = Math.max(0.005, 1 - label.x - label.width)
+  const width = Math.min(Math.max(0.05, label.width * (node.writeTarget === "paragraph-after" ? 2 : 1)), remainingWidth)
+  const below = node.writeTarget === "paragraph-after"
+  return {
+    ...label,
+    x: below ? label.x : label.x + label.width,
+    y: below ? Math.min(1 - label.height, label.y + label.height) : label.y,
+    width: below ? Math.min(Math.max(0.2, label.width * 2), 1 - label.x) : width,
+  }
+}
+
+interface ScoredMatch { boxes: OAPdfTextBox[]; score: number; startOrder: number }
+
+function scoredMatches(node: OAWordWritableNode, boxes: OAPdfTextBox[]): ScoredMatch[] {
+  const target = normalized(node.label)
+  if (!target) return []
+  const matches: ScoredMatch[] = []
+  for (let start = 0; start < boxes.length; start += 1) {
+    const first = boxes[start]
+    let joined = ""
+    for (let end = start; end < Math.min(boxes.length, start + 12); end += 1) {
+      const current = boxes[end]
+      if (current.page !== first.page) break
+      joined += normalized(current.normalizedText)
+      if (!joined) continue
+      let score = 0
+      if (joined === target) score = 1
+      else if (joined.startsWith(target)) score = 0.88
+      else if (target.startsWith(joined) && joined.length / target.length >= 0.7) score = 0.76
+      else if (current.line === first.line && joined.includes(target)) score = 0.82
+      if (score) matches.push({ boxes: boxes.slice(start, end + 1), score, startOrder: first.order })
+      if (joined.length > target.length * 2 + 12) break
+    }
+  }
+  return matches.sort((left, right) => right.score - left.score || left.startOrder - right.startOrder)
+}
+
+export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayout): { candidates: OADocumentBindingCandidate[]; warnings: OADocumentTemplateWarning[] } {
+  const candidates: OADocumentBindingCandidate[] = []
+  const warnings: OADocumentTemplateWarning[] = []
+  const usedStarts = new Set<number>()
+  const orderedNodes = [...nodes].sort((left, right) => left.order - right.order || left.id.localeCompare(right.id, "en-US"))
+  for (const node of orderedNodes) {
+    const peers = orderedNodes.filter((candidate) => normalized(candidate.label) === normalized(node.label))
+    const peerIndex = peers.findIndex((candidate) => candidate.id === node.id)
+    const bestByStart = new Map<number, ScoredMatch>()
+    for (const match of scoredMatches(node, pdf.textBoxes)) {
+      const existing = bestByStart.get(match.startOrder)
+      if (!existing || match.score > existing.score) bestByStart.set(match.startOrder, match)
+    }
+    const distinctMatches = [...bestByStart.values()]
+    const orderedMatches = distinctMatches.some((match) => match.score >= 0.88)
+      ? distinctMatches.filter((match) => match.score >= 0.88)
+      : distinctMatches
+    const possible = orderedMatches
+      .sort((left, right) => left.startOrder - right.startOrder)
+      .map((match, matchIndex) => ({ ...match, score: Math.max(0, match.score - Math.abs(matchIndex - peerIndex) * 0.25) }))
+      .filter((match) => !usedStarts.has(match.startOrder))
+      .sort((left, right) => right.score - left.score || left.startOrder - right.startOrder)
+    const best = possible[0]
+    const second = possible[1]
+    if (!best || best.score < MIN_SCORE || (second && best.score - second.score < MIN_LEAD)) {
+      warnings.push({ code: best ? "pdf_mapping_ambiguous" : "pdf_mapping_unresolved", message: `${node.label} 未找到唯一可靠的 PDF 写入位置`, severity: "warning", partName: node.partName, regionId: node.id })
+      continue
+    }
+    usedStarts.add(best.startOrder)
+    candidates.push({
+      id: node.id, label: node.label, description: `${node.kind} · ${node.writeTarget}`,
+      partName: node.partName, path: node.path, contextHash: node.contextHash,
+      writeTarget: node.writeTarget, ...(node.styleSourcePath ? { styleSourcePath: node.styleSourcePath } : {}),
+      visual: answerVisual(best.boxes, node),
+    })
+  }
+  return { candidates, warnings }
+}
+
+export function createMarkerPlan(nodes: OAWordWritableNode[]): OAMarkerPlanEntry[] {
+  return [...nodes].sort((left, right) => left.order - right.order || left.id.localeCompare(right.id, "en-US")).map((node) => ({
+    nodeId: node.id, partName: node.partName, path: node.path,
+    marker: `OA_${createHash("sha256").update(`oa-layout-marker-v1|${node.id}`).digest("hex").slice(0, 12).toUpperCase()}`,
+  }))
+}
+
+function samePageGeometry(expected: OAPdfPageInfo[], actual: OAPdfPageInfo[]) {
+  return expected.length === actual.length && expected.every((page, index) => {
+    const candidate = actual[index]
+    return page.page === candidate.page && Math.abs(page.width - candidate.width) <= 0.01 && Math.abs(page.height - candidate.height) <= 0.01 && page.rotation === candidate.rotation
+  })
+}
+
+export function validateMarkerLayout(plan: OAMarkerPlanEntry[], cleanPages: OAPdfPageInfo[], marked: OAPdfLayout): { resolved: OAMarkerResolution[]; unresolved: Array<OAMarkerPlanEntry & { reason: "marker_not_unique" }> } {
+  if (!samePageGeometry(cleanPages, marked.pages)) throw new Error("标记副本与干净 PDF 的页面几何不一致")
+  const resolved: OAMarkerResolution[] = []
+  const unresolved: Array<OAMarkerPlanEntry & { reason: "marker_not_unique" }> = []
+  for (const item of plan) {
+    const marker = normalized(item.marker)
+    const hits = marked.textBoxes.filter((box) => normalized(box.normalizedText) === marker)
+    if (hits.length !== 1) unresolved.push({ ...item, reason: "marker_not_unique" })
+    else resolved.push({ nodeId: item.nodeId, marker: item.marker, visual: unionVisual(hits) })
+  }
+  return { resolved, unresolved }
+}

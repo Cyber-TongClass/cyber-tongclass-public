@@ -62,3 +62,24 @@ test("includes headers and footers in deterministic part order", () => {
   const headerFirst = items.map((x) => x.partName).indexOf("word/header2.xml")
   assert.ok(headerFirst > documentLast)
 })
+
+test("attaches only unique server-issued PDF binding candidates", () => {
+  const xml = readFileSync(path.join(root, "scripts/fixtures/oa-word/docx/structural-regions.xml"), "utf8")
+  const source = docx(xml)
+  const initial = detection.detectWordFormRegions(source)
+  const name = initial.find((item) => item.kind === "table_cell" && item.label === "姓名")
+  assert.ok(name)
+  const visual = { page: 1, x: 0.2, y: 0.3, width: 0.2, height: 0.04, pageWidth: 600, pageHeight: 800, rotation: 0, coordinateSpace: "normalized-pdf" }
+  const binding = { id: "binding_unique", label: name.label, description: "table cell", partName: name.partName, path: name.path, contextHash: name.contextHash, writeTarget: "table-cell", visual }
+  const attached = detection.detectWordFormRegions(source, [binding])
+  const mapped = attached.find((item) => item.id === name.id)
+  assert.deepEqual(mapped.visual, visual)
+  assert.deepEqual(mapped.bindingCandidateIds, ["binding_unique"])
+  assert.equal(mapped.reviewState, "confirmed")
+  assert.ok(attached.filter((item) => item.id !== name.id).every((item) => item.reviewState !== "confirmed"))
+
+  const ambiguous = detection.detectWordFormRegions(source, [binding, { ...binding, id: "binding_other" }]).find((item) => item.id === name.id)
+  assert.equal(ambiguous.reviewState, "conflict")
+  assert.equal(ambiguous.visual, undefined)
+  assert.deepEqual(ambiguous.bindingCandidateIds, ["binding_other", "binding_unique"])
+})

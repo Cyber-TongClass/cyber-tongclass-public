@@ -3,6 +3,7 @@ import {
   createStableDocumentFieldId,
   OA_DOCUMENT_LIMITS,
   type OADocumentAnswerType,
+  type OADocumentBindingCandidate,
   type OADocumentRegionKind,
   type OADocumentSuggestion,
   type OADocumentSuggestionConfidence,
@@ -198,10 +199,25 @@ function packageParts(pkg: OoxmlPackage) {
     .sort((left, right) => left === "word/document.xml" ? -1 : right === "word/document.xml" ? 1 : left.localeCompare(right, "en"))
 }
 
-export function detectWordFormRegions(input: Uint8Array | Buffer | OoxmlPackage): OADocumentSuggestion[] {
+export function detectWordFormRegions(
+  input: Uint8Array | Buffer | OoxmlPackage,
+  bindingCandidates?: readonly OADocumentBindingCandidate[] | ReadonlyMap<string, readonly OADocumentBindingCandidate[]>,
+): OADocumentSuggestion[] {
   const pkg = typeof (input as OoxmlPackage).readText === "function" ? input as OoxmlPackage : readOoxmlPackage(input as Uint8Array)
   const candidates = packageParts(pkg).flatMap((partName) => detectPart(partName, pkg.readText(partName)))
   const withIds = candidates.map((candidate) => ({ ...candidate, id: stableId(candidate) }))
+  const candidateKey = (candidate: Pick<OADocumentBindingCandidate, "partName" | "path" | "contextHash">) => `${candidate.partName}|${candidate.path}|${candidate.contextHash}`
+  const candidatesByLocator = new Map<string, readonly OADocumentBindingCandidate[]>()
+  if (bindingCandidates) {
+    if (typeof (bindingCandidates as ReadonlyMap<string, readonly OADocumentBindingCandidate[]>).get === "function") {
+      for (const [key, values] of bindingCandidates as ReadonlyMap<string, readonly OADocumentBindingCandidate[]>) candidatesByLocator.set(key, values)
+    } else {
+      for (const candidate of bindingCandidates as readonly OADocumentBindingCandidate[]) {
+        const key = candidateKey(candidate)
+        candidatesByLocator.set(key, [...(candidatesByLocator.get(key) || []), candidate])
+      }
+    }
+  }
   const conflictsById = new Map<string, string[]>()
   for (let index = 0; index < withIds.length; index += 1) {
     const current = withIds[index]
@@ -213,7 +229,11 @@ export function detectWordFormRegions(input: Uint8Array | Buffer | OoxmlPackage)
     .map((candidate) => {
       const conflictIds = conflictsById.get(candidate.id) || []
       const fieldId = candidate.fieldId || createStableDocumentFieldId(candidate.label, `${candidate.partName}|${candidate.path}|${candidate.kind}`)
-      const reviewState = conflictIds.length ? "conflict" : candidate.kind === "repeat_row" || candidate.confidence !== "high" ? "unresolved" : "confirmed"
+      const bindings = [...(candidatesByLocator.get(candidateKey(candidate)) || [])].sort((left, right) => left.id.localeCompare(right.id, "en-US"))
+      const hasBindingInput = bindingCandidates !== undefined
+      const reviewState = hasBindingInput
+        ? bindings.length > 1 || conflictIds.length ? "conflict" : bindings.length === 1 ? "confirmed" : "unresolved"
+        : conflictIds.length ? "conflict" : candidate.kind === "repeat_row" || candidate.confidence !== "high" ? "unresolved" : "confirmed"
       return {
         id: candidate.id,
         partName: candidate.partName,
@@ -227,6 +247,8 @@ export function detectWordFormRegions(input: Uint8Array | Buffer | OoxmlPackage)
         evidence: candidate.evidence,
         conflictIds,
         fieldId,
+        ...(bindings.length === 1 ? { visual: bindings[0].visual } : {}),
+        ...(hasBindingInput ? { bindingCandidateIds: bindings.map((binding) => binding.id) } : {}),
         ...(candidate.required !== undefined ? { required: candidate.required } : {}),
         ...(candidate.maxLength !== undefined ? { maxLength: candidate.maxLength } : {}),
         ...(candidate.options?.length ? { options: candidate.options } : {}),
