@@ -50,7 +50,8 @@ test("canvas renders a real authenticated page image with normalized editable ov
   assert.match(overlay, /min-h-11|min-w-11/)
   assert.match(overlay, /pointer-events-none absolute inset-[028]/)
   assert.match(overlay, /touch-none/)
-  assert.match(overlay, /tabIndex=\{-1\}/)
+  assert.match(overlay, /resizeHandleAtPointer/)
+  assert.doesNotMatch(overlay, /handles\.map/)
 })
 
 test("workbench has AIA states, page controls, edit decisions, and publish blocking", async () => {

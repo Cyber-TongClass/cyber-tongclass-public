@@ -19,16 +19,16 @@ const tone: Record<OADocumentSuggestionReviewState, string> = {
   deleted: "border-neutral-300 bg-transparent",
 }
 
-const handles: Array<{ id: OADocumentResizeHandle; className: string; cursor: string }> = [
-  { id: "top-left", className: "left-0 top-0 -translate-x-1/2 -translate-y-1/2", cursor: "cursor-nwse-resize" },
-  { id: "top", className: "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2", cursor: "cursor-ns-resize" },
-  { id: "top-right", className: "right-0 top-0 translate-x-1/2 -translate-y-1/2", cursor: "cursor-nesw-resize" },
-  { id: "right", className: "right-0 top-1/2 translate-x-1/2 -translate-y-1/2", cursor: "cursor-ew-resize" },
-  { id: "bottom-right", className: "bottom-0 right-0 translate-x-1/2 translate-y-1/2", cursor: "cursor-nwse-resize" },
-  { id: "bottom", className: "bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2", cursor: "cursor-ns-resize" },
-  { id: "bottom-left", className: "bottom-0 left-0 -translate-x-1/2 translate-y-1/2", cursor: "cursor-nesw-resize" },
-  { id: "left", className: "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2", cursor: "cursor-ew-resize" },
-]
+const visualHandles = [
+  ["left-0 top-0 -translate-x-1/2 -translate-y-1/2", "top-left"],
+  ["left-1/2 top-0 -translate-x-1/2 -translate-y-1/2", "top"],
+  ["right-0 top-0 translate-x-1/2 -translate-y-1/2", "top-right"],
+  ["right-0 top-1/2 translate-x-1/2 -translate-y-1/2", "right"],
+  ["bottom-0 right-0 translate-x-1/2 translate-y-1/2", "bottom-right"],
+  ["bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2", "bottom"],
+  ["bottom-0 left-0 -translate-x-1/2 translate-y-1/2", "bottom-left"],
+  ["left-0 top-1/2 -translate-x-1/2 -translate-y-1/2", "left"],
+] as const
 
 type DragState = {
   pointerId: number
@@ -79,6 +79,24 @@ export function OADocumentOverlay({
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
+  const resizeHandleAtPointer = (event: PointerEvent<HTMLElement>): OADocumentResizeHandle | undefined => {
+    if (!selected || !pageElement) return undefined
+    const page = pageElement.getBoundingClientRect()
+    const exact = {
+      left: page.left + visual.x * page.width,
+      top: page.top + visual.y * page.height,
+      width: visual.width * page.width,
+      height: visual.height * page.height,
+    }
+    if (!exact.width || !exact.height) return undefined
+    const fx = (event.clientX - exact.left) / exact.width
+    const fy = (event.clientY - exact.top) / exact.height
+    if (fx > 0.25 && fx < 0.75 && fy > 0.25 && fy < 0.75) return undefined
+    const horizontal = fx <= 0.25 ? "left" : fx >= 0.75 ? "right" : ""
+    const vertical = fy <= 0.25 ? "top" : fy >= 0.75 ? "bottom" : ""
+    return (vertical && horizontal ? `${vertical}-${horizontal}` : vertical || horizontal) as OADocumentResizeHandle
+  }
+
   const moveDrag = (event: PointerEvent<HTMLElement>) => {
     const current = drag.current
     const delta = normalizedDelta(event)
@@ -109,7 +127,7 @@ export function OADocumentOverlay({
   return (
     <div
       data-region-id={id}
-      className="pointer-events-none absolute"
+      className="group/region pointer-events-none absolute"
       style={{
         left: `${visual.x * 100}%`,
         top: `${visual.y * 100}%`,
@@ -117,6 +135,14 @@ export function OADocumentOverlay({
         height: `${visual.height * 100}%`,
       }}
     >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-0 border-2 transition-[border-width,background-color] group-hover/region:border-[3px]",
+          tone[state],
+          selected && "border-[3px]",
+        )}
+      />
       <button
         type="button"
         aria-label={`填写区域：${label}`}
@@ -125,23 +151,16 @@ export function OADocumentOverlay({
         onFocus={() => onActivate(id)}
         onClick={() => onActivate(id)}
         onKeyDown={onKeyDown}
-        onPointerDown={(event) => startDrag(event)}
+        onPointerDown={(event) => startDrag(event, resizeHandleAtPointer(event))}
         onPointerMove={moveDrag}
         onPointerUp={stopDrag}
         onPointerCancel={stopDrag}
         className={cn(
-          "aia-focus group pointer-events-auto absolute inset-0 min-h-11 min-w-11 touch-none bg-transparent",
+          "aia-focus group pointer-events-auto absolute left-1/2 top-1/2 h-full w-full min-h-11 min-w-11 -translate-x-1/2 -translate-y-1/2 touch-none bg-transparent",
           selected && "outline outline-2 outline-offset-2 outline-[hsl(var(--aia-ink))]",
         )}
       >
-        <span
-          aria-hidden="true"
-          className={cn(
-            "pointer-events-none absolute inset-0 border-2 transition-[border-width,background-color] group-hover:border-[3px]",
-            tone[state],
-            selected && "border-[3px]",
-          )}
-        />
+        <span aria-hidden="true" className="sr-only">拖动移动；从边缘或角落拖动可缩放</span>
       </button>
       {selected ? (
         <>
@@ -153,20 +172,12 @@ export function OADocumentOverlay({
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />删除
             </button>
           </div>
-          {handles.map((handle) => (
-            <button
-              type="button"
-              tabIndex={-1}
-              key={handle.id}
-              aria-label={`${label} ${handle.id} 缩放手柄`}
-              onPointerDown={(event) => startDrag(event, handle.id)}
-              onPointerMove={moveDrag}
-              onPointerUp={stopDrag}
-              onPointerCancel={stopDrag}
-              className={cn("pointer-events-auto absolute z-20 grid min-h-11 min-w-11 touch-none place-items-center bg-transparent", handle.className, handle.cursor)}
-            >
-              <span aria-hidden="true" className="pointer-events-none h-3 w-3 border border-white bg-[hsl(var(--aia-ink))]" />
-            </button>
+          {visualHandles.map(([position, handle]) => (
+            <span
+              key={handle}
+              aria-hidden="true"
+              className={cn("pointer-events-none absolute z-20 h-3 w-3 border border-white bg-[hsl(var(--aia-ink))]", position)}
+            />
           ))}
         </>
       ) : null}
