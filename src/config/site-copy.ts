@@ -92,6 +92,7 @@ export const siteCopy = {
       courses: { title: "通班课程", description: "课程信息、讲义与课程评价。" },
       events: { title: "通班活动", description: "班级活动安排与记录。" },
       createNews: { title: "创建新闻", description: "撰写新闻并提交给有审核与管理权的成员审批。" },
+      reviewExternalNews: { title: "审阅官网新闻", description: "核对机器人生成的官网新闻草稿，修改后交给发布管理员审批。" },
       manageNews: { title: "管理新闻", description: "审核待发布新闻并查看处理记录。" },
       createEvent: { title: "创建活动", description: "创建活动信息并提交审批。" },
       manageEvent: { title: "管理活动", description: "审核待发布活动并查看处理记录。" },
@@ -102,6 +103,7 @@ export const siteCopy = {
       researchGroupsAdmin: { title: "课题组管理", description: "选择并维护课题组成员、文章与公开资料。" },
       admin: { title: "管理后台", description: "内容、账户与研究院目录的管理入口。" },
       permissions: { title: "权限管理", description: "配置新闻、活动与报销的创建权和审核管理权。" },
+      newsSync: { title: "官网新闻同步", description: "管理固定栏目同步、审阅范围、观察模式与运行健康状态。" },
       organization: { title: "组织管理", description: "新建、管理与删除用户组，用于表单可见范围与审批范围。" },
     },
     sections: {

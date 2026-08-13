@@ -2739,9 +2739,9 @@ export function useSaveExternalNewsReviewDraft() { return useExternalNewsMutatio
 export function useAdoptExternalNewsSnapshot() { return useExternalNewsMutation(externalNewsAdoptSnapshotRef) }
 export function useDecideExternalNewsReview() { return useExternalNewsMutation(externalNewsDecideReviewRef) }
 
-export function useExternalNewsSyncOperations() {
+export function useExternalNewsSyncOperations(enabled = true) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(externalNewsOperationsRef, sessionToken ? ({ sessionToken } as any) : "skip") as ExternalNewsSyncOperations | undefined
+  return useQuery(externalNewsOperationsRef, enabled && sessionToken ? ({ sessionToken } as any) : "skip") as ExternalNewsSyncOperations | undefined
 }
 
 export function useSaveExternalNewsSyncSettings() { return useExternalNewsMutation(externalNewsSaveSettingsRef) }

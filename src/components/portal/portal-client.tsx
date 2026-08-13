@@ -163,6 +163,12 @@ export function PortalClient() {
           ...copy.modules.createNews,
         }]
       : []),
+    ...(contentPermissions.news.canReview
+      ? [{
+          href: "/class-work/news/review",
+          ...copy.modules.reviewExternalNews,
+        }]
+      : []),
     ...(contentPermissions.news.canManage
       ? [{
           href: "/class-work/news/manage",
@@ -221,6 +227,10 @@ export function PortalClient() {
           {
             href: "/platform/permissions",
             ...copy.modules.permissions,
+          },
+          {
+            href: "/platform/news-sync",
+            ...copy.modules.newsSync,
           },
           {
             href: "/organization/manage",
