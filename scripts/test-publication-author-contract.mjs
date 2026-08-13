@@ -260,3 +260,24 @@ test("publication DTO types expose the exact write and public author contracts",
   assert.match(instituteTypesSource, /authorDetails:\s*PublicPublicationAuthor\[\]/)
   assert.doesNotMatch(instituteTypesSource, /authorDetails\?:\s*PublicPublicationAuthor\[\]/)
 })
+
+test("public publication DTOs preserve safe corresponding-author metadata", async () => {
+  const [publicationsSource, instituteContentSource, instituteDtoSource] = await Promise.all([
+    readFile(new URL("../convex/publications.ts", import.meta.url), "utf8"),
+    readFile(new URL("../convex/instituteContent.ts", import.meta.url), "utf8"),
+    readFile(new URL("../convex/lib/instituteDto.ts", import.meta.url), "utf8"),
+  ])
+
+  assert.match(publicationsSource, /authorDetails/)
+  assert.match(publicationsSource, /by_publication_order/)
+  assert.match(publicationsSource, /visibility\s*===\s*["']public["']/)
+  assert.match(publicationsSource, /Promise\.all\(page\.map/)
+  assert.match(instituteContentSource, /role:\s*["']author["']\s*\|\s*["']corresponding_author["']\s*\|\s*["']advisor["']/)
+  assert.match(instituteContentSource, /authorOrder:\s*number/)
+  assert.match(instituteContentSource, /authorDetails/)
+  assert.match(instituteDtoSource, /authorDetails/)
+  assert.doesNotMatch(
+    instituteDtoSource,
+    /PublicPublicationAuthor[\s\S]{0,500}accountUserId/,
+  )
+})

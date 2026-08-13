@@ -14,6 +14,7 @@ import type {
   PublicResearchGroupMembershipRole,
   PublicResearchGroup,
 } from "../../src/types/institute"
+import type { PublicPublicationAuthor } from "../../src/types"
 const PUBLICATION_AUTHOR_META_PATTERN = /^(.*?)\s*\[tc-author:([^\]]+)\]\s*$/
 
 function publicationAuthorDisplayName(value: string): string {
@@ -75,6 +76,7 @@ export type InstitutePublicationRecord = {
   doi?: string
   category: string
   subCategory?: string
+  authorDetails?: readonly PublicPublicationAuthor[]
 }
 
 export type InstituteNewsRecord = {
@@ -274,6 +276,63 @@ function addPublicRelations(
     .map((group) => toPublicResearchGroupReference(group))
 }
 
+type EncodedPublicationAuthorMeta = {
+  isTongClass?: boolean
+  username?: string
+  coFirst?: boolean
+  corresponding?: boolean
+}
+
+function normalizePublicAuthorSlug(value: unknown) {
+  if (typeof value !== "string") return undefined
+  const slug = value.trim().toLowerCase()
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? slug : undefined
+}
+
+function parsePublicAuthorMeta(value: string): { name: string; meta: EncodedPublicationAuthorMeta } {
+  const match = value.match(PUBLICATION_AUTHOR_META_PATTERN)
+  if (!match) return { name: value.trim(), meta: {} }
+  try {
+    const decoded = JSON.parse(decodeURIComponent(match[2])) as Record<string, unknown>
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+      return { name: match[1].trim(), meta: {} }
+    }
+    return {
+      name: match[1].trim(),
+      meta: {
+        ...(decoded.isTongClass === true ? { isTongClass: true } : {}),
+        ...(typeof decoded.username === "string" ? { username: decoded.username } : {}),
+        ...(decoded.coFirst === true ? { coFirst: true } : {}),
+        ...(decoded.corresponding === true ? { corresponding: true } : {}),
+      },
+    }
+  } catch {
+    return { name: match[1].trim(), meta: {} }
+  }
+}
+
+export function toPublicPublicationAuthor(
+  snapshot: string,
+  options?: { institutePersonSlug?: string; corresponding?: boolean },
+): PublicPublicationAuthor {
+  const parsed = parsePublicAuthorMeta(snapshot)
+  const instituteSlug = normalizePublicAuthorSlug(options?.institutePersonSlug)
+  const tongSlug = parsed.meta.isTongClass
+    ? normalizePublicAuthorSlug(parsed.meta.username)
+    : undefined
+  const profile = instituteSlug
+    ? { kind: "institute_person" as const, slug: instituteSlug }
+    : tongSlug
+      ? { kind: "tong_class_member" as const, slug: tongSlug }
+      : undefined
+  return {
+    name: parsed.name,
+    coFirst: parsed.meta.coFirst === true,
+    corresponding: parsed.meta.corresponding === true || options?.corresponding === true,
+    ...(profile ? { profile } : {}),
+  }
+}
+
 export function toPublicInstituteResearch(
   publication: InstitutePublicationRecord,
   content: { id: string; audiences: readonly PublicContentAudience[] },
@@ -284,6 +343,9 @@ export function toPublicInstituteResearch(
     audiences: [...content.audiences],
     title: publication.title,
     authors: publication.authors.map((author) => publicationAuthorDisplayName(author)),
+    authorDetails: publication.authorDetails
+      ? publication.authorDetails.map((author) => ({ ...author, ...(author.profile ? { profile: { ...author.profile } } : {}) }))
+      : publication.authors.map((author) => toPublicPublicationAuthor(author)),
     venue: publication.venue,
     year: publication.year,
     abstract: publication.abstract,

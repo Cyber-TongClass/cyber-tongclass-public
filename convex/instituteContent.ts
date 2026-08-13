@@ -12,6 +12,7 @@ import type {
   InstitutePublicationRecord,
   ResearchGroupRecord,
 } from "./lib/instituteDto"
+import { toPublicPublicationAuthor } from "./lib/instituteDto"
 import type {
   PublicContentAudience,
   PublicInstitutePersonReference,
@@ -93,6 +94,8 @@ type StoredContentMention = InstituteContentMentionRelation & {
 
 type PublicationAuthorshipSource = {
   personId: string
+  role: "author" | "corresponding_author" | "advisor"
+  authorOrder: number
 }
 
 type PublicationAuthorSources = {
@@ -139,12 +142,26 @@ function toPublicInstituteResearch(
   record: InstitutePublicationRecord,
   content: { id: string; audiences: readonly PublicContentAudience[] },
   relations: InstituteContentRelationSources,
+  authorSources: PublicationAuthorSources,
 ): PublicInstituteResearch {
+  const authorshipsByOrder = new Map(
+    authorSources.authorships.map((authorship) => [authorship.authorOrder, authorship]),
+  )
   const dto: PublicInstituteResearch = {
     id: content.id,
     audiences: [...content.audiences],
     title: record.title,
     authors: record.authors.map((author) => publicationAuthorDisplayName(author)),
+    authorDetails: record.authors.map((author, authorOrder) => {
+      const authorship = authorshipsByOrder.get(authorOrder)
+      const person = authorship
+        ? authorSources.peopleById.get(String(authorship.personId))
+        : undefined
+      return toPublicPublicationAuthor(author, {
+        ...(person?.visibility === "public" ? { institutePersonSlug: person.slug } : {}),
+        corresponding: authorship?.role === "corresponding_author",
+      })
+    }),
     venue: record.venue,
     year: record.year,
     abstract: record.abstract,
@@ -666,7 +683,7 @@ export const listPublicInstituteResearch = queryGeneric({
         getPublicationAudiences(ctx, record, authorSources),
         getPublicContentRelations(ctx, "publication", id, authorSources),
       ])
-      return toPublicInstituteResearch(record, { id, audiences }, relations)
+      return toPublicInstituteResearch(record, { id, audiences }, relations, authorSources)
     }))
   },
 })
@@ -722,7 +739,7 @@ export const getPublicInstituteResearchById = queryGeneric({
       getPublicationAudiences(ctx, record, authorSources),
       getPublicContentRelations(ctx, "publication", id, authorSources),
     ])
-    return toPublicInstituteResearch(record, { id, audiences }, relations)
+    return toPublicInstituteResearch(record, { id, audiences }, relations, authorSources)
   },
 })
 

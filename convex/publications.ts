@@ -9,15 +9,44 @@ import {
   resolvePublicationAuthors,
   syncPublicationAuthorships,
 } from "./lib/publicationAuthorships"
+import { toPublicPublicationAuthor } from "./lib/instituteDto"
 
-function publicPublicationDto(publication: any) {
+function publicPublicationDto(publication: any, authorDetails: any[]) {
   const {
     userId: _userId,
     siteScope: _siteScope,
     visibility: _visibility,
     ...publicFields
   } = publication
-  return publicFields
+  return {
+    ...publicFields,
+    authors: publication.authors.map((author: string) => toPublicPublicationAuthor(author).name),
+    authorDetails,
+  }
+}
+
+async function loadPublicAuthorDetails(ctx: any, publication: any) {
+  const authorships = await ctx.db
+    .query("publicationAuthorships")
+    .withIndex("by_publication_order", (index: any) => (
+      index.eq("publicationId", publication._id)
+    ))
+    .collect()
+  const people = await Promise.all(authorships.map(async (authorship: any) => (
+    [authorship.authorOrder, authorship, await ctx.db.get(authorship.personId)] as const
+  )))
+  const sourcesByOrder = new Map(people.map(([order, authorship, person]) => (
+    [order, { authorship, person }] as const
+  )))
+
+  return publication.authors.map((snapshot: string, authorOrder: number) => {
+    const source = sourcesByOrder.get(authorOrder)
+    const publicPerson = source?.person?.visibility === "public" ? source.person : undefined
+    return toPublicPublicationAuthor(snapshot, {
+      ...(publicPerson ? { institutePersonSlug: publicPerson.slug } : {}),
+      corresponding: source?.authorship?.role === "corresponding_author",
+    })
+  })
 }
 
 async function optionalActor(ctx: any, sessionToken?: string) {
@@ -43,10 +72,11 @@ function mayViewPublication(actor: any, publication: any) {
   return publication.visibility !== "hidden" || isPublicationOwner(actor, publication)
 }
 
-function publicationForActor(actor: any, publication: any) {
+async function publicationForActor(ctx: any, actor: any, publication: any) {
+  const authorDetails = await loadPublicAuthorDetails(ctx, publication)
   return isContentAdmin(actor) || isPublicationOwner(actor, publication)
-    ? publication
-    : publicPublicationDto(publication)
+    ? { ...publication, authorDetails }
+    : publicPublicationDto(publication, authorDetails)
 }
 
 // Get all publications with pagination
@@ -74,7 +104,7 @@ export const list = query({
     const skip = args.skip || 0
     const limit = args.limit || 50
     const page = visiblePublications.slice(skip, skip + limit)
-    return page.map((publication) => publicationForActor(actor, publication))
+    return Promise.all(page.map((publication) => publicationForActor(ctx, actor, publication)))
   },
 })
 
@@ -94,7 +124,7 @@ export const listByUser = query({
       .order("desc")
       .collect()
 
-    return publications
+    return Promise.all(publications.map((publication) => publicationForActor(ctx, actor, publication)))
   },
 })
 
@@ -109,7 +139,7 @@ export const getById = query({
     if (!publication) return null
     const actor = await optionalActor(ctx, args.sessionToken)
     if (!mayViewPublication(actor, publication)) return null
-    return publicationForActor(actor, publication)
+    return publicationForActor(ctx, actor, publication)
   },
 })
 
@@ -297,6 +327,6 @@ export const search = query({
       const inAuthors = p.authors && p.authors.join(" ").toLowerCase().includes(q)
       return inTitle || inAuthors
     }).slice(0, 20)
-    return filtered.map((publication) => publicationForActor(actor, publication))
+    return Promise.all(filtered.map((publication) => publicationForActor(ctx, actor, publication)))
   },
 })
