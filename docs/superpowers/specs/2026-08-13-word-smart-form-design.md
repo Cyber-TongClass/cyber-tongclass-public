@@ -61,6 +61,16 @@ No inferred field is published automatically. High-confidence suggestions start 
 - Publication is blocked until every unresolved document region is confirmed, ignored, or deleted.
 - Submission validation enforces confirmed length limits; values are never silently truncated or shrunk.
 
+## Word-first creation from the form editor
+
+- The new-form editor keeps the ordinary manual builder, but places “从 Word 自动生成表单” above it so Word import is available before title, audience, or workflow configuration.
+- Selecting a valid `.docx` or `.doc` creates a server-authorized draft whose temporary title comes from the source filename.
+- The temporary draft contains one internal placeholder field only because persisted OA forms require at least one field. That placeholder is removed when reviewed Word fields are compiled.
+- Until the owner changes the audience, the draft target scope contains only the creating account. It remains a draft and is never published automatically.
+- The selected file is uploaded and analyzed immediately after draft creation, then the browser opens the existing document annotation workbench for the newly created template version.
+- After the owner resolves document annotations and generates the form fields, the flow returns to the normal form editor to configure title, audience, approval workflow, and any additional manual fields.
+- Publication continues to use the existing complete form and workflow validation; Word import does not bypass those checks.
+
 ## Filling and export
 
 - Modify only XML parts containing confirmed anchors; preserve untouched parts byte-for-byte where possible.
@@ -120,4 +130,3 @@ Use a dedicated storage purpose for form templates, separate from applicant atta
 - Arbitrary embedded-file execution or macro preservation.
 - Replacing Word with coordinate-based PDF form filling.
 - Any production or silverfish deployment.
-
