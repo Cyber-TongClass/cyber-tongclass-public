@@ -24,7 +24,10 @@ async function requireManagedForm(ctx: any, sessionToken: string, formId: any) {
 function unresolvedCount(manifest: any) {
   const suggestions = Array.isArray(manifest?.suggestions) ? manifest.suggestions : []
   return suggestions.filter((item: any) => (
-    item?.status === "unresolved" || item?.status === "conflict"
+    item?.reviewState === "unresolved"
+    || item?.reviewState === "conflict"
+    || item?.status === "unresolved"
+    || item?.status === "conflict"
   )).length
 }
 
