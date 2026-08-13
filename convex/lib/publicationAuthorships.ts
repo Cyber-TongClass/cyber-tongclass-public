@@ -255,10 +255,10 @@ export async function resolvePublicationAuthors(
     }
   }))
 
-  return validatePublicationAuthorInputs(
-    inputs,
-    people.filter((person): person is InstitutePersonCandidate => Boolean(person)),
-  )
+  const candidates: InstitutePersonCandidate[] = people.flatMap((person) => (
+    person ? [{ ...person, hidden: person.hidden === true }] : []
+  ))
+  return validatePublicationAuthorInputs(inputs, candidates)
 }
 
 export async function syncPublicationAuthorships(

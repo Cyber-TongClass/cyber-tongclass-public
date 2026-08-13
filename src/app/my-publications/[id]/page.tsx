@@ -62,7 +62,7 @@ export default function MyPublicationEditorPage() {
   const { currentUser, isAuthenticated, isLoading: authLoading } = useAuth()
 
   // Fetch publication from Convex
-  const publicationData = usePublicationById(isCreateMode ? undefined : (publicationId as string))
+  const publicationData = usePublicationById(isCreateMode ? undefined : publicationId) as Publication | null | undefined
   const publicationsData = usePublications({ limit: 1000 })
   const publications: Publication[] = useMemo(() => publicationsData || [], [publicationsData])
   const publicationVenuesResponse = usePublicationVenues()

@@ -580,7 +580,7 @@ export const saveDraft = mutation({
       await ctx.db.patch(draft._id, {
         teacherId: teacher._id,
         reportingYear: value.reportingYear,
-        categoryId: value.categoryId,
+        categoryId: value.categoryId as any,
         categoryLabelSnapshot: value.categoryLabel,
         name: value.name,
         organization: value.organization,
@@ -596,7 +596,7 @@ export const saveDraft = mutation({
     const draftId = await ctx.db.insert("teacherRecognitionDrafts", {
       teacherId: teacher._id,
       reportingYear: value.reportingYear,
-      categoryId: value.categoryId,
+      categoryId: value.categoryId as any,
       categoryLabelSnapshot: value.categoryLabel,
       name: value.name,
       organization: value.organization,
@@ -758,7 +758,7 @@ export const updateNeedsChanges = mutation({
     if (linkedDraft) {
       await ctx.db.patch(linkedDraft._id, {
         reportingYear: value.reportingYear,
-        categoryId: value.categoryId,
+        categoryId: value.categoryId as any,
         categoryLabelSnapshot: value.categoryLabel,
         name: value.name,
         organization: value.organization,

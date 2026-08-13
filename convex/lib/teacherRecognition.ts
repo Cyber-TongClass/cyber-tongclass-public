@@ -183,8 +183,9 @@ export function normalizeTeacherRecognitionCategories(
       const label = requiredText(category.label, "类别名称不能为空", 80)
       const sortOrder = Number(category.sortOrder)
       if (!Number.isSafeInteger(sortOrder) || sortOrder < 0) throw new Error("类别排序值无效")
-      const status = category.status ?? "active"
-      if (status !== "active" && status !== "retired") throw new Error("类别状态无效")
+      const rawStatus = category.status ?? "active"
+      if (rawStatus !== "active" && rawStatus !== "retired") throw new Error("类别状态无效")
+      const status = rawStatus as "active" | "retired"
       return { key, label, sortOrder, status, sourceIndex }
     })
     .sort((left, right) => left.sortOrder - right.sortOrder || left.sourceIndex - right.sourceIndex)
