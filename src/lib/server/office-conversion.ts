@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import type { Readable } from "node:stream"
+import { pathToFileURL } from "node:url"
 
 import { detectOfficeCapabilities, type OfficeCapabilities } from "@/lib/server/office-capabilities"
 
@@ -83,6 +84,7 @@ export async function convertOfficeDocument(
     const inputPath = path.join(workDirectory, inputName)
     await writeFile(inputPath, Buffer.from(source))
     const child = (options.spawnImpl || spawn)(capabilities.libreOfficePath, [
+      `-env:UserInstallation=${pathToFileURL(path.join(workDirectory, "profile")).href}`,
       "--headless",
       "--nologo",
       "--nolockcheck",

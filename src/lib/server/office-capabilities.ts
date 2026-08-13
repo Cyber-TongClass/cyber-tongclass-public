@@ -12,13 +12,17 @@ export interface OfficeCapabilities extends OADocumentTemplateCapabilities {
 const SAFE_EXECUTABLE_NAMES = new Set(["soffice", "soffice.bin", "libreoffice"])
 const FONT_EXTENSIONS = new Set([".ttf", ".otf", ".ttc", ".woff", ".woff2"])
 
-function configuredExecutable(value = process.env.LIBREOFFICE_PATH) {
+export function configuredAbsoluteExecutable(value: string | undefined, allowedNames: ReadonlySet<string>) {
   const candidate = value?.trim()
   if (!candidate) return null
-  if (!path.isAbsolute(candidate) || !SAFE_EXECUTABLE_NAMES.has(path.basename(candidate).toLowerCase())) {
+  if (!path.isAbsolute(candidate) || !allowedNames.has(path.basename(candidate).toLowerCase())) {
     return null
   }
   return path.normalize(candidate)
+}
+
+function configuredExecutable(value = process.env.LIBREOFFICE_PATH) {
+  return configuredAbsoluteExecutable(value, SAFE_EXECUTABLE_NAMES)
 }
 
 function requiredFonts(value = process.env.OA_TEMPLATE_REQUIRED_FONTS) {
