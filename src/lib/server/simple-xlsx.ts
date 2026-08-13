@@ -1,5 +1,11 @@
 type XlsxCellValue = string | number
 
+export type SimpleXlsxMetadata = {
+  sheetName?: string
+  title?: string
+  creator?: string
+}
+
 function escapeXml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -46,7 +52,15 @@ function buildSheetXml(rows: XlsxCellValue[][]) {
 </worksheet>`
 }
 
-export function buildSimpleXlsx(rows: XlsxCellValue[][]) {
+function safeSheetName(value: string) {
+  const normalized = value.replace(/[\\/*?:\[\]]/g, " ").replace(/\s+/g, " ").trim()
+  return (normalized || "学术交流支持申请").slice(0, 31)
+}
+
+export function buildSimpleXlsx(rows: XlsxCellValue[][], metadata: SimpleXlsxMetadata = {}) {
+  const sheetName = safeSheetName(metadata.sheetName || "学术交流支持申请")
+  const title = metadata.title || "学术交流支持申请汇总"
+  const creator = metadata.creator || "Tong Class"
   return [
     {
       name: "[Content_Types].xml",
@@ -74,7 +88,7 @@ export function buildSimpleXlsx(rows: XlsxCellValue[][]) {
       name: "xl/workbook.xml",
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="学术交流支持申请" sheetId="1" r:id="rId1"/></sheets>
+  <sheets><sheet name="${escapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets>
 </workbook>`,
     },
     {
@@ -104,8 +118,8 @@ export function buildSimpleXlsx(rows: XlsxCellValue[][]) {
       name: "docProps/core.xml",
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>学术交流支持申请汇总</dc:title>
-  <dc:creator>Tong Class</dc:creator>
+  <dc:title>${escapeXml(title)}</dc:title>
+  <dc:creator>${escapeXml(creator)}</dc:creator>
   <dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created>
 </cp:coreProperties>`,
     },
