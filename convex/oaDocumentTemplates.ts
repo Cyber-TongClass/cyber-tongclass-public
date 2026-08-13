@@ -240,6 +240,12 @@ export const getExportAccess = query({
     const versionId = submission.documentTemplateVersionId
     if (!versionId) return { submission, form, version: null }
     const version = await ctx.db.get(versionId)
-    return { submission, form, version }
+    if (!version) return { submission, form, version: null }
+    const compiledStorageId = version.compiledStorageId || version.workingStorageId || version.sourceStorageId
+    const compiledUrl = await getR2DownloadUrl(compiledStorageId)
+      || (compiledStorageId.startsWith("r2:") ? null : await ctx.storage.getUrl(compiledStorageId))
+    const sourceUrl = await getR2DownloadUrl(version.sourceStorageId)
+      || (version.sourceStorageId.startsWith("r2:") ? null : await ctx.storage.getUrl(version.sourceStorageId))
+    return { submission, form, version, compiledUrl, sourceUrl }
   },
 })
