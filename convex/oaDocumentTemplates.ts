@@ -28,6 +28,7 @@ function unresolvedCount(manifest: any) {
     || item?.reviewState === "conflict"
     || item?.status === "unresolved"
     || item?.status === "conflict"
+    || (Array.isArray(item?.conflictIds) && item.conflictIds.length > 0)
   )).length
 }
 
