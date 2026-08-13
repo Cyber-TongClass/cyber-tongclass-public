@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Loader2, ShieldCheck, Trash2 } from "lucide-react"
 
 import { PermissionSubjectPicker } from "@/components/permissions/permission-subject-picker"
+import { TeacherRecognitionPermissionPanel } from "@/components/teacher-recognition/teacher-recognition-permission-panel"
 import {
   useContentPermissions,
   useRemoveContentPermission,
@@ -16,6 +17,7 @@ import type { OAUserScope } from "@/lib/oa-forms"
 import { cn } from "@/lib/utils"
 
 type PermissionCategory = "news" | "events" | "reimbursement"
+type WorkspaceCategory = PermissionCategory | "teacher-recognition"
 
 type PermissionTab = {
   category: PermissionCategory
@@ -23,6 +25,7 @@ type PermissionTab = {
   label: string
   description: string
   createLabel: string
+  reviewLabel?: string
   manageLabel: string
 }
 
@@ -33,7 +36,8 @@ const permissionTabs: PermissionTab[] = [
     label: "新闻",
     description: "控制新闻稿件的创建、审核与发布管理。",
     createLabel: "创建权",
-    manageLabel: "审核与管理权",
+    reviewLabel: "来源审阅权",
+    manageLabel: "发布审核与管理权",
   },
   {
     category: "events",
@@ -75,11 +79,11 @@ function PermissionRow({
   const removePermission = useRemoveContentPermission()
   const [isSaving, setIsSaving] = useState(false)
 
-  async function update(next: { canCreate: boolean; canManage: boolean }) {
+  async function update(next: { canCreate: boolean; canReview: boolean; canManage: boolean }) {
     setIsSaving(true)
     onError("")
     try {
-      if (!next.canCreate && !next.canManage) {
+      if (!next.canCreate && !next.canReview && !next.canManage) {
         await removePermission({ category: category as never, userId: entry.userId })
       } else {
         await setPermission({
@@ -116,22 +120,33 @@ function PermissionRow({
         </p>
       </div>
 
-      <fieldset disabled={isSaving} className="grid gap-2 sm:grid-cols-2">
+      <fieldset disabled={isSaving} className={cn("grid gap-2", tab.reviewLabel ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
         <legend className="sr-only">{entry.name} 的权限</legend>
         <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={entry.canManage}
-            onChange={(event) => update({ canManage: event.target.checked, canCreate: entry.canCreate })}
+            onChange={(event) => update({ canManage: event.target.checked, canReview: entry.canReview, canCreate: entry.canCreate })}
             className="aia-focus h-4 w-4 accent-[hsl(var(--aia-red))]"
           />
           {tab.manageLabel}
         </label>
+        {tab.reviewLabel ? (
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={entry.canReview}
+              onChange={(event) => update({ canReview: event.target.checked, canCreate: entry.canCreate, canManage: entry.canManage })}
+              className="aia-focus h-4 w-4 accent-[hsl(var(--aia-red))]"
+            />
+            {tab.reviewLabel}
+          </label>
+        ) : null}
         <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={entry.canCreate}
-            onChange={(event) => update({ canCreate: event.target.checked, canManage: entry.canManage })}
+            onChange={(event) => update({ canCreate: event.target.checked, canReview: entry.canReview, canManage: entry.canManage })}
             className="aia-focus h-4 w-4 accent-[hsl(var(--aia-red))]"
           />
           {tab.createLabel}
@@ -160,6 +175,7 @@ function PermissionCategoryPanel({ tab }: { tab: PermissionTab }) {
   async function assign(input: {
     scope: OAUserScope
     canCreate: boolean
+    canReview?: boolean
     canManage: boolean
   }) {
     setError("")
@@ -168,6 +184,7 @@ function PermissionCategoryPanel({ tab }: { tab: PermissionTab }) {
         category: tab.category as never,
         scope: input.scope,
         canCreate: input.canCreate,
+        canReview: input.canReview,
         canManage: input.canManage,
       })
     } catch (cause) {
@@ -193,6 +210,7 @@ function PermissionCategoryPanel({ tab }: { tab: PermissionTab }) {
       <PermissionSubjectPicker
         categoryLabel={tab.label}
         createLabel={tab.createLabel}
+        reviewLabel={tab.reviewLabel}
         manageLabel={tab.manageLabel}
         onAssign={assign}
       />
@@ -241,9 +259,10 @@ function PermissionCategoryPanel({ tab }: { tab: PermissionTab }) {
 }
 
 function PermissionWorkspace() {
-  const [activeCategory, setActiveCategory] = useState<PermissionCategory>("news")
+  const [activeCategory, setActiveCategory] = useState<WorkspaceCategory>("news")
   const activeTab = permissionTabs.find((tab) => tab.category === activeCategory) || permissionTabs[0]
-  const focusTab = (category: PermissionCategory) => {
+  const allTabs = [...permissionTabs, { category: "teacher-recognition" as const, kicker: "Recognition", label: "教师奖励" }]
+  const focusTab = (category: WorkspaceCategory) => {
     setActiveCategory(category)
     window.requestAnimationFrame(() => {
       document.getElementById(`permission-tab-${category}`)?.focus()
@@ -253,7 +272,7 @@ function PermissionWorkspace() {
   return (
     <>
       <div role="tablist" aria-label="平台权限类别" className="flex flex-wrap gap-x-8 gap-y-1 border-b aia-border-rule">
-        {permissionTabs.map((tab) => {
+        {allTabs.map((tab) => {
           const isActive = tab.category === activeCategory
           return (
             <button
@@ -266,15 +285,15 @@ function PermissionWorkspace() {
               tabIndex={isActive ? 0 : -1}
               onClick={() => setActiveCategory(tab.category)}
               onKeyDown={(event) => {
-                const currentIndex = permissionTabs.findIndex((candidate) => candidate.category === tab.category)
+                const currentIndex = allTabs.findIndex((candidate) => candidate.category === tab.category)
                 let nextIndex = currentIndex
-                if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % permissionTabs.length
-                else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + permissionTabs.length) % permissionTabs.length
+                if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % allTabs.length
+                else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + allTabs.length) % allTabs.length
                 else if (event.key === "Home") nextIndex = 0
-                else if (event.key === "End") nextIndex = permissionTabs.length - 1
+                else if (event.key === "End") nextIndex = allTabs.length - 1
                 else return
                 event.preventDefault()
-                focusTab(permissionTabs[nextIndex].category)
+                focusTab(allTabs[nextIndex].category)
               }}
               className={cn(
                 "aia-focus relative flex min-h-11 items-center gap-2 pb-2.5 pt-1 text-sm transition-colors",
@@ -296,7 +315,9 @@ function PermissionWorkspace() {
           )
         })}
       </div>
-      <PermissionCategoryPanel key={activeTab.category} tab={activeTab} />
+      {activeCategory === "teacher-recognition"
+        ? <TeacherRecognitionPermissionPanel />
+        : <PermissionCategoryPanel key={activeTab.category} tab={activeTab} />}
     </>
   )
 }

@@ -6,7 +6,7 @@ import type { ReactNode } from "react"
 import { useMyContentPermissions, type ContentReviewCategory } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 
-export type ClassWorkCapability = "create" | "manage" | "either"
+export type ClassWorkCapability = "create" | "review" | "manage" | "either"
 
 const categoryLabels: Record<ContentReviewCategory, string> = {
   news: "新闻",
@@ -32,7 +32,9 @@ export function ClassWorkAccessGuard({
   if (!isAuthenticated) {
     const next = capability === "create"
       ? `/class-work/${category}/new`
-      : `/class-work/${category}/manage`
+      : capability === "review"
+        ? `/class-work/${category}/review`
+        : `/class-work/${category}/manage`
     return (
       <div className="border border-dashed aia-border-rule px-5 py-4 text-sm leading-6 text-[hsl(var(--aia-ink))]">
         登录后才能进入班级工作。
@@ -45,13 +47,15 @@ export function ClassWorkAccessGuard({
 
   const rights = permissions?.[category]
   const allowed = capability === "either"
-    ? true
+    ? rights?.canCreate === true || rights?.canReview === true || rights?.canManage === true
     : capability === "create"
       ? rights?.canCreate === true
-      : rights?.canManage === true
+      : capability === "review"
+        ? rights?.canReview === true
+        : rights?.canManage === true
 
   if (!allowed) {
-    const action = capability === "manage" ? "管理" : capability === "create" ? "创建" : "访问"
+    const action = capability === "manage" ? "管理" : capability === "review" ? "审阅" : capability === "create" ? "创建" : "访问"
     return (
       <div className="border border-dashed aia-border-rule px-5 py-4">
         <p className="text-sm font-medium text-[hsl(var(--aia-ink))]">

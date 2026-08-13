@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useMemo, useSyncExternalStore } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useAction, useQuery, useMutation } from "convex/react"
 import { makeFunctionReference } from "convex/server"
 import { api } from "../../convex/_generated/api"
 import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
@@ -159,6 +159,22 @@ const actOnCoffeeTalkApplicationRef = makeFunctionReference<"mutation">("coffeeT
 const listCoffeeTalkNotificationsRef = makeFunctionReference<"query">("coffeeTalk:listNotifications")
 const markCoffeeTalkNotificationReadRef = makeFunctionReference<"mutation">("coffeeTalk:markNotificationRead")
 const markAllCoffeeTalkNotificationsReadRef = makeFunctionReference<"mutation">("coffeeTalk:markAllNotificationsRead")
+const teacherRecognitionAccessRef = makeFunctionReference<"query">("teacherRecognitions:getAccess")
+const teacherRecognitionConfigurationRef = makeFunctionReference<"query">("teacherRecognitions:getConfiguration")
+const teacherRecognitionSetReviewerGroupsRef = makeFunctionReference<"mutation">("teacherRecognitions:setReviewerGroups")
+const teacherRecognitionCategoriesRef = makeFunctionReference<"query">("teacherRecognitions:listCategories")
+const teacherRecognitionMineRef = makeFunctionReference<"query">("teacherRecognitions:listMine")
+const teacherRecognitionMineDetailRef = makeFunctionReference<"query">("teacherRecognitions:getMine")
+const teacherRecognitionSaveDraftRef = makeFunctionReference<"mutation">("teacherRecognitions:saveDraft")
+const teacherRecognitionRemoveDraftRef = makeFunctionReference<"mutation">("teacherRecognitions:removeDraft")
+const teacherRecognitionProofUploadRef = makeFunctionReference<"mutation">("teacherRecognitions:generateProofUploadUrl")
+const teacherRecognitionSubmitDraftRef = makeFunctionReference<"mutation">("teacherRecognitions:submitDraft")
+const teacherRecognitionUpdateNeedsChangesRef = makeFunctionReference<"mutation">("teacherRecognitions:updateNeedsChanges")
+const teacherRecognitionReviewQueueRef = makeFunctionReference<"query">("teacherRecognitions:listReviewQueue")
+const teacherRecognitionReviewDetailRef = makeFunctionReference<"query">("teacherRecognitions:getReviewDetail")
+const teacherRecognitionReviewActionRef = makeFunctionReference<"mutation">("teacherRecognitions:actOnReviewTask")
+const teacherRecognitionManagementRef = makeFunctionReference<"query">("teacherRecognitions:listForManagement")
+const teacherRecognitionProofUrlRef = makeFunctionReference<"query">("teacherRecognitions:getProofUrl")
 const TECHDAY_AUTH_STORAGE_EVENT = "techday-auth-storage"
 const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
 
@@ -1357,6 +1373,80 @@ export function useSeedAcademicExchangeReimbursementTables() {
   }, [seed])
 }
 
+// ==================== 教师奖励与专业服务 ====================
+
+function useTeacherRecognitionMutation(ref: ReturnType<typeof makeFunctionReference<"mutation">>) {
+  const mutate = useMutation(ref)
+  return useCallback((args: Record<string, unknown> = {}) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return mutate({ ...args, sessionToken } as any)
+  }, [mutate])
+}
+
+export function useTeacherRecognitionAccess() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherRecognitionAccessRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+export function useTeacherRecognitionConfiguration() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherRecognitionConfigurationRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+export function useSetTeacherRecognitionReviewerGroups() {
+  return useTeacherRecognitionMutation(teacherRecognitionSetReviewerGroupsRef)
+}
+
+export function useTeacherRecognitionCategories(includeRetired = false) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherRecognitionCategoriesRef, sessionToken ? ({ sessionToken, includeRetired } as any) : "skip")
+}
+
+export function useMyTeacherRecognitions() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherRecognitionMineRef, sessionToken ? ({ sessionToken } as any) : "skip")
+}
+
+export function useMyTeacherRecognitionDetail(input?: { draftId?: string; submissionId?: string } | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    teacherRecognitionMineDetailRef,
+    sessionToken && input ? ({ sessionToken, ...input } as any) : "skip",
+  )
+}
+
+export function useSaveTeacherRecognitionDraft() { return useTeacherRecognitionMutation(teacherRecognitionSaveDraftRef) }
+export function useRemoveTeacherRecognitionDraft() { return useTeacherRecognitionMutation(teacherRecognitionRemoveDraftRef) }
+export function useGenerateTeacherRecognitionProofUploadUrl() { return useTeacherRecognitionMutation(teacherRecognitionProofUploadRef) }
+export function useSubmitTeacherRecognitionDraft() { return useTeacherRecognitionMutation(teacherRecognitionSubmitDraftRef) }
+export function useUpdateTeacherRecognitionNeedsChanges() { return useTeacherRecognitionMutation(teacherRecognitionUpdateNeedsChangesRef) }
+
+export function useTeacherRecognitionReviewQueue(status?: string) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherRecognitionReviewQueueRef, sessionToken ? ({ sessionToken, ...(status ? { status } : {}) } as any) : "skip")
+}
+
+export function useTeacherRecognitionReviewDetail(taskId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherRecognitionReviewDetailRef, sessionToken && taskId ? ({ sessionToken, taskId } as any) : "skip")
+}
+
+export function useActOnTeacherRecognitionReview() { return useTeacherRecognitionMutation(teacherRecognitionReviewActionRef) }
+
+export function useTeacherRecognitionManagement(filters: Record<string, unknown> = {}) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(teacherRecognitionManagementRef, sessionToken ? ({ sessionToken, ...filters } as any) : "skip")
+}
+
+export function useTeacherRecognitionProofUrl(submissionId?: string | null, storageId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    teacherRecognitionProofUrlRef,
+    sessionToken && submissionId && storageId ? ({ sessionToken, submissionId, storageId } as any) : "skip",
+  ) as string | null | undefined
+}
+
 // ==================== OA 表单 / 问卷申请 ====================
 
 export function usePublishedOAForms(args?: { category?: string; kind?: "form" | "reimbursement"; includePast?: boolean }) {
@@ -2377,6 +2467,14 @@ const contentReviewReviewQueueRef = makeFunctionReference<"query">("contentRevie
 const contentReviewMySubmissionsRef = makeFunctionReference<"query">("contentReview:mySubmissions")
 const contentReviewSubmissionDetailRef = makeFunctionReference<"query">("contentReview:getSubmissionDetail")
 const contentReviewReviewRef = makeFunctionReference<"mutation">("contentReview:review")
+const externalNewsReviewQueueRef = makeFunctionReference<"query">("externalNewsSync:listMyReviewQueue")
+const externalNewsReviewDraftRef = makeFunctionReference<"query">("externalNewsSync:getReviewDraft")
+const externalNewsSaveDraftRef = makeFunctionReference<"mutation">("externalNewsSync:saveReviewDraft")
+const externalNewsAdoptSnapshotRef = makeFunctionReference<"mutation">("externalNewsSync:adoptPendingSnapshot")
+const externalNewsDecideReviewRef = makeFunctionReference<"mutation">("externalNewsSync:decideReview")
+const externalNewsOperationsRef = makeFunctionReference<"query">("externalNewsSync:getOperations")
+const externalNewsSaveSettingsRef = makeFunctionReference<"mutation">("externalNewsSync:saveSettings")
+const externalNewsRunNowRef = makeFunctionReference<"action">("externalNewsSync:runNow")
 
 export type ContentReviewCategory = "news" | "events"
 export type ContentPermissionCategory = ContentReviewCategory | "reimbursement"
@@ -2388,6 +2486,7 @@ export type ContentPermissionEntry = {
   name: string
   identityType: string
   canCreate: boolean
+  canReview: boolean
   canManage: boolean
   updatedAt: number
 }
@@ -2425,7 +2524,8 @@ export type ContentSubmission = {
     _id: string
     isMine: boolean
     reviewerName: string
-    status: "pending" | "approved" | "rejected" | "skipped"
+    status: "pending" | "approved" | "accepted" | "changes_requested" | "rejected" | "skipped"
+    stage?: "source_review" | "publication_approval"
     comment?: string
     decidedAt?: number
   }>
@@ -2446,7 +2546,7 @@ export function useContentPermissions(category: ContentPermissionCategory) {
 
 export function useSetContentPermission() {
   const setPermission = useMutation(contentReviewSetPermissionRef)
-  return useCallback((args: { category: ContentPermissionCategory; userId: string; canCreate: boolean; canManage: boolean }) => {
+  return useCallback((args: { category: ContentPermissionCategory; userId: string; canCreate: boolean; canReview?: boolean; canManage: boolean }) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
     return setPermission({ ...args, sessionToken, userId: args.userId as any } as any)
@@ -2460,6 +2560,7 @@ export function useSetContentPermissionsForScope() {
     category: ContentPermissionCategory
     scope: OAUserScope
     canCreate: boolean
+    canReview?: boolean
     canManage: boolean
   }) => {
     const sessionToken = getTongClassStoredSessionToken()
@@ -2483,7 +2584,7 @@ export function useMyContentPermissions() {
   return useQuery(
     contentReviewMyPermissionsRef,
     sessionToken ? ({ sessionToken } as any) : "skip",
-  ) as Record<ContentPermissionCategory, { canCreate: boolean; canManage: boolean }> | undefined
+  ) as Record<ContentPermissionCategory, { canCreate: boolean; canReview: boolean; canManage: boolean }> | undefined
 }
 
 export function useSubmitContentForReview() {
@@ -2548,4 +2649,108 @@ export function useReviewContentSubmission() {
       ...(args.id ? { id: args.id as any } : {}),
     } as any)
   }, [review])
+}
+
+export type ExternalNewsReviewQueueItem = {
+  taskId: string
+  submissionId: string
+  title: string
+  category: string
+  sourceUrl: string
+  sourcePublishedAt?: number
+  sourceUpdateAvailable: boolean
+  taskStatus: "pending" | "changes_requested" | "accepted" | "rejected" | "skipped"
+  lastFetchedAt?: number
+  createdAt: number
+}
+
+export type ExternalNewsReviewDraft = {
+  submissionId: string
+  taskId: string
+  title: string
+  content: string
+  category: string
+  sourceUrl: string
+  coverImageUrl?: string
+  sourcePublishedAt?: number
+  sourceReviewStatus: "pending" | "needs_changes" | "accepted" | "rejected"
+  taskStatus: "pending" | "changes_requested" | "accepted" | "rejected" | "skipped"
+  sourceUpdateAvailable: boolean
+  internalUpdatedAt: number
+  sourceSnapshot?: { title: string; content: string; fetchedAt: number }
+}
+
+export type ExternalNewsSyncOperations = {
+  settings: {
+    enabled: boolean
+    mode: "observation" | "draft"
+    reviewerMode: "scope" | "all_reviewers"
+    reviewerScope?: OAUserScope
+  }
+  reviewerPreview: { count: number; labels: string[] }
+  sources: Array<{
+    key: "news" | "notices" | "research_progress" | "academic_lectures"
+    label: string
+    listUrl: string
+    health: null | {
+      lastAttemptAt?: number
+      lastSuccessAt?: number
+      lastFailureCode?: string
+      consecutiveFailures: number
+      lastDiscoveredCount: number
+    }
+  }>
+  runs: Array<{
+    _id: string
+    trigger: "cron" | "manual"
+    mode: "observation" | "draft"
+    status: "running" | "completed" | "partial_failure" | "failed"
+    discoveredCount: number
+    draftCount: number
+    failureCount: number
+    startedAt: number
+    finishedAt?: number
+  }>
+}
+
+function useExternalNewsMutation(ref: ReturnType<typeof makeFunctionReference<"mutation">>) {
+  const mutate = useMutation(ref)
+  return useCallback((args: Record<string, unknown> = {}) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return mutate({ ...args, sessionToken } as any)
+  }, [mutate])
+}
+
+export function useExternalNewsReviewQueue() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(externalNewsReviewQueueRef, sessionToken ? ({ sessionToken } as any) : "skip") as ExternalNewsReviewQueueItem[] | undefined
+}
+
+export function useExternalNewsReviewDraft(taskId?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    externalNewsReviewDraftRef,
+    sessionToken && taskId ? ({ sessionToken, taskId: taskId as any } as any) : "skip",
+  ) as ExternalNewsReviewDraft | undefined
+}
+
+export function useSaveExternalNewsReviewDraft() { return useExternalNewsMutation(externalNewsSaveDraftRef) }
+export function useAdoptExternalNewsSnapshot() { return useExternalNewsMutation(externalNewsAdoptSnapshotRef) }
+export function useDecideExternalNewsReview() { return useExternalNewsMutation(externalNewsDecideReviewRef) }
+
+export function useExternalNewsSyncOperations() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(externalNewsOperationsRef, sessionToken ? ({ sessionToken } as any) : "skip") as ExternalNewsSyncOperations | undefined
+}
+
+export function useSaveExternalNewsSyncSettings() { return useExternalNewsMutation(externalNewsSaveSettingsRef) }
+
+export function useRunExternalNewsSyncNow() {
+  const run = useAction(externalNewsRunNowRef)
+  return useCallback(() => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return run({ sessionToken } as any)
+  }, [run])
 }

@@ -8,10 +8,12 @@ import type { OAUserScope } from "@/lib/oa-forms"
 type PermissionSubjectPickerProps = {
   categoryLabel: string
   createLabel: string
+  reviewLabel?: string
   manageLabel: string
   onAssign: (input: {
     scope: OAUserScope
     canCreate: boolean
+    canReview?: boolean
     canManage: boolean
   }) => Promise<unknown>
   canAssignScope?: (scope: OAUserScope) => boolean
@@ -31,6 +33,7 @@ function hasScopeValue(scope: OAUserScope) {
 export function PermissionSubjectPicker({
   categoryLabel,
   createLabel,
+  reviewLabel,
   manageLabel,
   onAssign,
   canAssignScope = () => true,
@@ -38,21 +41,23 @@ export function PermissionSubjectPicker({
 }: PermissionSubjectPickerProps) {
   const [scope, setScope] = useState<OAUserScope>({})
   const [canCreate, setCanCreate] = useState(false)
+  const [canReview, setCanReview] = useState(false)
   const [canManage, setCanManage] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState("")
 
   const isScopeSupported = canAssignScope(scope)
-  const canSubmit = hasScopeValue(scope) && isScopeSupported && (canCreate || canManage) && !isSaving
+  const canSubmit = hasScopeValue(scope) && isScopeSupported && (canCreate || canReview || canManage) && !isSaving
 
   async function assign() {
     if (!canSubmit) return
     setError("")
     setIsSaving(true)
     try {
-      await onAssign({ scope, canCreate, canManage })
+      await onAssign({ scope, canCreate, canReview, canManage })
       setScope({})
       setCanCreate(false)
+      setCanReview(false)
       setCanManage(false)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "权限添加失败，请稍后重试。")
@@ -93,6 +98,18 @@ export function PermissionSubjectPicker({
           <span className="min-w-0 flex-1">{manageLabel}</span>
           <span className="aia-mono text-xs aia-text-muted">Manage</span>
         </label>
+        {reviewLabel ? (
+          <label className="flex cursor-pointer items-center gap-3 border-b aia-border-rule py-3 text-sm">
+            <input
+              type="checkbox"
+              checked={canReview}
+              onChange={(event) => setCanReview(event.target.checked)}
+              className="aia-focus h-4 w-4 accent-[hsl(var(--aia-red))]"
+            />
+            <span className="min-w-0 flex-1">{reviewLabel}</span>
+            <span className="aia-mono text-xs aia-text-muted">Review</span>
+          </label>
+        ) : null}
         <label className="flex cursor-pointer items-center gap-3 py-3 text-sm">
           <input
             type="checkbox"
@@ -117,7 +134,7 @@ export function PermissionSubjectPicker({
             ? "先选择需要授权的人员或人员组。"
             : !isScopeSupported
               ? unsupportedScopeMessage
-            : !canCreate && !canManage
+            : !canCreate && !canReview && !canManage
               ? "至少选择一项权限。"
               : "同一账号已有的权限将被本次设置更新。"}
         </p>
