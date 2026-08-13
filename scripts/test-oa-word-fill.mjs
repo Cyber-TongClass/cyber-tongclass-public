@@ -96,6 +96,32 @@ test("legacy mark_choice compiles and fills only markers without replacing its p
   assert.doesNotMatch(xml, /oa-field:legacy_choice/)
 })
 
+test("legacy bookmark append preserves the bookmark pair and fills between them", () => {
+  const sourceBody = `<w:p><w:r><w:t>姓名：</w:t></w:r><w:bookmarkStart w:id="7" w:name="applicant_name"/><w:bookmarkEnd w:id="7"/><w:r><w:t>（必填）</w:t></w:r></w:p>`
+  const input = docx(sourceBody)
+  const sourceXml = pkgModule.readOoxmlPackage(input).readText("word/document.xml")
+  const locator = compiler.inspectWordXmlPart(sourceXml).find((node) => node.localName === "bookmarkstart")
+  const field = { fieldId: "applicant_name", label: "姓名", answerType: "text", required: true }
+  const manifest = {
+    syntaxVersion: 1,
+    compilerVersion: "test",
+    fields: [field],
+    suggestions: [],
+    anchors: [{ fieldId: field.fieldId, kind: "bookmark", partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash, output: { mode: "append" } }],
+  }
+
+  const compiled = compiler.compileWordTemplate(input, manifest)
+  const output = fill.fillWordTemplate(compiled.bytes, { fields: [field], answers: { applicant_name: "张三" } })
+  const xml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+
+  assert.match(xml, /<w:bookmarkStart w:id="7" w:name="applicant_name"\/>/)
+  assert.match(xml, /<w:bookmarkEnd w:id="7"\/>/)
+  assert.match(xml, /oa-field:applicant_name[\s\S]*?<w:t>张三<\/w:t>/)
+  assert.ok(xml.indexOf("<w:bookmarkStart") < xml.indexOf("oa-field:applicant_name"))
+  assert.ok(xml.indexOf("oa-field:applicant_name") < xml.indexOf("<w:bookmarkEnd"))
+  assert.match(xml, /（必填）/)
+})
+
 test("rejects overlong and malicious answers", () => {
   const input = docx(`<w:p>${sdt("text")}</w:p>`)
   assert.throws(() => fill.fillWordTemplate(input, { fields, answers: { text: "x".repeat(21) } }), /长度/)

@@ -117,6 +117,20 @@ function choiceMarkerMatches(value: string) {
   return [...value.matchAll(/[□☐○◯☒☑●■]/g)]
 }
 
+function normalizeChoiceOptionText(value: string) {
+  return value.normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
+}
+
+function visibleChoiceOptions(runs: WordXmlElement[]) {
+  const value = runs.map(runText).join("")
+  const markers = choiceMarkerMatches(value)
+  return markers.map((marker, index) => {
+    const start = (marker.index ?? 0) + marker[0].length
+    const end = markers[index + 1]?.index ?? value.length
+    return normalizeChoiceOptionText(value.slice(start, end))
+  })
+}
+
 function createStyledTextRun(document: WordXmlDocument, prototype: WordXmlElement, value: string) {
   const run = createWordElement(document, "r")
   const runProperties = childElements(prototype, "rPr")[0]
@@ -129,11 +143,17 @@ function createStyledTextRun(document: WordXmlDocument, prototype: WordXmlElemen
 }
 
 function compileChoice(document: WordXmlDocument, target: WordXmlElement, anchor: OADocumentAnchor, field: OADocumentManifestField) {
-  const options = field.options || []
+  const options = (field.options || []).map(normalizeChoiceOptionText)
   const runs = descendantElements(target, "r")
-  const markerCount = runs.reduce((count, run) => count + choiceMarkerMatches(runText(run)).length, 0)
-  if (!options.length || markerCount !== options.length) {
+  const visibleOptions = visibleChoiceOptions(runs)
+  if (!options.length || visibleOptions.length !== options.length) {
     throw new Error(`选项字段“${field.label}”无法安全匹配选项标记`)
+  }
+  if (new Set(options).size !== options.length || new Set(visibleOptions).size !== visibleOptions.length) {
+    throw new Error(`选项字段“${field.label}”的选项文本必须唯一`)
+  }
+  if (options.some((option) => !option) || visibleOptions.some((option, index) => !option || option !== options[index])) {
+    throw new Error(`选项字段“${field.label}”无法安全匹配选项文本`)
   }
   let optionIndex = 0
   for (const run of runs) {
@@ -197,6 +217,13 @@ function wrapTarget(document: WordXmlDocument, target: WordXmlElement, anchor: O
     updateExistingSdt(target, field, anchor)
     return
   }
+  if (anchor.kind === "bookmark") {
+    const parent = target.parentNode
+    if (!parent) throw new Error(`书签定位已失效：${anchor.path}`)
+    const { sdt } = createSdt(document, field, anchor, false)
+    parent.insertBefore(sdt, target.nextSibling)
+    return
+  }
   const writeTarget = explicitWriteTarget(anchor)
   if (writeTarget === "paragraph-after") {
     insertParagraphAfter(document, target, anchor, field)
@@ -244,13 +271,6 @@ function wrapTarget(document: WordXmlDocument, target: WordXmlElement, anchor: O
     content.removeChild(content.firstChild!)
     parent.replaceChild(sdt, target)
     content.appendChild(target)
-    return
-  }
-  if (anchor.kind === "bookmark") {
-    const parent = target.parentNode
-    if (!parent) throw new Error(`书签定位已失效：${anchor.path}`)
-    const { sdt } = createSdt(document, field, anchor, false)
-    parent.insertBefore(sdt, target.nextSibling)
     return
   }
   const localName = target.localName || target.nodeName.split(":").at(-1)

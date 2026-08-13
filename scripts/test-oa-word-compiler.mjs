@@ -107,6 +107,39 @@ test("choice safely splits markers and option text that share one styled run", (
   assert.equal((resultXml.match(/<w:color w:val="13579B"\/>/g) || []).length, 7)
 })
 
+test("choice rejects reordered, renamed, or non-unique visible options across run layouts", () => {
+  const sources = [
+    `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>类型：○教学 ○科研 ○管理</w:t></w:r></w:p></w:body></w:document>`,
+    `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>类型：</w:t></w:r><w:r><w:t>○</w:t></w:r><w:r><w:t>教学 </w:t></w:r><w:r><w:t>○</w:t></w:r><w:r><w:t>科研 </w:t></w:r><w:r><w:t>○管理</w:t></w:r></w:p></w:body></w:document>`,
+  ]
+  for (const sourceXml of sources) {
+    const anchor = versionTwoAnchor(sourceXml, "category", "choice", "radio_group")
+    for (const options of [["科研", "教学", "管理"], ["教学", "研究", "管理"]]) {
+      const field = { fieldId: "category", label: "类型", answerType: "single_choice", required: true, options }
+      assert.throws(
+        () => compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] }),
+        /无法安全匹配选项文本/,
+      )
+    }
+  }
+
+  const duplicateXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>类型：○教学 ○教学</w:t></w:r></w:p></w:body></w:document>`
+  const duplicateAnchor = versionTwoAnchor(duplicateXml, "category", "choice", "radio_group")
+  const duplicateField = { fieldId: "category", label: "类型", answerType: "single_choice", required: true, options: ["教学", "教学"] }
+  assert.throws(
+    () => compiler.compileWordTemplate(docx(duplicateXml), { syntaxVersion: 2, compilerVersion: "test", fields: [duplicateField], suggestions: [], anchors: [duplicateAnchor] }),
+    /选项文本.*唯一/,
+  )
+
+  const emptyXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>类型：○</w:t></w:r></w:p></w:body></w:document>`
+  const emptyAnchor = versionTwoAnchor(emptyXml, "category", "choice", "radio_group")
+  const emptyField = { fieldId: "category", label: "类型", answerType: "single_choice", required: true, options: [""] }
+  assert.throws(
+    () => compiler.compileWordTemplate(docx(emptyXml), { syntaxVersion: 2, compilerVersion: "test", fields: [emptyField], suggestions: [], anchors: [emptyAnchor] }),
+    /无法安全匹配选项文本/,
+  )
+})
+
 test("inline-run replaces the confirmed run while retaining its run style", () => {
   const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>姓名：</w:t></w:r><w:r><w:rPr><w:u w:val="single"/><w:rFonts w:eastAsia="楷体"/></w:rPr><w:t>____</w:t></w:r></w:p></w:body></w:document>`
   const locator = compiler.inspectWordXmlPart(sourceXml).filter((node) => node.localName === "r")[1]
