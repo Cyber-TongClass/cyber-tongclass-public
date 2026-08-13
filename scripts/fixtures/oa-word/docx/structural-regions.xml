@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr><w:tc><w:p><w:r><w:t>姓名</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr>
+      <w:tr><w:tc><w:p><w:r><w:t>项目名称</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>联系电话：</w:t></w:r></w:p>
+    <w:p><w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">          </w:t></w:r></w:p>
+    <w:p><w:r><w:t>类别：□ 教学 □ 科研 □ 服务（单选）</w:t></w:r></w:p>
+    <w:p><w:r><w:t>说明（不超过200字）：</w:t></w:r></w:p>
+    <w:p><w:bookmarkStart w:id="7" w:name="legacy_name"/><w:bookmarkEnd w:id="7"/></w:p>
+    <w:p><w:sdt><w:sdtPr><w:tag w:val="oa-field:existing"/><w:alias w:val="已有字段"/></w:sdtPr><w:sdtContent><w:r><w:t>占位</w:t></w:r></w:sdtContent></w:sdt></w:p>
+  </w:body>
+</w:document>
+
