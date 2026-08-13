@@ -50,26 +50,33 @@ export interface User {
 }
 
 // Publication types
-export interface PublicationAuthorWriteInput {
-  name: string
-  userId?: string
-  username?: string
-  institutePersonSlug?: string
-  coFirst?: boolean
-  corresponding?: boolean
+export type PublicationAuthorProfile = {
+  kind: "institute_person" | "tong_class_member"
+  slug: string
 }
 
-export interface PublicationPublicAuthorDetail {
+export type PublicPublicationAuthor = {
   name: string
-  coFirst?: boolean
-  corresponding?: boolean
-  personSlug?: string
+  coFirst: boolean
+  corresponding: boolean
+  profile?: PublicationAuthorProfile
+}
+
+export type PublicationAuthorInput = {
+  snapshot: string
+  name: string
+  coFirst: boolean
+  corresponding: boolean
+  tongClassUserId?: string
+  tongClassUsername?: string
+  institutePersonSlug?: string
 }
 
 export interface Publication {
   _id: string
   title: string
   authors: string[]
+  authorDetails?: PublicPublicationAuthor[]
   venue: string
   year: number
   abstract: string

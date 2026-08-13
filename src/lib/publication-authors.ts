@@ -1,7 +1,7 @@
 import type {
   Publication,
-  PublicationAuthorWriteInput,
-  PublicationPublicAuthorDetail,
+  PublicationAuthorInput,
+  PublicPublicationAuthor,
 } from "@/types"
 
 const AUTHOR_META_PATTERN = /^(.*?)\s*\[tc-author:([^\]]+)\]\s*$/
@@ -32,8 +32,11 @@ function normalizeOptionalString(value: unknown) {
   return normalized || undefined
 }
 
-function isSafePersonSlug(value: string) {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
+function normalizeSafeSlug(value: unknown) {
+  const normalized = normalizeOptionalString(value)?.toLowerCase()
+  return normalized && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalized)
+    ? normalized
+    : undefined
 }
 
 function normalizeMeta(value: unknown): EncodedAuthorMeta | null {
@@ -42,17 +45,17 @@ function normalizeMeta(value: unknown): EncodedAuthorMeta | null {
   const meta = value as Record<string, unknown>
   const userId = normalizeOptionalString(meta.userId)
   const username = normalizeOptionalString(meta.username)
-  const institutePersonSlug = normalizeOptionalString(meta.institutePersonSlug)
+  const institutePersonSlug = normalizeSafeSlug(meta.institutePersonSlug)
 
   return {
-    ...(meta.isTongClass === true && userId ? { isTongClass: true } : {}),
+    ...(typeof meta.isTongClass === "boolean" ? { isTongClass: meta.isTongClass } : {}),
     ...(userId ? { userId } : {}),
     ...(username ? { username } : {}),
-    ...(institutePersonSlug && isSafePersonSlug(institutePersonSlug)
-      ? { institutePersonSlug }
+    ...(institutePersonSlug ? { institutePersonSlug } : {}),
+    ...(typeof meta.coFirst === "boolean" ? { coFirst: meta.coFirst } : {}),
+    ...(typeof meta.corresponding === "boolean"
+      ? { corresponding: meta.corresponding }
       : {}),
-    ...(meta.coFirst === true ? { coFirst: true } : {}),
-    ...(meta.corresponding === true ? { corresponding: true } : {}),
   }
 }
 
@@ -65,20 +68,17 @@ function decodeMeta(value: string): EncodedAuthorMeta | null {
   }
 }
 
-export function normalizePublicationAuthorWriteInput(
-  author: PublicationAuthorWriteInput,
-): PublicationAuthorWriteInput {
+function normalizePublicationAuthor(author: PublicationAuthor): PublicationAuthor {
   const userId = normalizeOptionalString(author.userId)
   const username = normalizeOptionalString(author.username)
-  const institutePersonSlug = normalizeOptionalString(author.institutePersonSlug)
+  const institutePersonSlug = normalizeSafeSlug(author.institutePersonSlug)
+  const hasTongIdentity = author.isTongClass === true && Boolean(userId)
 
   return {
     name: author.name.trim(),
-    ...(userId ? { userId } : {}),
+    ...(hasTongIdentity ? { isTongClass: true, userId } : {}),
     ...(username ? { username } : {}),
-    ...(institutePersonSlug && isSafePersonSlug(institutePersonSlug)
-      ? { institutePersonSlug }
-      : {}),
+    ...(institutePersonSlug ? { institutePersonSlug } : {}),
     ...(author.coFirst === true ? { coFirst: true } : {}),
     ...(author.corresponding === true ? { corresponding: true } : {}),
   }
@@ -97,13 +97,15 @@ export function parsePublicationAuthor(value: string): PublicationAuthor {
   }
 }
 
-export function encodePublicationAuthor(author: PublicationAuthorWriteInput) {
-  const normalized = normalizePublicationAuthorWriteInput(author)
+export function encodePublicationAuthor(author: PublicationAuthor) {
+  const normalized = normalizePublicationAuthor(author)
   const { name } = normalized
   if (!name) return ""
 
   const meta: EncodedAuthorMeta = {
-    ...(normalized.userId ? { isTongClass: true, userId: normalized.userId } : {}),
+    ...(normalized.isTongClass && normalized.userId
+      ? { isTongClass: true, userId: normalized.userId }
+      : {}),
     ...(normalized.username ? { username: normalized.username } : {}),
     ...(normalized.institutePersonSlug
       ? { institutePersonSlug: normalized.institutePersonSlug }
@@ -119,17 +121,41 @@ export function encodePublicationAuthor(author: PublicationAuthorWriteInput) {
   return `${name} [tc-author:${encodeMeta(meta)}]`
 }
 
-export function toPublicPublicationAuthorDetail(
-  value: string | PublicationAuthor,
-): PublicationPublicAuthorDetail {
-  const author = typeof value === "string" ? parsePublicationAuthor(value) : value
-  const personSlug = normalizeOptionalString(author.institutePersonSlug)
+export function toPublicationAuthorInput(author: PublicationAuthor): PublicationAuthorInput {
+  const normalized = normalizePublicationAuthor(author)
+  const hasTongIdentity = normalized.isTongClass === true && Boolean(normalized.userId)
 
   return {
-    name: author.name.trim(),
-    ...(author.coFirst === true ? { coFirst: true } : {}),
-    ...(author.corresponding === true ? { corresponding: true } : {}),
-    ...(personSlug && isSafePersonSlug(personSlug) ? { personSlug } : {}),
+    snapshot: encodePublicationAuthor(normalized),
+    name: normalized.name,
+    coFirst: normalized.coFirst === true,
+    corresponding: normalized.corresponding === true,
+    ...(hasTongIdentity && normalized.userId
+      ? { tongClassUserId: normalized.userId }
+      : {}),
+    ...(hasTongIdentity && normalized.username
+      ? { tongClassUsername: normalized.username }
+      : {}),
+    ...(normalized.institutePersonSlug
+      ? { institutePersonSlug: normalized.institutePersonSlug }
+      : {}),
+  }
+}
+
+export function toPublicPublicationAuthor(author: PublicationAuthor): PublicPublicationAuthor {
+  const normalized = normalizePublicationAuthor(author)
+  const tongClassSlug = normalizeSafeSlug(normalized.username)
+  const profile = normalized.institutePersonSlug
+    ? { kind: "institute_person" as const, slug: normalized.institutePersonSlug }
+    : normalized.isTongClass && normalized.userId && tongClassSlug
+      ? { kind: "tong_class_member" as const, slug: tongClassSlug }
+      : undefined
+
+  return {
+    name: normalized.name,
+    coFirst: normalized.coFirst === true,
+    corresponding: normalized.corresponding === true,
+    ...(profile ? { profile } : {}),
   }
 }
 

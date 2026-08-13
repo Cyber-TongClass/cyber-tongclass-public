@@ -1,4 +1,4 @@
-import type { PublicationPublicAuthorDetail } from "@/types"
+import type { PublicPublicationAuthor } from "@/types"
 
 export type InstitutePersonKind = "teacher" | "graduate"
 
@@ -106,7 +106,7 @@ export type PublicInstituteResearch = {
   audiences: PublicContentAudience[]
   title: string
   authors: string[]
-  authorDetails?: PublicationPublicAuthorDetail[]
+  authorDetails: PublicPublicationAuthor[]
   venue: string
   year: number
   abstract: string
