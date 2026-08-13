@@ -80,23 +80,13 @@ export function OADocumentOverlay({
   }
 
   const resizeHandleAtPointer = (event: PointerEvent<HTMLElement>): OADocumentResizeHandle | undefined => {
-    if (!selected || !pageElement) return undefined
-    const page = pageElement.getBoundingClientRect()
-    const exact = {
-      left: page.left + visual.x * page.width,
-      top: page.top + visual.y * page.height,
-      width: visual.width * page.width,
-      height: visual.height * page.height,
-    }
-    if (!exact.width || !exact.height) return undefined
-    const hitWidth = Math.max(exact.width, 44)
-    const hitHeight = Math.max(exact.height, 44)
-    const hitLeft = exact.left + exact.width / 2 - hitWidth / 2
-    const hitTop = exact.top + exact.height / 2 - hitHeight / 2
-    const fx = (event.clientX - hitLeft) / hitWidth
-    const fy = (event.clientY - hitTop) / hitHeight
-    const moveHalfWidth = Math.min(0.3, Math.max(0.14, 14 / hitWidth))
-    const moveHalfHeight = Math.min(0.3, Math.max(0.14, 14 / hitHeight))
+    if (!selected) return undefined
+    const hit = event.currentTarget.getBoundingClientRect()
+    if (!hit.width || !hit.height) return undefined
+    const fx = (event.clientX - hit.left) / hit.width
+    const fy = (event.clientY - hit.top) / hit.height
+    const moveHalfWidth = Math.min(0.5, 14 / hit.width)
+    const moveHalfHeight = Math.min(0.5, 14 / hit.height)
     if (Math.abs(fx - 0.5) <= moveHalfWidth && Math.abs(fy - 0.5) <= moveHalfHeight) return undefined
     const horizontal = fx < 0.5 - moveHalfWidth ? "left" : fx > 0.5 + moveHalfWidth ? "right" : ""
     const vertical = fy < 0.5 - moveHalfHeight ? "top" : fy > 0.5 + moveHalfHeight ? "bottom" : ""
