@@ -147,3 +147,40 @@ test("parses the complete common Poppler font type column", async () => {
   assert.deepEqual(inspected.map((font) => font.type), fontTypes)
   assert.deepEqual(inspected.map((font) => font.name), fontTypes.map((_, index) => `Fixture Font ${index + 1}`))
 })
+
+test("rejects an oversized rendered page from metadata before reading it", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "oa-poppler-oversized-page-"))
+  const makeTool = (name, body) => {
+    const executable = path.join(directory, name)
+    writeFileSync(executable, `#!/bin/sh\nset -eu\n${body}\n`)
+    chmodSync(executable, 0o700)
+    return executable
+  }
+  const caps = {
+    pdfInfoPath: makeTool("pdfinfo", `printf 'Pages: 1\\nPage size: 300 x 400 pts\\nPage rot: 0\\n'`),
+    pdfTextPath: null,
+    pdfToPpmPath: makeTool("pdftoppm", `prefix="$9"; printf '\\211PNG\\r\\n\\032\\n' > "\${prefix}-1.png"; truncate -s 20971521 "\${prefix}-1.png"; chmod 000 "\${prefix}-1.png"`),
+    pdfFontsPath: null,
+    unavailableReasons: [],
+  }
+  await assert.rejects(() => tools.renderPdfPages(pdf, caps), /20 MiB/)
+})
+
+test("rejects total rendered page metadata above 100 MiB before reading pages", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "oa-poppler-total-pages-"))
+  const makeTool = (name, body) => {
+    const executable = path.join(directory, name)
+    writeFileSync(executable, `#!/bin/sh\nset -eu\n${body}\n`)
+    chmodSync(executable, 0o700)
+    return executable
+  }
+  const pageScript = Array.from({ length: 6 }, (_, index) => `printf '\\211PNG\\r\\n\\032\\n' > "\${prefix}-${index + 1}.png"; truncate -s 18874368 "\${prefix}-${index + 1}.png"; chmod 000 "\${prefix}-${index + 1}.png"`).join("; ")
+  const caps = {
+    pdfInfoPath: makeTool("pdfinfo", `printf 'Pages: 6\\nPage size: 300 x 400 pts\\nPage rot: 0\\n'`),
+    pdfTextPath: null,
+    pdfToPpmPath: makeTool("pdftoppm", `prefix="$9"; ${pageScript}`),
+    pdfFontsPath: null,
+    unavailableReasons: [],
+  }
+  await assert.rejects(() => tools.renderPdfPages(pdf, caps), /总.*100 MiB|100 MiB.*总/)
+})

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { constants } from "node:fs"
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { access, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import type { Readable } from "node:stream"
@@ -35,6 +35,7 @@ const MAX_PAGE_POINTS = 20_000
 const MAX_PAGE_PIXELS = 40_000_000
 const MAX_TOTAL_PIXELS = 200_000_000
 const MAX_PAGE_BYTES = 20 * 1024 * 1024
+const MAX_TOTAL_RENDERED_BYTES = 100 * 1024 * 1024
 const MAX_STDOUT_BYTES = 5 * 1024 * 1024
 const MAX_STDERR_BYTES = 128 * 1024
 const TOOL_TIMEOUT_MS = 60_000
@@ -229,6 +230,13 @@ export async function renderPdfPages(bytes: Uint8Array, caps: OAPreviewToolCapab
     await runTool(caps.pdfToPpmPath, "pdftoppm", ["-png", "-r", String(RENDER_DPI), "-f", "1", "-l", String(pages.length), inputPath, prefix], cwd)
     const names = (await readdir(cwd)).filter((name) => /^page-\d+\.png$/.test(name)).sort((left, right) => Number(left.match(/\d+/)?.[0]) - Number(right.match(/\d+/)?.[0]))
     if (names.length !== pages.length) throw new Error("pdftoppm 生成的页面数量不匹配")
+    const pageStats = await Promise.all(names.map((name) => stat(path.join(cwd, name))))
+    let totalRenderedBytes = 0
+    for (const [index, metadata] of pageStats.entries()) {
+      if (!metadata.isFile() || metadata.size <= 0 || metadata.size > MAX_PAGE_BYTES) throw new Error(`PDF 第 ${index + 1} 页 PNG 无效或超过 20 MiB 限制`)
+      totalRenderedBytes += metadata.size
+      if (totalRenderedBytes > MAX_TOTAL_RENDERED_BYTES) throw new Error("PDF 页面 PNG 总大小超过 100 MiB 限制")
+    }
     const rendered: Buffer[] = []
     for (const name of names) {
       const page = await readFile(path.join(cwd, name))
