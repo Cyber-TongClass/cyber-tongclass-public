@@ -624,7 +624,12 @@ export default defineSchema({
     title: v.string(),
     body: v.string(),
     resourceType: v.union(v.literal("coffee_talk"), v.literal("oa_workflow"), v.literal("content_review")),
-    resourceId: v.union(v.id("coffeeTalkApplications"), v.id("oaFormSubmissions"), v.id("contentSubmissions")),
+    resourceId: v.union(
+      v.id("coffeeTalkApplications"),
+      v.id("oaFormSubmissions"),
+      v.id("contentSubmissions"),
+      v.id("externalNewsSyncLedger"),
+    ),
     naturalKey: v.optional(v.string()),
     readAt: v.optional(v.number()),
     archivedAt: v.optional(v.number()),
@@ -639,6 +644,7 @@ export default defineSchema({
     category: v.union(v.literal("news"), v.literal("events"), v.literal("reimbursement")),
     userId: v.id("users"),
     canCreate: v.boolean(),
+    canReview: v.optional(v.boolean()),
     canManage: v.boolean(),
     grantedBy: v.id("users"),
     createdAt: v.number(),
@@ -681,6 +687,23 @@ export default defineSchema({
     // rejects accidental reuse of the same key for different draft content.
     idempotencyKey: v.optional(v.string()),
     requestFingerprint: v.optional(v.string()),
+    origin: v.optional(v.union(v.literal("manual"), v.literal("external_sync"))),
+    workflowStage: v.optional(v.union(
+      v.literal("source_review"),
+      v.literal("publication_approval"),
+      v.literal("complete"),
+    )),
+    sourceReviewStatus: v.optional(v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("needs_changes"),
+      v.literal("rejected"),
+    )),
+    sourceLedgerId: v.optional(v.id("externalNewsSyncLedger")),
+    activeSourceSnapshotId: v.optional(v.id("externalNewsSourceSnapshots")),
+    pendingSourceSnapshotId: v.optional(v.id("externalNewsSourceSnapshots")),
+    sourcePublishedAt: v.optional(v.number()),
+    sourceUpdateAvailable: v.optional(v.boolean()),
     status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
     reviewedBy: v.optional(v.id("users")),
     reviewerName: v.optional(v.string()),
@@ -699,10 +722,12 @@ export default defineSchema({
   contentReviewTasks: defineTable({
     submissionId: v.id("contentSubmissions"),
     userId: v.id("users"),
+    stage: v.optional(v.union(v.literal("source_review"), v.literal("publication_approval"))),
     status: v.union(
       v.literal("pending"),
       v.literal("approved"),
       v.literal("rejected"),
+      v.literal("changes_requested"),
       v.literal("skipped"),
     ),
     comment: v.optional(v.string()),
@@ -715,6 +740,91 @@ export default defineSchema({
     .index("by_submission", ["submissionId"])
     .index("by_submission_user", ["submissionId", "userId"])
     .index("by_user_status_createdAt", ["userId", "status", "createdAt"]),
+
+  externalNewsSyncSettings: defineTable({
+    singletonKey: v.literal("default"),
+    enabled: v.boolean(),
+    mode: v.union(v.literal("observation"), v.literal("draft")),
+    reviewerMode: v.union(v.literal("scope"), v.literal("all_reviewers")),
+    reviewerScope: v.optional(oaUserScope),
+    updatedBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_singletonKey", ["singletonKey"]),
+
+  externalNewsSyncLedger: defineTable({
+    identity: v.string(),
+    sourceKey: v.union(
+      v.literal("news"),
+      v.literal("notices"),
+      v.literal("research_progress"),
+      v.literal("academic_lectures"),
+    ),
+    canonicalUrl: v.string(),
+    sourcePublishedAt: v.optional(v.number()),
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    lastFetchedAt: v.optional(v.number()),
+    currentHash: v.optional(v.string()),
+    status: v.union(
+      v.literal("observed"),
+      v.literal("draft_created"),
+      v.literal("update_available"),
+      v.literal("published"),
+      v.literal("rejected"),
+      v.literal("failed"),
+    ),
+    submissionId: v.optional(v.id("contentSubmissions")),
+    failureCode: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_identity", ["identity"])
+    .index("by_sourceKey_lastSeenAt", ["sourceKey", "lastSeenAt"]),
+
+  externalNewsSourceSnapshots: defineTable({
+    ledgerId: v.id("externalNewsSyncLedger"),
+    contentHash: v.string(),
+    title: v.string(),
+    markdown: v.string(),
+    category: v.string(),
+    sourceUrl: v.string(),
+    coverImageUrl: v.optional(v.string()),
+    sourcePublishedAt: v.optional(v.number()),
+    fetchedAt: v.number(),
+  }).index("by_ledger_hash", ["ledgerId", "contentHash"]),
+
+  externalNewsSourceHealth: defineTable({
+    sourceKey: v.union(
+      v.literal("news"),
+      v.literal("notices"),
+      v.literal("research_progress"),
+      v.literal("academic_lectures"),
+    ),
+    lastAttemptAt: v.optional(v.number()),
+    lastSuccessAt: v.optional(v.number()),
+    lastFailureCode: v.optional(v.string()),
+    consecutiveFailures: v.number(),
+    lastDiscoveredCount: v.number(),
+    updatedAt: v.number(),
+  }).index("by_sourceKey", ["sourceKey"]),
+
+  externalNewsSyncRuns: defineTable({
+    trigger: v.union(v.literal("cron"), v.literal("manual")),
+    requestedBy: v.optional(v.id("users")),
+    mode: v.union(v.literal("observation"), v.literal("draft")),
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("partial_failure"),
+      v.literal("failed"),
+    ),
+    discoveredCount: v.number(),
+    draftCount: v.number(),
+    failureCount: v.number(),
+    startedAt: v.number(),
+    finishedAt: v.optional(v.number()),
+  }).index("by_startedAt", ["startedAt"]),
 
   // Events table
   events: defineTable({

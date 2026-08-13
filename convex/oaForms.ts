@@ -211,6 +211,15 @@ function formKind(form: any) {
   return form?.kind === "reimbursement" ? "reimbursement" : "form"
 }
 
+function isSystemManagedForm(form: any) {
+  return Boolean(form?.systemKey)
+}
+
+function assertNotSystemManagedForm(form: any) {
+  if (isSystemManagedForm(form)) throw new Error("系统表单只能在对应的专用管理页面中配置")
+  return form
+}
+
 async function getReimbursementPermission(ctx: any, userId: any) {
   return await ctx.db
     .query("contentPermissions")
@@ -933,6 +942,7 @@ export const listPublished = query({
     const now = Date.now()
     const access = await Promise.all(rows.map((form) => canUserAccessOAForm(ctx, user, form)))
     return rows
+      .filter((form) => !isSystemManagedForm(form))
       .filter((form, index) => form.visibility === "members" && access[index])
       .filter((form) => args.includePast ? (form.status === "published" || form.status === "archived") : form.status === "published")
       .filter((form) => !args.kind || formKind(form) === args.kind)
@@ -948,7 +958,7 @@ export const getPublishedBySlug = query({
   handler: async (ctx, args) => {
     const user = await getUserBySession(ctx, args.sessionToken)
     const form = await ctx.db.query("oaForms").withIndex("by_slug", (q) => q.eq("slug", normalizeSlug(args.slug))).first()
-    if (!form || (form.status !== "published" && form.status !== "archived")) return null
+    if (!form || isSystemManagedForm(form) || (form.status !== "published" && form.status !== "archived")) return null
     if (!await canUserAccessOAForm(ctx, user, form)) return null
     const now = Date.now()
     if (form.openAt && form.openAt > now) return null
@@ -961,7 +971,8 @@ export const adminList = query({
   handler: async (ctx, args) => {
     const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
     const rows = await ctx.db.query("oaForms").withIndex("by_updatedAt").order("desc").collect()
-    const visibleRows = admin.role === "super_admin" ? rows : rows.filter((form) => !isAIAWorkflowForm(form))
+    const nonSystemRows = rows.filter((form) => !isSystemManagedForm(form))
+    const visibleRows = admin.role === "super_admin" ? nonSystemRows : nonSystemRows.filter((form) => !isAIAWorkflowForm(form))
     return args.kind ? visibleRows.filter((form) => formKind(form) === args.kind) : visibleRows
   },
 })
@@ -972,6 +983,7 @@ export const adminGet = query({
     const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
     const form = await ctx.db.get(args.id)
     if (!form) return null
+    assertNotSystemManagedForm(form)
     assertCanManageAIAWorkflowForm(admin, form)
     return form
   },
@@ -994,6 +1006,7 @@ export const adminUpsert = mutation({
     const resultFields = (args.resultFields || []).map(sanitizeResultField)
     uniqueIds(resultFields, "结果字段")
     const existingById = args.id ? await ctx.db.get(args.id) : null
+    if (existingById) assertNotSystemManagedForm(existingById)
     if (existingById) assertCanManageAIAWorkflowForm(admin, existingById)
     const requestedKind: "form" | "reimbursement" = existingById
       ? formKind(existingById)
@@ -1089,6 +1102,7 @@ export const adminSetStatus = mutation({
     const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
     const form = await ctx.db.get(args.id)
     if (!form) throw new Error("表单不存在")
+    assertNotSystemManagedForm(form)
     assertCanManageAIAWorkflowForm(admin, form)
     const reimbursementWorkflow = formKind(form) === "reimbursement"
       ? await buildCurrentReimbursementWorkflow(ctx, form)
@@ -1118,6 +1132,7 @@ export const adminSetPinned = mutation({
     if (admin.role !== "super_admin") throw new Error("只有超级管理员可以置顶表单")
     const form = await ctx.db.get(args.id)
     if (!form) throw new Error("表单不存在")
+    assertNotSystemManagedForm(form)
     assertCanManageAIAWorkflowForm(admin, form)
     const now = Date.now()
     await ctx.db.patch(args.id, {
@@ -1135,6 +1150,7 @@ export const adminRemove = mutation({
     const admin = requireAdmin(await getUserBySession(ctx, args.sessionToken))
     const form = await ctx.db.get(args.id)
     if (!form) throw new Error("表单不存在")
+    assertNotSystemManagedForm(form)
     assertCanManageAIAWorkflowForm(admin, form)
     const existingSubmission = await ctx.db
       .query("oaFormSubmissions")
@@ -1206,9 +1222,10 @@ export const teacherList = query({
     const isSuperAdmin = user.role === "super_admin"
     if (!isSuperAdmin) requireTeacher(user)
     const all = await ctx.db.query("oaForms").withIndex("by_updatedAt").order("desc").collect()
-    const rows = isSuperAdmin
+    const rows = (isSuperAdmin
       ? all
-      : all.filter((form) => String(form.createdBy) === String(user._id))
+      : all.filter((form) => String(form.createdBy) === String(user._id)))
+      .filter((form) => !isSystemManagedForm(form))
     const nameCache = new Map<string, string>()
     return await Promise.all(rows.map(async (form) => {
       const submissions = await ctx.db
@@ -1239,6 +1256,7 @@ export const teacherGet = query({
     const teacher = requireTeacher(await getUserBySession(ctx, args.sessionToken))
     const form = await ctx.db.get(args.id)
     if (!form) return null
+    assertNotSystemManagedForm(form)
     assertOwnForm(teacher, form)
     return form
   },
@@ -1263,6 +1281,7 @@ export const teacherUpsert = mutation({
       ? Math.floor(args.maxSubmissionsPerUser)
       : undefined
     const existingById = args.id ? await ctx.db.get(args.id) : null
+    if (existingById) assertNotSystemManagedForm(existingById)
     if (existingById) assertOwnForm(teacher, existingById)
     const existingBySlug = await ctx.db.query("oaForms").withIndex("by_slug", (q) => q.eq("slug", slug)).first()
     if (existingBySlug && (!args.id || String(existingBySlug._id) !== String(args.id))) {
@@ -1331,7 +1350,7 @@ export const teacherSetStatus = mutation({
   args: { sessionToken: v.string(), id: v.id("oaForms"), status: formStatusValidator },
   handler: async (ctx, args) => {
     const teacher = requireTeacher(await getUserBySession(ctx, args.sessionToken))
-    const form = assertOwnForm(teacher, await ctx.db.get(args.id))
+    const form = assertNotSystemManagedForm(assertOwnForm(teacher, await ctx.db.get(args.id)))
     if (args.status === "published") await validateWorkflowForPublication(ctx, teacher, form)
     const now = Date.now()
     await ctx.db.patch(args.id, {
@@ -1349,6 +1368,7 @@ export const teacherRemove = mutation({
   handler: async (ctx, args) => {
     const teacher = requireTeacher(await getUserBySession(ctx, args.sessionToken))
     const form = await ctx.db.get(args.id)
+    assertNotSystemManagedForm(form)
     assertOwnForm(teacher, form)
     const existingSubmission = await ctx.db
       .query("oaFormSubmissions")
@@ -1386,11 +1406,12 @@ export const manageList = query({
   handler: async (ctx, args) => {
     const manager = await requireManageSurfaceActor(ctx, await getUserBySession(ctx, args.sessionToken))
     const all = await ctx.db.query("oaForms").withIndex("by_updatedAt").order("desc").collect()
+    const nonSystemRows = all.filter((form) => !isSystemManagedForm(form))
     const rows = manager.role === "super_admin"
-      ? all
+      ? nonSystemRows
       : resolveUserIdentityType(manager) === "teacher"
-        ? all.filter((form) => String(form.createdBy) === String(manager._id))
-        : all.filter((form) => (
+        ? nonSystemRows.filter((form) => String(form.createdBy) === String(manager._id))
+        : nonSystemRows.filter((form) => (
             String(form.createdBy) === String(manager._id)
             && formKind(form) === "reimbursement"
           ))
@@ -1424,7 +1445,7 @@ export const listEditorVisibleTargets = query({
   handler: async (ctx, args) => {
     const manager = await requireManageSurfaceActor(ctx, await getUserBySession(ctx, args.sessionToken))
     const rows = await ctx.db.query("oaForms").withIndex("by_updatedAt").order("desc").collect()
-    const candidates = rows.filter((form) => form.status === "published" && form.visibility === "members")
+    const candidates = rows.filter((form) => !isSystemManagedForm(form) && form.status === "published" && form.visibility === "members")
     const access = manager.role === "super_admin"
       ? []
       : await Promise.all(candidates.map((form) => canUserAccessOAForm(ctx, manager, form)))
@@ -1445,6 +1466,7 @@ export const manageGet = query({
     const manager = await requireManageSurfaceActor(ctx, await getUserBySession(ctx, args.sessionToken))
     const form = await ctx.db.get(args.id)
     if (!form) return null
+    assertNotSystemManagedForm(form)
     await assertCanManageFormWithRights(ctx, manager, form)
     return form
   },
@@ -1455,6 +1477,7 @@ export const manageUpsert = mutation({
   handler: async (ctx, args) => {
     const manager = await getUserBySession(ctx, args.sessionToken)
     const existingById = args.id ? await ctx.db.get(args.id) : null
+    if (existingById) assertNotSystemManagedForm(existingById)
     const requestedKind: "form" | "reimbursement" = existingById
       ? formKind(existingById)
       : args.kind === "reimbursement" ? "reimbursement" : "form"
@@ -1555,6 +1578,7 @@ export const manageSetStatus = mutation({
   handler: async (ctx, args) => {
     const manager = await requireManageSurfaceActor(ctx, await getUserBySession(ctx, args.sessionToken))
     const form = await assertCanManageFormWithRights(ctx, manager, await ctx.db.get(args.id))
+    assertNotSystemManagedForm(form)
     const reimbursementWorkflow = formKind(form) === "reimbursement"
       ? await buildCurrentReimbursementWorkflow(ctx, form)
       : undefined
@@ -1582,6 +1606,7 @@ export const manageSetPinned = mutation({
     const manager = requireFormManager(await getUserBySession(ctx, args.sessionToken))
     if (manager.role !== "super_admin") throw new Error("只有超级管理员可以置顶表单")
     const form = await ctx.db.get(args.id)
+    assertNotSystemManagedForm(form)
     assertCanManageForm(manager, form)
     const now = Date.now()
     await ctx.db.patch(args.id, {
@@ -1598,6 +1623,7 @@ export const manageRemove = mutation({
   handler: async (ctx, args) => {
     const manager = await requireManageSurfaceActor(ctx, await getUserBySession(ctx, args.sessionToken))
     const form = await ctx.db.get(args.id)
+    assertNotSystemManagedForm(form)
     await assertCanManageFormWithRights(ctx, manager, form)
     const existingSubmission = await ctx.db
       .query("oaFormSubmissions")
@@ -1683,6 +1709,9 @@ export const submit = mutation({
     const submissionRequestFingerprint = JSON.stringify({
       formId: String(form._id),
       answers: normalizedAnswers,
+      documentTemplateVersionId: form.activeDocumentTemplateVersionId
+        ? String(form.activeDocumentTemplateVersionId)
+        : null,
     })
     const replay = await ctx.db
       .query("oaFormSubmissions")
@@ -1724,6 +1753,7 @@ export const submit = mutation({
       submitterEmail: user.email,
       answers: normalizedAnswers,
       formSnapshot: buildFormSnapshot(form),
+      documentTemplateVersionId: form.activeDocumentTemplateVersionId,
       reviewStatus: "pending",
       submissionIdempotencyKey: idempotencyKey,
       submissionRequestFingerprint,
