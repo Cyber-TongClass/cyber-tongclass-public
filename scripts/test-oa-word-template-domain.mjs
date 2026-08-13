@@ -79,6 +79,117 @@ test("validates stable, unique manifest fields and anchor natural keys", () => {
   assert.throws(() => domain.validateTemplateManifest({ ...manifest, anchors: [{ ...anchor, fieldId: "missing" }] }), /不存在的字段/)
 })
 
+const visual = {
+  page: 4,
+  x: 0.12,
+  y: 0.34,
+  width: 0.76,
+  height: 0.18,
+  pageWidth: 595.28,
+  pageHeight: 841.89,
+  rotation: 0,
+  coordinateSpace: "normalized-pdf",
+}
+
+const structural = {
+  partName: "word/document.xml",
+  path: "/document/body[1]/p[7]",
+  contextHash: "sha256:abc",
+  writeTarget: "paragraph-after",
+  styleSourcePath: "/document/body[1]/p[7]",
+}
+
+function versionTwoManifest() {
+  return {
+    syntaxVersion: 2,
+    compilerVersion: "oa-word-v2",
+    fields: [{ fieldId: "main_practice", label: "主要做法", answerType: "textarea", required: true }],
+    anchors: [{
+      fieldId: "main_practice",
+      kind: "label_blank",
+      partName: structural.partName,
+      path: structural.path,
+      contextHash: structural.contextHash,
+      output: { mode: "append", multiline: true },
+      visual,
+      bindingCandidateId: "candidate_main_practice",
+      structural,
+    }],
+    suggestions: [{
+      id: "suggestion_main_practice",
+      kind: "label_blank",
+      label: "主要做法",
+      inferredAnswerType: "textarea",
+      confidence: "high",
+      reviewState: "confirmed",
+      evidence: ["instruction paragraph"],
+      conflictIds: [],
+      fieldId: "main_practice",
+      partName: structural.partName,
+      path: structural.path,
+      contextHash: structural.contextHash,
+      visual,
+      bindingCandidateIds: ["candidate_main_practice"],
+    }],
+  }
+}
+
+test("validates version-two visual and structural anchors while preserving version one", () => {
+  assert.doesNotThrow(() => domain.validateTemplateManifest(versionTwoManifest()))
+
+  const legacy = versionTwoManifest()
+  legacy.syntaxVersion = 1
+  legacy.anchors = legacy.anchors.map(({ visual: _visual, bindingCandidateId: _candidate, structural: _structural, ...anchor }) => anchor)
+  legacy.suggestions = []
+  assert.doesNotThrow(() => domain.validateTemplateManifest(legacy))
+})
+
+test("rejects invalid version-two visual geometry", () => {
+  for (const invalidVisual of [
+    { ...visual, page: 0 },
+    { ...visual, x: Number.NaN },
+    { ...visual, pageWidth: Number.POSITIVE_INFINITY },
+    { ...visual, x: 0.8, width: 0.3 },
+    { ...visual, y: -0.01 },
+    { ...visual, rotation: 45 },
+  ]) {
+    const manifest = versionTwoManifest()
+    manifest.anchors[0] = { ...manifest.anchors[0], visual: invalidVisual }
+    assert.throws(() => domain.validateTemplateManifest(manifest), /可视锚点/)
+  }
+})
+
+test("requires both anchors and one unique candidate for every confirmed version-two field", () => {
+  for (const omitted of ["visual", "bindingCandidateId", "structural"]) {
+    const manifest = versionTwoManifest()
+    delete manifest.anchors[0][omitted]
+    assert.throws(() => domain.validateTemplateManifest(manifest), /双锚点/)
+  }
+
+  const withoutConfirmedAnchor = versionTwoManifest()
+  withoutConfirmedAnchor.anchors = []
+  assert.throws(() => domain.validateTemplateManifest(withoutConfirmedAnchor), /已确认字段.*锚点/)
+
+  const duplicate = versionTwoManifest()
+  duplicate.fields.push({ fieldId: "overview", label: "基本概况", answerType: "textarea", required: true })
+  duplicate.suggestions.push({
+    ...duplicate.suggestions[0],
+    id: "suggestion_overview",
+    fieldId: "overview",
+    label: "基本概况",
+    path: "/document/body[1]/p[8]",
+    contextHash: "sha256:def",
+  })
+  duplicate.anchors.push({
+    ...duplicate.anchors[0],
+    fieldId: "overview",
+    path: "/document/body[1]/p[8]",
+    contextHash: "sha256:def",
+    structural: { ...structural, path: "/document/body[1]/p[8]", contextHash: "sha256:def" },
+  })
+  assert.throws(() => domain.validateTemplateManifest(duplicate), /候选 ID.*重复/)
+})
+
 test("derives deterministic safe field IDs", () => {
   assert.equal(domain.createStableDocumentFieldId("联系 邮箱", "word/document.xml|p[2]"), domain.createStableDocumentFieldId("联系 邮箱", "word/document.xml|p[2]"))
   assert.match(domain.createStableDocumentFieldId("联系 邮箱", "word/document.xml|p[2]"), /^field_[a-z0-9_]+_[0-9a-f]{8}$/)

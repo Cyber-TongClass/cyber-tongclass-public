@@ -43,11 +43,39 @@ export type OADocumentAnswerType =
   | "multiple_choice"
   | "file"
 export type OADocumentOutputMode = "replace" | "append" | "mark_choice" | "repeat_row"
+export type OADocumentWriteTarget = "table-cell" | "inline-run" | "paragraph-after" | "choice" | "repeat-row"
+export type OADocumentPageRotation = 0 | 90 | 180 | 270
 
 export interface OADocumentStructuralLocator {
   partName: string
   path: string
   contextHash: string
+}
+
+export interface OADocumentVisualAnchor {
+  page: number
+  x: number
+  y: number
+  width: number
+  height: number
+  pageWidth: number
+  pageHeight: number
+  rotation: OADocumentPageRotation
+  coordinateSpace: "normalized-pdf"
+}
+
+export interface OADocumentStructuralAnchor extends OADocumentStructuralLocator {
+  writeTarget: OADocumentWriteTarget
+  styleSourcePath?: string
+}
+
+export interface OADocumentBindingCandidate extends OADocumentStructuralLocator {
+  id: string
+  label: string
+  description: string
+  writeTarget: OADocumentWriteTarget
+  styleSourcePath?: string
+  visual: OADocumentVisualAnchor
 }
 
 export interface OADocumentSuggestion extends OADocumentStructuralLocator {
@@ -63,6 +91,8 @@ export interface OADocumentSuggestion extends OADocumentStructuralLocator {
   required?: boolean
   maxLength?: number
   options?: string[]
+  visual?: OADocumentVisualAnchor
+  bindingCandidateIds?: string[]
 }
 
 export interface OADocumentAnchor extends OADocumentStructuralLocator {
@@ -73,6 +103,9 @@ export interface OADocumentAnchor extends OADocumentStructuralLocator {
     multiline?: boolean
     preservePrototype?: boolean
   }
+  visual?: OADocumentVisualAnchor
+  bindingCandidateId?: string
+  structural?: OADocumentStructuralAnchor
 }
 
 export interface OADocumentManifestField {
@@ -135,6 +168,8 @@ const REGION_KINDS = new Set<OADocumentRegionKind>([
   "table_cell", "underline", "label_blank", "checkbox_group", "radio_group", "content_control", "bookmark", "legacy_placeholder", "repeat_row",
 ])
 const OUTPUT_MODES = new Set<OADocumentOutputMode>(["replace", "append", "mark_choice", "repeat_row"])
+const WRITE_TARGETS = new Set<OADocumentWriteTarget>(["table-cell", "inline-run", "paragraph-after", "choice", "repeat-row"])
+const PAGE_ROTATIONS = new Set<OADocumentPageRotation>([0, 90, 180, 270])
 
 function hasDocxSignature(bytes?: Uint8Array) {
   return !!bytes && bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04
@@ -218,6 +253,25 @@ function assertSafePartName(partName: string) {
   if (!/^(word\/|docProps\/|customXml\/)/.test(partName)) throw new Error("锚点必须位于受支持的 Word 部件")
 }
 
+function assertVisualAnchor(anchor: OADocumentVisualAnchor) {
+  const coordinates = [anchor.x, anchor.y, anchor.width, anchor.height]
+  if (!Number.isSafeInteger(anchor.page) || anchor.page < 1) throw new Error("可视锚点页码无效")
+  if (![...coordinates, anchor.pageWidth, anchor.pageHeight].every(Number.isFinite)) throw new Error("可视锚点包含非有限数值")
+  if (anchor.pageWidth <= 0 || anchor.pageHeight <= 0) throw new Error("可视锚点页面尺寸无效")
+  if (anchor.coordinateSpace !== "normalized-pdf") throw new Error("可视锚点坐标空间无效")
+  if (!PAGE_ROTATIONS.has(anchor.rotation)) throw new Error("可视锚点旋转角度无效")
+  if (anchor.x < 0 || anchor.y < 0 || anchor.width <= 0 || anchor.height <= 0 || anchor.x + anchor.width > 1 || anchor.y + anchor.height > 1) {
+    throw new Error("可视锚点矩形必须完整位于页面内")
+  }
+}
+
+function assertStructuralAnchor(anchor: OADocumentStructuralAnchor) {
+  assertSafePartName(anchor.partName)
+  if (!anchor.path.trim() || !anchor.contextHash.trim()) throw new Error("锚点结构定位不完整")
+  if (!WRITE_TARGETS.has(anchor.writeTarget)) throw new Error("锚点写入目标无效")
+  if (anchor.styleSourcePath !== undefined && !anchor.styleSourcePath.trim()) throw new Error("锚点样式来源路径无效")
+}
+
 export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
   if (!Number.isSafeInteger(manifest.syntaxVersion) || manifest.syntaxVersion < 1) throw new Error("syntaxVersion 无效")
   if (!manifest.compilerVersion?.trim() || manifest.compilerVersion.length > 100) throw new Error("compilerVersion 无效")
@@ -239,6 +293,8 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
     }
   }
   const anchorKeys = new Set<string>()
+  const bindingCandidateIds = new Set<string>()
+  const anchorCountsByField = new Map<string, number>()
   for (const anchor of manifest.anchors) {
     if (!fieldIds.has(anchor.fieldId)) throw new Error(`锚点引用不存在的字段：${anchor.fieldId}`)
     if (!REGION_KINDS.has(anchor.kind)) throw new Error("锚点区域类型无效")
@@ -248,6 +304,30 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
     const key = anchorNaturalKey(anchor)
     if (anchorKeys.has(key)) throw new Error(`锚点自然键重复：${key}`)
     anchorKeys.add(key)
+    anchorCountsByField.set(anchor.fieldId, (anchorCountsByField.get(anchor.fieldId) ?? 0) + 1)
+    if (manifest.syntaxVersion >= 2) {
+      if (!anchor.visual || !anchor.bindingCandidateId || !anchor.structural) throw new Error(`字段 ${anchor.fieldId} 缺少完整双锚点`)
+      assertVisualAnchor(anchor.visual)
+      assertIdentifier(anchor.bindingCandidateId, "候选 ID")
+      if (bindingCandidateIds.has(anchor.bindingCandidateId)) throw new Error(`候选 ID 重复：${anchor.bindingCandidateId}`)
+      bindingCandidateIds.add(anchor.bindingCandidateId)
+      assertStructuralAnchor(anchor.structural)
+    }
+  }
+  for (const suggestion of manifest.suggestions) {
+    if (suggestion.visual) assertVisualAnchor(suggestion.visual)
+    if (suggestion.bindingCandidateIds) {
+      const suggestionCandidateIds = new Set<string>()
+      for (const candidateId of suggestion.bindingCandidateIds) {
+        assertIdentifier(candidateId, "候选 ID")
+        if (suggestionCandidateIds.has(candidateId)) throw new Error(`建议 ${suggestion.id} 的候选 ID 重复：${candidateId}`)
+        suggestionCandidateIds.add(candidateId)
+      }
+    }
+    if (manifest.syntaxVersion >= 2 && suggestion.reviewState === "confirmed") {
+      if (!suggestion.fieldId || !fieldIds.has(suggestion.fieldId)) throw new Error(`已确认建议 ${suggestion.id} 缺少有效字段`)
+      if (anchorCountsByField.get(suggestion.fieldId) !== 1) throw new Error(`已确认字段 ${suggestion.fieldId} 必须恰有一个锚点`)
+    }
   }
   return manifest
 }
