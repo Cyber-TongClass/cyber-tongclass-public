@@ -14,7 +14,6 @@ import {
   useManageOAForm,
   useManageUpsertOAForm,
   useOADocumentTemplateVersion,
-  useSaveOADocumentTemplateReview,
 } from "@/lib/api"
 import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import {
@@ -84,7 +83,6 @@ export default function OADocumentTemplatePage() {
   const version = useOADocumentTemplateVersion(versionId) as ManagedDocumentVersion | null | undefined
   const generateUpload = useGenerateOADocumentTemplateSourceUploadUrl()
   const createVersion = useCreateOrGetOADocumentTemplateVersion()
-  const saveReview = useSaveOADocumentTemplateReview()
   const upsertForm = useManageUpsertOAForm()
   const [manifest, setManifest] = useState<OADocumentTemplateManifest | null>(null)
   const [busy, setBusy] = useState(false)
@@ -131,20 +129,6 @@ export default function OADocumentTemplatePage() {
     }
   }
 
-  async function persistReview(nextManifest: OADocumentTemplateManifest) {
-    if (!versionId) throw new Error("模板版本尚未创建")
-    if (form && version && String(version.formId) !== String(form._id)) throw new Error("模板版本与当前表单不匹配")
-    await saveReview({
-      versionId,
-      manifest: nextManifest,
-      warnings: version?.warnings || [],
-      capabilities: version?.capabilities || {},
-      ...(version?.workingStorageId ? { workingStorageId: version.workingStorageId } : {}),
-      ...(version?.previewStorageId ? { previewStorageId: version.previewStorageId } : {}),
-    })
-    setManifest(nextManifest)
-  }
-
   async function compileAndActivate(draftManifest: OADocumentTemplateManifest) {
     if (!versionId || !form || !version) throw new Error("模板版本尚未创建")
     if (String(version.formId) !== String(form._id)) throw new Error("模板版本与当前表单不匹配")
@@ -152,7 +136,6 @@ export default function OADocumentTemplatePage() {
     setMessage("")
     try {
       const reviewedManifest = buildReviewedDocumentManifest(draftManifest)
-      await persistReview(reviewedManifest)
       await routeRequest("/api/oa/document-templates/compile", versionId)
       const fields = mergeDocumentManifestFields(withoutWordImportPlaceholder(form.fields), reviewedManifest)
       await upsertForm({ ...form, id: form._id, fields })
@@ -211,9 +194,10 @@ export default function OADocumentTemplatePage() {
         <section className="mt-8">
           <OADocumentWorkbench
             key={versionId}
+            versionId={versionId}
             initialManifest={manifest}
             onChange={setManifest}
-            onSave={persistReview}
+            onSave={setManifest}
             onCompile={compileAndActivate}
             compiling={busy}
           />

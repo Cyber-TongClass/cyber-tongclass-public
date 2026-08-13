@@ -27,12 +27,14 @@ export function OADocumentAnnotationPanel({
   onActivate,
   onAdd,
   onDecision,
+  canConfirm,
 }: {
   suggestions: OADocumentSuggestion[]
   activeRegionId?: string
   onActivate: (regionId: string) => void
   onAdd: () => void
   onDecision: (regionId: string, state: "confirmed" | "ignored" | "deleted") => void
+  canConfirm: (regionId: string) => boolean
 }) {
   return (
     <aside aria-label="识别批注" className="border-l aia-border-rule bg-[hsl(var(--aia-paper))]">
@@ -72,7 +74,7 @@ export function OADocumentAnnotationPanel({
             </button>
             {activeRegionId === suggestion.id ? (
               <div className="flex gap-1 px-4 pb-4 pl-9">
-                <button type="button" onClick={() => onDecision(suggestion.id, "confirmed")} className="aia-focus p-2 text-emerald-700" aria-label="确认该问题"><Check className="h-4 w-4" /></button>
+                <button type="button" disabled={!canConfirm(suggestion.id)} onClick={() => onDecision(suggestion.id, "confirmed")} className="aia-focus p-2 text-emerald-700 disabled:cursor-not-allowed disabled:opacity-30" aria-label="确认该问题"><Check className="h-4 w-4" /></button>
                 <button type="button" onClick={() => onDecision(suggestion.id, "ignored")} className="aia-focus p-2 aia-text-muted" aria-label="忽略该问题"><EyeOff className="h-4 w-4" /></button>
                 <button type="button" onClick={() => onDecision(suggestion.id, "deleted")} className="aia-focus p-2 text-[hsl(var(--aia-red))]" aria-label="删除该问题"><Trash2 className="h-4 w-4" /></button>
               </div>

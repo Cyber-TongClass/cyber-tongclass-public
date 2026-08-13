@@ -37,9 +37,23 @@ test("document-template controller uploads, hashes, analyzes, reviews, compiles,
   assert.match(code, /\/api\/oa\/document-templates\/compile/)
   assert.match(code, /Authorization.*Bearer/)
   assert.match(code, /versionId/)
-  assert.match(code, /useSaveOADocumentTemplateReview/)
+  assert.doesNotMatch(code, /useSaveOADocumentTemplateReview/)
+  assert.match(code, /versionId=\{versionId\}/)
+  assert.match(code, /onSave=\{setManifest\}/)
   assert.match(code, /mergeDocumentManifestFields/)
   assert.doesNotMatch(code, /sourceUrl|templateUrl|answers/)
+})
+
+test("workbench saves review edits through the authenticated route and guards stale responses", async () => {
+  const code = await source("src/components/oa-documents/oa-document-workbench.tsx")
+  assert.match(code, /\/api\/oa\/document-templates\/\$\{versionId\}\/review/)
+  assert.match(code, /method:\s*"POST"/)
+  assert.match(code, /Authorization:\s*`Bearer \$\{sessionToken\}`/)
+  assert.match(code, /JSON\.stringify\(\{ edits/)
+  assert.match(code, /revisionRef/)
+  assert.match(code, /requestRevision === revisionRef\.current/)
+  assert.match(code, /payload\.manifest/)
+  assert.doesNotMatch(code, /saveReview\(/)
 })
 
 test("existing form management links to the original Word template workbench", async () => {
@@ -112,4 +126,33 @@ test("reviewed manifest conversion blocks unresolved work and preserves existing
       documentOutput: { mode: "replace", multiline: false },
     },
   ])
+})
+
+test("version-two reviewed manifests require canonical visual and structural bindings", () => {
+  const output = path.join(mkdtempSync(path.join(tmpdir(), "oa-word-client-v2-")), "client.cjs")
+  execFileSync(path.join(root, "node_modules/.bin/esbuild"), [
+    path.join(root, "src/lib/oa-document-template-client.ts"),
+    "--bundle", "--platform=node", "--format=cjs", `--outfile=${output}`,
+  ])
+  const client = createRequire(import.meta.url)(output)
+  const suggestion = {
+    id: "region_name", kind: "table_cell", label: "姓名", inferredAnswerType: "text",
+    confidence: "high", reviewState: "confirmed", evidence: [], conflictIds: [], fieldId: "name",
+    partName: "word/document.xml", path: "/document/body[1]/tbl[1]/tr[1]/tc[2]", contextHash: "abc",
+    bindingCandidateIds: ["candidate_name"],
+  }
+  const incomplete = { syntaxVersion: 2, compilerVersion: "aia-ooxml-2", fields: [], anchors: [], suggestions: [suggestion] }
+  assert.equal(client.hasBlockingDocumentReview(incomplete), true)
+  assert.throws(() => client.buildReviewedDocumentManifest(incomplete), /绑定|双锚点/)
+
+  const visual = { page: 1, x: 0.2, y: 0.2, width: 0.2, height: 0.05, pageWidth: 595, pageHeight: 842, rotation: 0, coordinateSpace: "normalized-pdf" }
+  const structural = { partName: suggestion.partName, path: suggestion.path, contextHash: suggestion.contextHash, writeTarget: "table-cell" }
+  const canonical = {
+    ...incomplete,
+    fields: [{ fieldId: "name", label: "姓名", answerType: "text", required: false }],
+    anchors: [{ fieldId: "name", kind: "table_cell", ...structural, output: { mode: "replace", multiline: false }, visual, bindingCandidateId: "candidate_name", structural }],
+    suggestions: [{ ...suggestion, visual }],
+  }
+  assert.equal(client.hasBlockingDocumentReview(canonical), false)
+  assert.equal(client.buildReviewedDocumentManifest(canonical), canonical)
 })

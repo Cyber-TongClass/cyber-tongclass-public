@@ -48,9 +48,22 @@ function manifestAnchor(suggestion: OADocumentSuggestion, fieldId: string): OADo
   }
 }
 
-export function hasBlockingDocumentReview(manifest: Pick<OADocumentTemplateManifest, "suggestions">) {
+export function hasBlockingDocumentReview(
+  manifest: Pick<OADocumentTemplateManifest, "suggestions"> & Partial<Pick<OADocumentTemplateManifest, "syntaxVersion" | "fields" | "anchors">>,
+) {
   const counts = countTemplateReviewStates(manifest.suggestions)
-  return counts.unresolved > 0 || counts.conflicts > 0
+  if (counts.unresolved > 0 || counts.conflicts > 0) return true
+  if ((manifest.syntaxVersion ?? 1) < 2) return false
+  if (!manifest.fields || !manifest.anchors) return true
+  const versionTwo = manifest as OADocumentTemplateManifest
+  const fieldIds = new Set(versionTwo.fields.map((field) => field.fieldId))
+  const anchors = new Map(versionTwo.anchors.map((anchor) => [anchor.fieldId, anchor]))
+  return versionTwo.suggestions.some((suggestion) => {
+    if (suggestion.reviewState !== "confirmed" || !suggestion.fieldId || !fieldIds.has(suggestion.fieldId)) return suggestion.reviewState === "confirmed"
+    const anchor = anchors.get(suggestion.fieldId)
+    return !anchor?.visual || !anchor.bindingCandidateId || !anchor.structural
+      || !suggestion.bindingCandidateIds?.includes(anchor.bindingCandidateId)
+  })
 }
 
 /**
@@ -60,8 +73,14 @@ export function hasBlockingDocumentReview(manifest: Pick<OADocumentTemplateManif
  */
 export function buildReviewedDocumentManifest(manifest: OADocumentTemplateManifest): OADocumentTemplateManifest {
   if (hasBlockingDocumentReview(manifest)) {
-    throw new Error("仍有待确认对象或冲突，暂不能编译并启用模板")
+    throw new Error(manifest.syntaxVersion >= 2
+      ? "仍有待确认对象、冲突或缺少完整双锚点绑定，暂不能编译并启用模板"
+      : "仍有待确认对象或冲突，暂不能编译并启用模板")
   }
+
+  // Version two manifests are canonical server review results. The browser
+  // must not reconstruct structural OOXML locators from editable client data.
+  if (manifest.syntaxVersion >= 2) return validateTemplateManifest(manifest)
 
   const fields = new Map<string, OADocumentManifestField>()
   const anchors = new Map<string, OADocumentAnchor>()
