@@ -71,14 +71,21 @@ export function validatePublicationAuthorInputs(
   inputs: readonly PublicationAuthorInputLike[],
   people: readonly InstitutePersonCandidate[],
 ): ValidatedPublicationAuthorInput[] {
-  const peopleBySlug = new Map(
-    people.map((person) => [normalizeSlug(person.slug), person] as const),
-  )
+  const peopleBySlug = new Map<string, InstitutePersonCandidate>()
+  for (const person of people) {
+    const slug = normalizeSlug(person.slug)
+    if (!slug) continue
+    if (peopleBySlug.has(slug)) throw new Error("研究院成员标识重复")
+    peopleBySlug.set(slug, person)
+  }
   const usedPersonIds = new Set<string>()
 
   return inputs.map((input) => {
     const name = optionalString(input.name)
     if (!name) throw new Error("作者姓名不能为空")
+    if (/\[tc-author:[^\]]*\]\s*$/i.test(name)) {
+      throw new Error("作者姓名不能包含保留的元数据标记")
+    }
     if (typeof input.coFirst !== "boolean") throw new Error("共同一作标记必须是布尔值")
     if (typeof input.corresponding !== "boolean") throw new Error("通讯作者标记必须是布尔值")
 
@@ -121,8 +128,13 @@ export function validatePublicationAuthorInputs(
   })
 }
 
-function byNaturalKey<T extends { naturalKey: string }>(left: T, right: T) {
-  return left.naturalKey.localeCompare(right.naturalKey)
+function compareCodeUnits(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+function byNaturalKey<T extends { naturalKey: string; id?: string }>(left: T, right: T) {
+  return compareCodeUnits(left.naturalKey, right.naturalKey)
+    || compareCodeUnits(left.id || "", right.id || "")
 }
 
 export function planPublicationAuthorshipSync(
@@ -142,7 +154,18 @@ export function planPublicationAuthorshipSync(
       isPrimary: authorOrder === 0,
     }]
   })
-  const existingByNaturalKey = new Map(existing.map((row) => [row.naturalKey, row]))
+  const existingGroups = new Map<string, ExistingAuthorship[]>()
+  for (const row of existing) {
+    const group = existingGroups.get(row.naturalKey) || []
+    group.push(row)
+    existingGroups.set(row.naturalKey, group)
+  }
+  for (const group of existingGroups.values()) {
+    group.sort((left, right) => compareCodeUnits(left.id, right.id))
+  }
+  const existingByNaturalKey = new Map(
+    Array.from(existingGroups, ([naturalKey, rows]) => [naturalKey, rows[0]] as const),
+  )
   const desiredKeys = new Set(desired.map((row) => row.naturalKey))
 
   const creates = desired
@@ -169,7 +192,10 @@ export function planPublicationAuthorshipSync(
   }).sort(byNaturalKey)
 
   const deletes = existing
-    .filter((row) => !desiredKeys.has(row.naturalKey))
+    .filter((row) => {
+      if (!desiredKeys.has(row.naturalKey)) return true
+      return existingByNaturalKey.get(row.naturalKey)?.id !== row.id
+    })
     .map((row) => ({ id: row.id, naturalKey: row.naturalKey }))
     .sort(byNaturalKey)
 

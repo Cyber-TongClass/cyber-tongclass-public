@@ -56,6 +56,22 @@ test("rejects an empty normalized author name", () => {
   )
 })
 
+test("rejects valid and malformed reserved author metadata suffixes in names", () => {
+  const reservedNames = [
+    snapshot("Injected", { userId: "users:forged", coFirst: true }),
+    "Malformed [tc-author:%7Bbroken]",
+  ]
+
+  for (const name of reservedNames) {
+    assert.throws(
+      () => authorships.validatePublicationAuthorInputs([
+        { snapshot: name, name, coFirst: false, corresponding: false },
+      ], people),
+      /作者姓名不能包含保留的元数据标记/,
+    )
+  }
+})
+
 test("requires explicit co-first and corresponding booleans", () => {
   assert.throws(
     () => authorships.validatePublicationAuthorInputs([
@@ -163,6 +179,22 @@ test("rejects account mismatch and duplicate institute person identities", () =>
   )
 })
 
+test("rejects duplicate canonical people slugs regardless of source ordering", () => {
+  const duplicates = [
+    { personId: "person-first", slug: " Teacher-A ", kind: "teacher" },
+    { personId: "person-second", slug: "teacher-a", kind: "graduate" },
+  ]
+
+  for (const candidates of [duplicates, duplicates.toReversed()]) {
+    assert.throws(
+      () => authorships.validatePublicationAuthorInputs([
+        author("Teacher A", { institutePersonSlug: "teacher-a" }),
+      ], candidates),
+      /研究院成员标识重复/,
+    )
+  }
+})
+
 test("allows duplicate external names and multiple corresponding authors without joins", () => {
   const validated = authorships.validatePublicationAuthorInputs([
     author("Same Name", { corresponding: true }),
@@ -252,6 +284,63 @@ test("plans no-op, reorder, role upgrade and downgrade, and stale deletion", () 
   )
 })
 
+test("duplicate existing natural keys converge on the code-unit-smallest row id", () => {
+  const validated = authorships.validatePublicationAuthorInputs([
+    author("Teacher A", { institutePersonSlug: "teacher-a", corresponding: true }),
+  ], people)
+  const duplicates = [
+    {
+      id: "row-z", naturalKey: "pub-1:person-a", personId: "person-a",
+      role: "corresponding_author", authorOrder: 0, isPrimary: true,
+    },
+    {
+      id: "row-a", naturalKey: "pub-1:person-a", personId: "person-a",
+      role: "author", authorOrder: 9, isPrimary: false,
+    },
+  ]
+  const expected = {
+    creates: [],
+    updates: [{
+      id: "row-a", naturalKey: "pub-1:person-a", role: "corresponding_author",
+      authorOrder: 0, isPrimary: true, updatedAt: 456,
+    }],
+    deletes: [{ id: "row-z", naturalKey: "pub-1:person-a" }],
+  }
+
+  for (const existing of [duplicates, duplicates.toReversed()]) {
+    const plan = authorships.planPublicationAuthorshipSync(
+      "pub-1",
+      validated,
+      existing,
+      456,
+    )
+    assert.deepEqual(plan, expected)
+
+    const converged = existing
+      .filter((row) => !plan.deletes.some((deletion) => deletion.id === row.id))
+      .map((row) => {
+        const update = plan.updates.find((item) => item.id === row.id)
+        return update ? { ...row, ...update } : row
+      })
+    assert.deepEqual(
+      authorships.planPublicationAuthorshipSync("pub-1", validated, converged, 999),
+      { creates: [], updates: [], deletes: [] },
+    )
+  }
+
+  assert.deepEqual(
+    authorships.planPublicationAuthorshipSync("pub-1", [], duplicates, 456),
+    {
+      creates: [],
+      updates: [],
+      deletes: [
+        { id: "row-a", naturalKey: "pub-1:person-a" },
+        { id: "row-z", naturalKey: "pub-1:person-a" },
+      ],
+    },
+  )
+})
+
 test("sorts every operation by natural key regardless of input row ordering", () => {
   const validated = authorships.validatePublicationAuthorInputs([
     author("Graduate B", { institutePersonSlug: "graduate-b" }),
@@ -265,6 +354,18 @@ test("sorts every operation by natural key regardless of input row ordering", ()
     {
       id: "row-y", naturalKey: "pub-1:person-y", personId: "person-y",
       role: "author", authorOrder: 8, isPrimary: false,
+    },
+    {
+      id: "row-underscore", naturalKey: "pub-1:_", personId: "_",
+      role: "author", authorOrder: 7, isPrimary: false,
+    },
+    {
+      id: "row-uppercase", naturalKey: "pub-1:Z", personId: "Z",
+      role: "author", authorOrder: 6, isPrimary: false,
+    },
+    {
+      id: "row-lowercase", naturalKey: "pub-1:a", personId: "a",
+      role: "author", authorOrder: 5, isPrimary: false,
     },
   ], 10)
 
