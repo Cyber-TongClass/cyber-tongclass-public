@@ -23,6 +23,10 @@ function normalized(value: string) {
   return value.normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/[：:（）()_＿.·…\s]+/g, "").toLocaleLowerCase("en-US")
 }
 
+function choiceNormalized(value: string) {
+  return normalized(value).replace(/[□☐○◯☒☑●■]/g, "")
+}
+
 function unionVisual(boxes: OAPdfTextBox[]): OADocumentVisualAnchor {
   const first = boxes[0]
   const x = Math.min(...boxes.map((box) => box.x))
@@ -55,6 +59,40 @@ function answerVisual(boxes: OAPdfTextBox[], node: OAWordWritableNode) {
 }
 
 interface ScoredMatch { boxes: OAPdfTextBox[]; score: number; startOrder: number }
+
+function choiceOptions(node: OAWordWritableNode) {
+  return [...node.normalizedText.matchAll(/[□☐○◯☒☑●■]([^□☐○◯☒☑●■]+)/g)]
+    .map((match) => choiceNormalized(match[1]))
+    .filter(Boolean)
+}
+
+function containsOptionsInOrder(value: string, options: string[]) {
+  let offset = 0
+  for (const option of options) {
+    const index = value.indexOf(option, offset)
+    if (index < 0) return false
+    offset = index + option.length
+  }
+  return true
+}
+
+function expandChoiceMatch(node: OAWordWritableNode, match: ScoredMatch, allBoxes: OAPdfTextBox[]): ScoredMatch | null {
+  if (node.writeTarget !== "choice") return match
+  const options = choiceOptions(node)
+  if (!options.length) return null
+  const label = unionVisual(match.boxes)
+  const startOrder = Math.min(...match.boxes.map((box) => box.order))
+  const group: OAPdfTextBox[] = []
+  let text = ""
+  for (const box of allBoxes) {
+    if (box.order < startOrder || box.page !== label.page || box.order > startOrder + 24) continue
+    if (box.line !== match.boxes[0].line && box.y > label.y + label.height + 0.12) continue
+    group.push(box)
+    text += choiceNormalized(box.normalizedText)
+    if (containsOptionsInOrder(text, options)) return { ...match, boxes: [...new Map([...match.boxes, ...group].map((item) => [item.order, item])).values()] }
+  }
+  return null
+}
 
 function geometryOrder(left: ScoredMatch, right: ScoredMatch) {
   const leftVisual = unionVisual(left.boxes)
@@ -103,7 +141,9 @@ export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayou
     const peers = orderedNodes.filter((candidate) => normalized(candidate.label) === normalized(node.label))
     const peerIndex = peers.findIndex((candidate) => candidate.id === node.id)
     const bestByStart = new Map<number, ScoredMatch>()
-    for (const match of scoredMatches(node, pdf.textBoxes)) {
+    for (const rawMatch of scoredMatches(node, pdf.textBoxes)) {
+      const match = expandChoiceMatch(node, rawMatch, pdf.textBoxes)
+      if (!match) continue
       const existing = bestByStart.get(match.startOrder)
       if (!existing || match.score > existing.score) bestByStart.set(match.startOrder, match)
     }
@@ -135,7 +175,7 @@ export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayou
       id: node.id, label: node.label, description: `${node.kind} · ${node.writeTarget}`,
       partName: node.partName, path: node.path, contextHash: node.contextHash,
       writeTarget: node.writeTarget, ...(node.styleSourcePath ? { styleSourcePath: node.styleSourcePath } : {}),
-      visual: answerVisual(best.boxes, node),
+      visual: node.writeTarget === "choice" ? unionVisual(best.boxes) : answerVisual(best.boxes, node),
     })
   }
   return { candidates, warnings }

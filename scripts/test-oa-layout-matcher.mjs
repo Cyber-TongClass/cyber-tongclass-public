@@ -66,6 +66,20 @@ test("parses top-left normalized Poppler bbox XML and rejects unsafe or invalid 
   assert.throws(() => pdfLayout.parsePdfBboxXml(`<doc><page width="600" height="800"><word xMin="NaN" yMin="0" xMax="1" yMax="1">x</word></page></doc>`), /有限|几何/)
   assert.throws(() => pdfLayout.parsePdfBboxXml(`<doc><page width="600" height="800"><word xMin="0" yMin="0" xMax="601" yMax="1">x</word></page></doc>`), /页面范围/)
   assert.throws(() => pdfLayout.parsePdfBboxXml("x".repeat(5 * 1024 * 1024 + 1)), /大小/)
+  const deeplyNested = `<doc><page width="600" height="800">${"<flow>".repeat(5_000)}${"</flow>".repeat(5_000)}</page></doc>`
+  assert.throws(() => pdfLayout.parsePdfBboxXml(deeplyNested), /深度.*限制/)
+})
+
+test("choice visuals cover the complete option group instead of a small box after its label", () => {
+  const nodes = wordLayout.indexWordWritableNodes(pkg(xml)).filter((node) => node.writeTarget === "choice")
+  const pdf = pdfLayout.parsePdfBboxXml(bbox([[['类型', 30, 200, 70, 220], ['教学', 90, 200, 125, 220], ['科研', 140, 200, 175, 220], ['管理', 190, 200, 225, 220]]]))
+  const result = matcher.matchWordNodesToPdf(nodes, pdf)
+  assert.equal(result.candidates.length, 1)
+  const visual = result.candidates[0].visual
+  assert.equal(visual.x, 30 / 600)
+  assert.equal(visual.y, 200 / 800)
+  assert.equal(visual.x + visual.width, 225 / 600)
+  assert.equal(visual.y + visual.height, 220 / 800)
 })
 
 test("maps unique Word nodes deterministically and uses document order for repeated cross-page labels", () => {
