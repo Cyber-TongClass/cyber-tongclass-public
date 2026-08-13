@@ -35,7 +35,7 @@ for (const source of EXTERNAL_NEWS_SOURCES) {
 
     assert.match(result.markdown, /合成正文/)
     assert.match(result.markdown, /安全链接/)
-    assert.doesNotMatch(result.markdown, /stolen|script|iframe|form|javascript:|data:text|onclick|onerror/i)
+    assert.doesNotMatch(result.markdown, /stolen|secret|script|iframe|form|javascript:|data:text|onclick|onerror/i)
     assert.match(result.coverImageUrl ?? "", /^https:\/\/www\.ai\.pku\.edu\.cn\//)
   })
 }

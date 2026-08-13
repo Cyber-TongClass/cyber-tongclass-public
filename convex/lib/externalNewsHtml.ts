@@ -19,7 +19,6 @@ const VOID_TAGS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "i
 const SKIPPED_TAGS = new Set([
   "script",
   "style",
-  "form",
   "iframe",
   "frame",
   "object",
