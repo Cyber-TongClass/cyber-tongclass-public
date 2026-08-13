@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { ArrowLeft, FileCheck2 } from "lucide-react"
 
@@ -31,6 +31,7 @@ import {
   type OADocumentTemplateWarning,
 } from "@/lib/oa-document-templates"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { withoutWordImportPlaceholder } from "@/lib/oa-word-import-flow"
 import type { OAForm } from "@/types"
 
 const COMPILER_VERSION = "aia-ooxml-1"
@@ -39,6 +40,7 @@ const SYNTAX_VERSION = "1"
 type ManagedDocumentForm = OAForm & { activeDocumentTemplateVersionId?: string }
 type ManagedDocumentVersion = {
   _id: string
+  formId: string
   status: string
   sourceFileName: string
   version: number
@@ -74,9 +76,11 @@ async function routeRequest(path: string, versionId: string) {
 
 export default function OADocumentTemplatePage() {
   const params = useParams<{ id: string }>()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { isAuthenticated, isLoading } = useAuth()
   const form = useManageOAForm(params.id) as ManagedDocumentForm | null | undefined
-  const [versionId, setVersionId] = useState<string | null>(null)
+  const [versionId, setVersionId] = useState<string | null>(() => searchParams.get("versionId"))
   const version = useOADocumentTemplateVersion(versionId) as ManagedDocumentVersion | null | undefined
   const generateUpload = useGenerateOADocumentTemplateSourceUploadUrl()
   const createVersion = useCreateOrGetOADocumentTemplateVersion()
@@ -129,6 +133,7 @@ export default function OADocumentTemplatePage() {
 
   async function persistReview(nextManifest: OADocumentTemplateManifest) {
     if (!versionId) throw new Error("模板版本尚未创建")
+    if (form && version && String(version.formId) !== String(form._id)) throw new Error("模板版本与当前表单不匹配")
     await saveReview({
       versionId,
       manifest: nextManifest,
@@ -141,17 +146,17 @@ export default function OADocumentTemplatePage() {
   }
 
   async function compileAndActivate(draftManifest: OADocumentTemplateManifest) {
-    if (!versionId || !form) throw new Error("模板版本尚未创建")
+    if (!versionId || !form || !version) throw new Error("模板版本尚未创建")
+    if (String(version.formId) !== String(form._id)) throw new Error("模板版本与当前表单不匹配")
     setBusy(true)
     setMessage("")
     try {
       const reviewedManifest = buildReviewedDocumentManifest(draftManifest)
       await persistReview(reviewedManifest)
       await routeRequest("/api/oa/document-templates/compile", versionId)
-      const fields = mergeDocumentManifestFields(form.fields, reviewedManifest)
+      const fields = mergeDocumentManifestFields(withoutWordImportPlaceholder(form.fields), reviewedManifest)
       await upsertForm({ ...form, id: form._id, fields })
-      setManifest(reviewedManifest)
-      setMessage(`原格式模板已启用，${reviewedManifest.fields.length} 个 Word 字段已绑定到收集表单。`)
+      router.push(`/forms/manage/${form._id}`)
     } finally {
       setBusy(false)
     }
