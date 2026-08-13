@@ -1,0 +1,7 @@
+{
+  "syntaxVersion": 1,
+  "compilerVersion": "oa-word-v1",
+  "fields": [{ "fieldId": "applicant_name", "label": "申请人", "answerType": "text", "required": true, "maxLength": 100 }],
+  "anchors": [{ "fieldId": "applicant_name", "partName": "word/document.xml", "kind": "table_cell", "path": "body/tbl[0]/tr[0]/tc[1]", "contextHash": "sha256:fixture-table-cell", "output": { "mode": "replace", "multiline": false } }],
+  "suggestions": []
+}

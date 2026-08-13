@@ -1,0 +1,13 @@
+{
+  "syntaxVersion": 1,
+  "compilerVersion": "oa-word-v1",
+  "fields": [
+    { "fieldId": "project_name", "label": "项目名称", "answerType": "text", "required": true, "maxLength": 200 },
+    { "fieldId": "project_type", "label": "项目类型", "answerType": "single_choice", "required": true, "options": ["科研", "教学"] }
+  ],
+  "anchors": [
+    { "fieldId": "project_name", "partName": "word/document.xml", "kind": "underline", "path": "body/p[2]/r[1]", "contextHash": "sha256:fixture-underline", "output": { "mode": "replace", "multiline": false } },
+    { "fieldId": "project_type", "partName": "word/document.xml", "kind": "checkbox_group", "path": "body/p[3]", "contextHash": "sha256:fixture-checkbox", "output": { "mode": "mark_choice", "multiline": false } }
+  ],
+  "suggestions": []
+}
