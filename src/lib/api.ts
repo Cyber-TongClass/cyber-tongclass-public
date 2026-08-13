@@ -2524,7 +2524,7 @@ export type ContentSubmission = {
     _id: string
     isMine: boolean
     reviewerName: string
-    status: "pending" | "approved" | "accepted" | "changes_requested" | "rejected" | "skipped"
+    status: "pending" | "approved" | "rejected" | "skipped"
     stage?: "source_review" | "publication_approval"
     comment?: string
     decidedAt?: number
