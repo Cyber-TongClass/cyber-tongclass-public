@@ -34,8 +34,14 @@ export function contentSubmissionFingerprint(value: unknown): string {
   return `v1:${(hash >>> 0).toString(16).padStart(8, "0")}:${input.length}`
 }
 
-export function contentReviewTaskNaturalKey(submissionId: unknown, reviewerId: unknown): string {
-  return `content-review:${String(submissionId)}:reviewer:${String(reviewerId)}`
+export type ContentReviewStage = "source_review" | "publication_approval"
+
+export function contentReviewTaskNaturalKey(
+  submissionId: unknown,
+  reviewerId: unknown,
+  stage: ContentReviewStage = "publication_approval",
+): string {
+  return `content-review:${String(submissionId)}:${stage}:reviewer:${String(reviewerId)}`
 }
 
 /** Preserves manager query order while removing disabled and duplicate accounts. */

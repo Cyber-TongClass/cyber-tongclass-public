@@ -28,6 +28,13 @@ export type ExternalNewsReviewTaskStatus =
   | "rejected"
   | "skipped"
 
+export type ExternalNewsIngestDecision =
+  | "observe"
+  | "create_draft"
+  | "touch"
+  | "record_update"
+  | "adopt_historical"
+
 const TRACKING_PARAMETER = /^(?:utm_.+|spm|from|source|fbclid|gclid)$/i
 
 export function canonicalizeExternalNewsUrl(value: string): string {
@@ -70,6 +77,20 @@ export async function sourceSnapshotHash(input: {
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("")
+}
+
+export function decideExternalNewsIngest(input: {
+  mode: "observation" | "draft"
+  ledger: null | { currentHash?: string; submissionId?: string }
+  incomingHash: string
+  historicalMatch: boolean
+}): ExternalNewsIngestDecision {
+  if (!input.ledger && input.historicalMatch) return "adopt_historical"
+  if (!input.ledger) return input.mode === "draft" ? "create_draft" : "observe"
+  if (input.mode === "draft" && !input.ledger.submissionId) return "create_draft"
+  if (input.ledger.currentHash === input.incomingHash) return "touch"
+  if (input.ledger.submissionId) return "record_update"
+  return input.mode === "draft" ? "create_draft" : "observe"
 }
 
 export function decideExternalReview(

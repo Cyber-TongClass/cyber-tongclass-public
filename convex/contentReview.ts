@@ -107,18 +107,28 @@ async function getPermission(ctx: any, category: PermissionCategory, userId: Id<
 function effectiveRights(_user: any, permission: any) {
   return {
     canCreate: permission?.canCreate === true,
+    canReview: permission?.canReview === true,
     canManage: permission?.canManage === true,
   }
 }
 
-async function requireRights(ctx: any, sessionToken: string, category: PermissionCategory, right: "canCreate" | "canManage") {
+async function requireRights(
+  ctx: any,
+  sessionToken: string,
+  category: PermissionCategory,
+  right: "canCreate" | "canReview" | "canManage",
+) {
   const user = await getUserBySession(ctx, sessionToken)
   const permission = await getPermission(ctx, category, user._id)
   const rights = effectiveRights(user, permission)
   if (!rights[right]) {
-    throw new Error(right === "canCreate"
-      ? `你没有创建${CATEGORY_LABELS[category]}的权限`
-      : `你没有管理${CATEGORY_LABELS[category]}的权限`)
+    throw new Error(
+      right === "canCreate"
+        ? `你没有创建${CATEGORY_LABELS[category]}的权限`
+        : right === "canReview"
+          ? `你没有审阅${CATEGORY_LABELS[category]}的权限`
+          : `你没有管理${CATEGORY_LABELS[category]}的权限`,
+    )
   }
   return user
 }
@@ -160,7 +170,7 @@ async function finalizeApprovedSubmission(ctx: any, submission: any, reviewerNam
       authorId: submission.createdBy,
       authorName: submission.creatorName,
       category: submission.payload.newsCategory || "新闻",
-      publishedAt: now,
+      publishedAt: submission.sourcePublishedAt ?? now,
       isPublished: true,
       siteScope: "institute",
       targetScope: submission.targetScope,
@@ -185,12 +195,16 @@ async function finalizeApprovedSubmission(ctx: any, submission: any, reviewerNam
   }
   await ctx.db.patch(submission._id, {
     status: "approved",
+    ...(submission.origin === "external_news_sync" ? { workflowStage: "complete" } : {}),
     reviewerName,
     reviewComment: normalizeText(comment) || undefined,
     reviewedAt: now,
     ...(publishedContentId ? { publishedContentId } : {}),
     updatedAt: now,
   })
+  if (submission.origin === "external_news_sync" && submission.sourceLedgerId) {
+    await ctx.db.patch(submission.sourceLedgerId, { status: "published", updatedAt: now })
+  }
   await notify(ctx, {
     userId: submission.createdBy,
     title: `你的${CATEGORY_LABELS[submission.category as ContentCategory]}已发布`,
@@ -199,6 +213,54 @@ async function finalizeApprovedSubmission(ctx: any, submission: any, reviewerNam
     naturalKey: `content_review:done:${String(submission._id)}:approved:${String(submission.createdBy)}`,
     now,
   })
+}
+
+/** Snapshot the active publication managers at stage activation. */
+export async function createPublicationApprovalTasks(ctx: any, submission: any, now: number) {
+  const grants = await ctx.db
+    .query("contentPermissions")
+    .withIndex("by_category_user", (q: any) => q.eq("category", submission.category))
+    .collect()
+  const users = await ctx.db.query("users").collect()
+  const userById = new Map<string, any>(users.map((user: any) => [String(user._id), user]))
+  const reviewerIds = uniqueEligibleReviewerIds(
+    grants
+      .filter((grant: any) => grant.canManage === true)
+      .map((grant: any) => ({
+        id: String(grant.userId),
+        disabled: userById.get(String(grant.userId))?.accountStatus === "disabled"
+          || !userById.has(String(grant.userId)),
+      })),
+  )
+  if (reviewerIds.length === 0) throw new Error("当前没有可用发布审核人")
+
+  for (const reviewerId of reviewerIds) {
+    const naturalKey = contentReviewTaskNaturalKey(submission._id, reviewerId, "publication_approval")
+    const existing = await ctx.db
+      .query("contentReviewTasks")
+      .withIndex("by_naturalKey", (q: any) => q.eq("naturalKey", naturalKey))
+      .first()
+    if (!existing) {
+      await ctx.db.insert("contentReviewTasks", {
+        submissionId: submission._id,
+        userId: reviewerId as Id<"users">,
+        stage: "publication_approval",
+        status: "pending",
+        naturalKey,
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+    await notify(ctx, {
+      userId: reviewerId as Id<"users">,
+      title: `新的${CATEGORY_LABELS[submission.category as ContentCategory]}待发布审核`,
+      body: `「${submission.title}」已进入发布审核。`,
+      resourceId: submission._id,
+      naturalKey: `content_review:publication_approval:${String(submission._id)}:${reviewerId}`,
+      now,
+    })
+  }
+  return reviewerIds
 }
 
 /**
@@ -212,14 +274,17 @@ async function retirePendingReviewTasks(
   userId: Id<"users">,
   category: PermissionCategory,
   now: number,
+  stage: "source_review" | "publication_approval" = "publication_approval",
 ) {
   if (category === "reimbursement") return
-  const pendingTasks = await ctx.db
+  const statuses = stage === "source_review" ? ["pending", "changes_requested"] : ["pending"]
+  const pendingTasks = (await Promise.all(statuses.map((status) => ctx.db
     .query("contentReviewTasks")
-    .withIndex("by_user_status_createdAt", (q: any) => q.eq("userId", userId).eq("status", "pending"))
-    .collect()
+    .withIndex("by_user_status_createdAt", (q: any) => q.eq("userId", userId).eq("status", status))
+    .collect()))).flat()
   const affected = new Map<string, any>()
   for (const task of pendingTasks) {
+    if ((task.stage ?? "publication_approval") !== stage) continue
     const submission = await ctx.db.get(task.submissionId)
     if (!submission || submission.status !== "pending" || submission.category !== category) continue
     await ctx.db.patch(task._id, {
@@ -236,9 +301,13 @@ async function retirePendingReviewTasks(
       .withIndex("by_submission", (q: any) => q.eq("submissionId", submission._id))
       .collect()
     if (tasks.some((task: any) => task.status === "pending")) continue
-    if (!tasks.some((task: any) => task.status === "approved")) {
+    if (!tasks.some((task: any) => (
+      (task.stage ?? "publication_approval") === stage
+      && (task.status === "approved" || task.status === "accepted")
+    ))) {
       throw new Error("无法撤销管理权：仍有待审内容且没有其他已审核人员")
     }
+    if (stage === "source_review") continue
     await finalizeApprovedSubmission(ctx, submission, "系统（审核权限撤销）", now, REVOKED_REVIEWER_AUDIT_COMMENT)
   }
 }
@@ -266,6 +335,7 @@ export const listPermissions = queryGeneric({
         name: displayName(user),
         identityType: resolveUserIdentityType(user),
         canCreate: row.canCreate === true,
+        canReview: row.canReview === true,
         canManage: row.canManage === true,
         updatedAt: row.updatedAt,
       })
@@ -280,6 +350,7 @@ export const setPermission = mutationGeneric({
     category: permissionCategoryValidator,
     userId: v.id("users"),
     canCreate: v.boolean(),
+    canReview: v.optional(v.boolean()),
     canManage: v.boolean(),
   },
   handler: async (ctx, args) => {
@@ -290,14 +361,17 @@ export const setPermission = mutationGeneric({
     if (target.accountStatus === "disabled") throw new Error("目标账号不可用")
     const now = Date.now()
     const existing = await getPermission(ctx, args.category, args.userId)
-    if (!args.canCreate && !args.canManage) {
+    const canReview = args.category === "news" && args.canReview === true
+    if (!args.canCreate && !canReview && !args.canManage) {
       if (existing) await ctx.db.delete(existing._id)
+      if (existing?.canReview) await retirePendingReviewTasks(ctx, args.userId, args.category, now, "source_review")
       if (existing?.canManage) await retirePendingReviewTasks(ctx, args.userId, args.category, now)
       return true
     }
     if (existing) {
       await ctx.db.patch(existing._id, {
         canCreate: args.canCreate,
+        canReview,
         canManage: args.canManage,
         grantedBy: admin._id,
         updatedAt: now,
@@ -305,11 +379,15 @@ export const setPermission = mutationGeneric({
       if (existing.canManage && !args.canManage) {
         await retirePendingReviewTasks(ctx, args.userId, args.category, now)
       }
+      if (existing.canReview && !canReview) {
+        await retirePendingReviewTasks(ctx, args.userId, args.category, now, "source_review")
+      }
     } else {
       await ctx.db.insert("contentPermissions", {
         category: args.category,
         userId: args.userId,
         canCreate: args.canCreate,
+        canReview,
         canManage: args.canManage,
         grantedBy: admin._id,
         createdAt: now,
@@ -330,6 +408,7 @@ export const setPermissionsForScope = mutationGeneric({
     category: permissionCategoryValidator,
     scope: contentScopeValidator,
     canCreate: v.boolean(),
+    canReview: v.optional(v.boolean()),
     canManage: v.boolean(),
   },
   handler: async (ctx, args) => {
@@ -353,16 +432,19 @@ export const setPermissionsForScope = mutationGeneric({
     if (targets.size === 0) throw new Error("授权范围内没有可用账号")
 
     const now = Date.now()
+    const canReview = args.category === "news" && args.canReview === true
     for (const target of targets.values()) {
       const existing = await getPermission(ctx, args.category, target._id)
-      if (!args.canCreate && !args.canManage) {
+      if (!args.canCreate && !canReview && !args.canManage) {
         if (existing) await ctx.db.delete(existing._id)
+        if (existing?.canReview) await retirePendingReviewTasks(ctx, target._id, args.category, now, "source_review")
         if (existing?.canManage) await retirePendingReviewTasks(ctx, target._id, args.category, now)
         continue
       }
       if (existing) {
         await ctx.db.patch(existing._id, {
           canCreate: args.canCreate,
+          canReview,
           canManage: args.canManage,
           grantedBy: admin._id,
           updatedAt: now,
@@ -370,11 +452,15 @@ export const setPermissionsForScope = mutationGeneric({
         if (existing.canManage && !args.canManage) {
           await retirePendingReviewTasks(ctx, target._id, args.category, now)
         }
+        if (existing.canReview && !canReview) {
+          await retirePendingReviewTasks(ctx, target._id, args.category, now, "source_review")
+        }
       } else {
         await ctx.db.insert("contentPermissions", {
           category: args.category,
           userId: target._id,
           canCreate: args.canCreate,
+          canReview,
           canManage: args.canManage,
           grantedBy: admin._id,
           createdAt: now,
@@ -393,6 +479,9 @@ export const removePermission = mutationGeneric({
     if (admin.role !== "super_admin") throw new Error("只有超级管理员可以管理内容权限")
     const existing = await getPermission(ctx, args.category, args.userId)
     if (existing) await ctx.db.delete(existing._id)
+    if (existing?.canReview) {
+      await retirePendingReviewTasks(ctx, args.userId, args.category, Date.now(), "source_review")
+    }
     if (existing?.canManage) {
       await retirePendingReviewTasks(ctx, args.userId, args.category, Date.now())
     }
@@ -411,7 +500,7 @@ export const myPermissions = queryGeneric({
       .collect()
     const byCategory = new Map(rows.map((row: any) => [row.category as PermissionCategory, row]))
     const categories: PermissionCategory[] = ["news", "events", "reimbursement"]
-    const result: Record<string, { canCreate: boolean; canManage: boolean }> = {}
+    const result: Record<string, { canCreate: boolean; canReview: boolean; canManage: boolean }> = {}
     for (const category of categories) {
       result[category] = effectiveRights(user, byCategory.get(category))
     }
@@ -486,26 +575,6 @@ export const submit = mutationGeneric({
       return existing._id
     }
 
-    // Resolve the initial reviewer panel before inserting anything. Every
-    // current manager is eligible, including a creator who also has management
-    // rights. Managers added later can acquire an idempotent task on review.
-    const grants = await ctx.db
-      .query("contentPermissions")
-      .withIndex("by_category_user", (q: any) => q.eq("category", args.category))
-      .collect()
-    const managerIds = new Set<string>(
-      grants.filter((grant: any) => grant.canManage === true).map((grant: any) => String(grant.userId)),
-    )
-    const allUsers = await ctx.db.query("users").collect()
-    const userById = new Map(allUsers.map((candidate: any) => [String(candidate._id), candidate]))
-    const reviewerIds = uniqueEligibleReviewerIds(
-      [...managerIds].map((id) => ({
-        id,
-        disabled: userById.get(id)?.accountStatus === "disabled" || !userById.has(id),
-      })),
-    )
-    if (reviewerIds.length === 0) throw new Error("当前没有可用审核人")
-
     const now = Date.now()
     const submissionId = await ctx.db.insert("contentSubmissions", {
       category: args.category,
@@ -516,36 +585,15 @@ export const submit = mutationGeneric({
       creatorName: displayName(user),
       idempotencyKey,
       requestFingerprint,
+      origin: "manual",
       status: "pending",
+      workflowStage: "publication_approval",
       createdAt: now,
       updatedAt: now,
     })
 
-    for (const managerId of reviewerIds) {
-      const naturalKey = contentReviewTaskNaturalKey(submissionId, managerId)
-      const existingTask = await ctx.db
-        .query("contentReviewTasks")
-        .withIndex("by_naturalKey", (q: any) => q.eq("naturalKey", naturalKey))
-        .first()
-      if (!existingTask) {
-        await ctx.db.insert("contentReviewTasks", {
-          submissionId,
-          userId: managerId as Id<"users">,
-          status: "pending",
-          naturalKey,
-          createdAt: now,
-          updatedAt: now,
-        })
-      }
-      await notify(ctx, {
-        userId: managerId as Id<"users">,
-        title: `新的${CATEGORY_LABELS[args.category]}待审核`,
-        body: `${displayName(user)} 提交了「${title}」，等待审核。`,
-        resourceId: submissionId,
-        naturalKey: `content_review:pending:${String(submissionId)}:${managerId}`,
-        now,
-      })
-    }
+    const submission = await ctx.db.get(submissionId)
+    await createPublicationApprovalTasks(ctx, submission, now)
     return submissionId
   },
 })
@@ -564,7 +612,8 @@ async function projectSubmissionWithTasks(
   for (const task of tasks) {
     if (submission.status === "pending") {
       const permission = await getPermission(ctx, submission.category, task.userId)
-      if (permission?.canManage !== true) continue
+      const stage = task.stage ?? "publication_approval"
+      if (stage === "source_review" ? permission?.canReview !== true : permission?.canManage !== true) continue
     }
     const reviewer = await ctx.db.get(task.userId)
     projectedTasks.push({
@@ -572,6 +621,7 @@ async function projectSubmissionWithTasks(
       isMine: String(task.userId) === String(viewerId),
       reviewerName: displayName(reviewer),
       status: task.status,
+      stage: task.stage ?? "publication_approval",
       comment: task.comment,
       decidedAt: task.decidedAt,
     })
@@ -602,7 +652,10 @@ export const reviewQueue = queryGeneric({
       : (await ctx.db.query("contentSubmissions").collect())
         .filter((row: any) => row.category === args.category)
         .sort((left: any, right: any) => right.createdAt - left.createdAt)
-    return await Promise.all(rows.map((row: any) => projectSubmissionWithTasks(ctx, row, reviewer._id, true)))
+    const eligibleRows = rows.filter((row: any) => (
+      row.status !== "pending" || (row.workflowStage ?? "publication_approval") === "publication_approval"
+    ))
+    return await Promise.all(eligibleRows.map((row: any) => projectSubmissionWithTasks(ctx, row, reviewer._id, true)))
   },
 })
 
@@ -673,18 +726,22 @@ export const review = mutationGeneric({
         ? await ctx.db.get(args.id)
         : null
     if (!submission) throw new Error("提交不存在")
+    if ((task?.stage ?? "publication_approval") !== "publication_approval") {
+      throw new Error("来源审阅任务必须在新闻审阅页面处理")
+    }
     await requireRights(ctx, args.sessionToken, submission.category as ContentCategory, "canManage")
 
     if (!task) {
-      task = await ctx.db
+      const actorTasks = await ctx.db
         .query("contentReviewTasks")
         .withIndex("by_submission_user", (q: any) => (
           q.eq("submissionId", submission._id).eq("userId", reviewer._id)
         ))
-        .first()
+        .collect()
+      task = actorTasks.find((candidate: any) => (candidate.stage ?? "publication_approval") === "publication_approval") ?? null
       if (!task && submission.status === "pending") {
         const now = Date.now()
-        const naturalKey = contentReviewTaskNaturalKey(submission._id, reviewer._id)
+        const naturalKey = contentReviewTaskNaturalKey(submission._id, reviewer._id, "publication_approval")
         const existingTask = await ctx.db
           .query("contentReviewTasks")
           .withIndex("by_naturalKey", (q: any) => q.eq("naturalKey", naturalKey))
@@ -692,6 +749,7 @@ export const review = mutationGeneric({
         const taskId = existingTask?._id ?? await ctx.db.insert("contentReviewTasks", {
           submissionId: submission._id,
           userId: reviewer._id,
+          stage: "publication_approval",
           status: "pending",
           naturalKey,
           createdAt: now,
@@ -701,6 +759,9 @@ export const review = mutationGeneric({
       }
     }
     if (!task) throw new Error("审核任务不存在")
+    if ((task.stage ?? "publication_approval") !== "publication_approval") {
+      throw new Error("来源审阅任务必须在新闻审阅页面处理")
+    }
     if (String(task.userId) !== String(reviewer._id)) throw new Error("无权处理该审核任务")
     if (String(task.submissionId) !== String(submission._id)) throw new Error("审核任务与提交不匹配")
     if (task.status === args.decision) return true
@@ -712,12 +773,15 @@ export const review = mutationGeneric({
       .query("contentReviewTasks")
       .withIndex("by_submission", (q: any) => q.eq("submissionId", submission._id))
       .collect()
+    const publicationTasks = tasks.filter((candidate: any) => (
+      (candidate.stage ?? "publication_approval") === "publication_approval"
+    ))
     const transition = decideContentReviewOutcome(
-      tasks.map((candidate: any) => ({ id: String(candidate._id), status: candidate.status })),
+      publicationTasks.map((candidate: any) => ({ id: String(candidate._id), status: candidate.status })),
       String(task._id),
       args.decision,
     )
-    const taskById = new Map(tasks.map((candidate: any) => [String(candidate._id), candidate]))
+    const taskById = new Map(publicationTasks.map((candidate: any) => [String(candidate._id), candidate]))
     for (const update of transition.taskUpdates) {
       const candidate = taskById.get(update.id)
       if (!candidate) continue
@@ -744,12 +808,16 @@ export const review = mutationGeneric({
     }
     await ctx.db.patch(submission._id, {
       status: transition.outcome,
+      ...(submission.origin === "external_news_sync" ? { workflowStage: "complete" } : {}),
       reviewedBy: reviewer._id,
       reviewerName: displayName(reviewer),
       reviewComment: normalizeText(args.comment) || undefined,
       reviewedAt: now,
       updatedAt: now,
     })
+    if (submission.origin === "external_news_sync" && submission.sourceLedgerId) {
+      await ctx.db.patch(submission.sourceLedgerId, { status: "rejected", updatedAt: now })
+    }
     await notify(ctx, {
       userId: submission.createdBy,
       title: `你的${CATEGORY_LABELS[submission.category as ContentCategory]}未通过审核`,
