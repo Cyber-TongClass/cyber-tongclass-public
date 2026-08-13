@@ -34,6 +34,19 @@ test("font inventory and missing required fonts gate conversions", async () => {
   assert.equal(report.canExportLegacyDoc, false)
 })
 
+test("font capability matching uses internal family and PostScript aliases", async () => {
+  const aliases = await capabilitiesModule.resolveOfficeFontAliases(["Times New Roman", "宋体"], "/definitely/missing")
+  assert.ok(aliases["Times New Roman"].some((value) => /Times New Roman|TimesNewRoman/i.test(value)))
+  assert.ok(aliases["宋体"].some((value) => /宋体|Songti/i.test(value)))
+  assert.deepEqual(capabilitiesModule.missingConvertedPdfFonts(["Times New Roman"], aliases, ["ABCDEF+TimesNewRomanPSMT"]), [])
+  assert.deepEqual(capabilitiesModule.missingConvertedPdfFonts(["Times New Roman"], aliases, ["ABCDEF+TimesNewRomanPS-BoldMT"]), [])
+  assert.deepEqual(capabilitiesModule.missingConvertedPdfFonts(["宋体"], aliases, ["ABCDEF+STSongti-SC-Bold"]), [])
+  assert.doesNotMatch(aliases["宋体"][0], /Regular|常规|標準/u)
+  assert.deepEqual(capabilitiesModule.missingConvertedPdfFonts(["Times New Roman"], aliases, ["ABCDEF+LiberationSerif"]), ["Times New Roman"])
+  const bogus = await capabilitiesModule.resolveOfficeFontAliases(["Regular"], "/definitely/missing")
+  assert.equal(bogus.Regular, undefined)
+})
+
 function fakeChild({ code = 0, delay = 0, stderr = "", onSpawn }) {
   const child = new EventEmitter()
   child.stdout = new PassThrough()
@@ -47,7 +60,7 @@ function fakeChild({ code = 0, delay = 0, stderr = "", onSpawn }) {
   return child
 }
 
-const ready = { libreOfficePath: "/usr/bin/soffice", fontDirectory: "/fonts", installedFonts: ["SimSun"], missingFonts: [], unavailableReasons: [], canAnalyze: true, canCompile: true, canExportDocx: true, canExportLegacyDoc: true, canExportPdf: true }
+const ready = { libreOfficePath: "/usr/bin/soffice", fontDirectory: "/fonts", installedFonts: ["SimSun"], fontAliases: {}, missingFonts: [], unavailableReasons: [], canAnalyze: true, canCompile: true, canExportDocx: true, canExportLegacyDoc: true, canExportPdf: true }
 
 test("conversion detects timeout and unexpected output while preserving source bytes", async () => {
   const source = Buffer.from("original-doc")

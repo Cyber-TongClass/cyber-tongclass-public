@@ -11,6 +11,9 @@
 
 - `LIBREOFFICE_PATH`：LibreOffice/soffice 可执行文件的绝对路径，必须通过服务器允许列表。
 - `OA_TEMPLATE_FONT_DIR`：模板需要的字体目录。缺少字体时禁用依赖排版一致性的 PDF/旧 `.doc` 输出。
+- `OA_PDFINFO_PATH`、`OA_PDFTOTEXT_PATH`、`OA_PDFTOPPM_PATH`、`OA_PDFFONTS_PATH`：四个 Poppler 工具的绝对路径；文件名必须分别为 `pdfinfo`、`pdftotext`、`pdftoppm`、`pdffonts`。
+- `OA_DOCUMENT_SERVICE_TOKEN`：至少 32 字符的随机服务端密钥，必须同时配置在 Next.js 和 Convex 环境；用于阻止浏览器绕过批注审核 API 直接写入 manifest。
+- 容器部署需将含模板实际字体的宿主目录通过 `OA_TEMPLATE_FONT_DIR_HOST` 挂载到 `/opt/oa-fonts`；镜像内置 LibreOffice 与 Poppler，但不会打包有许可证限制的业务字体。
 - R2 对象存储：原件用途为 `oa-form-template`，工作副本、预览和编译文件用途为 `oa-form-template-derived`。两类对象都绑定表单管理者身份。
 
 运行 `node scripts/smoke-oa-office-conversion.mjs --capabilities-only` 可只检查能力，不处理业务文件。

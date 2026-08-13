@@ -31,6 +31,10 @@ function safeBaseName(value: string) {
   return base.replace(/[\\/:*?"<>|]/g, "_")
 }
 
+function xmlText(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
 function boundedAppend(chunks: Buffer[], chunk: Buffer, state: { size: number }) {
   if (state.size >= MAX_PROCESS_OUTPUT) return
   const remaining = MAX_PROCESS_OUTPUT - state.size
@@ -83,6 +87,25 @@ export async function convertOfficeDocument(
   try {
     const inputPath = path.join(workDirectory, inputName)
     await writeFile(inputPath, Buffer.from(source))
+    const fontConfigPath = path.join(workDirectory, "fonts.conf")
+    const aliases = Object.entries(capabilities.fontAliases || {}).flatMap(([requested, values]) => {
+      const family = values[0]
+      if (!family) return []
+      return [`<match target="pattern"><test name="family" qual="any"><string>${xmlText(requested)}</string></test><edit name="family" mode="prepend" binding="strong"><string>${xmlText(family)}</string></edit></match>`]
+    })
+    await writeFile(fontConfigPath, [
+      `<?xml version="1.0"?>`,
+      `<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">`,
+      `<fontconfig>`,
+      `<dir>${xmlText(capabilities.fontDirectory || "")}</dir>`,
+      `<dir>/System/Library/Fonts</dir>`,
+      `<dir>/System/Library/Fonts/Supplemental</dir>`,
+      `<dir>/Library/Fonts</dir>`,
+      `<cachedir>${xmlText(path.join(workDirectory, "font-cache"))}</cachedir>`,
+      ...aliases,
+      `<config></config>`,
+      `</fontconfig>`,
+    ].join(""), "utf8")
     const child = (options.spawnImpl || spawn)(capabilities.libreOfficePath, [
       `-env:UserInstallation=${pathToFileURL(path.join(workDirectory, "profile")).href}`,
       "--headless",
@@ -101,6 +124,7 @@ export async function convertOfficeDocument(
         PATH: process.env.PATH || "/usr/bin:/bin",
         HOME: workDirectory,
         TMPDIR: workDirectory,
+        FONTCONFIG_FILE: fontConfigPath,
         NODE_ENV: process.env.NODE_ENV || "production",
       },
       stdio: ["ignore", "pipe", "pipe"],

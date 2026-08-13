@@ -96,8 +96,6 @@ const manageListOAFormSubmissionsRef = makeFunctionReference<"query">("oaForms:m
 const generateOADocumentTemplateSourceUploadUrlRef = makeFunctionReference<"mutation">("oaDocumentTemplates:generateSourceUploadUrl")
 const createOrGetOADocumentTemplateVersionRef = makeFunctionReference<"mutation">("oaDocumentTemplates:createOrGetVersion")
 const getManageOADocumentTemplateVersionRef = makeFunctionReference<"query">("oaDocumentTemplates:getManageVersion")
-const saveOADocumentTemplateAnalysisRef = makeFunctionReference<"mutation">("oaDocumentTemplates:saveAnalysis")
-const activateOADocumentTemplateVersionRef = makeFunctionReference<"mutation">("oaDocumentTemplates:activateCompiledVersion")
 const generateOAFormUploadUrlRef = makeFunctionReference<"mutation">("oaForms:generateUploadUrl")
 const submitOAFormRef = makeFunctionReference<"mutation">("oaForms:submit")
 const updateOAFormSubmissionRef = makeFunctionReference<"mutation">("oaForms:updateSubmission")
@@ -1648,31 +1646,6 @@ export function useOADocumentTemplateVersion(versionId?: string | null) {
     getManageOADocumentTemplateVersionRef,
     sessionToken && versionId ? ({ sessionToken, versionId: versionId as any } as any) : "skip",
   )
-}
-
-export function useSaveOADocumentTemplateReview() {
-  const saveReview = useMutation(saveOADocumentTemplateAnalysisRef)
-  return useCallback((args: {
-    versionId: string
-    manifest: unknown
-    warnings: unknown[]
-    capabilities: unknown
-    workingStorageId?: string
-    previewStorageId?: string
-  }) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return saveReview({ ...args, sessionToken, versionId: args.versionId as any } as any)
-  }, [saveReview])
-}
-
-export function useActivateOADocumentTemplateVersion() {
-  const activate = useMutation(activateOADocumentTemplateVersionRef)
-  return useCallback((args: { versionId: string; compiledStorageId: string; manifest: unknown }) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return activate({ ...args, sessionToken, versionId: args.versionId as any } as any)
-  }, [activate])
 }
 
 /** Teacher-owned form publishing: each teacher only ever sees their own forms. */

@@ -16,16 +16,13 @@ test("Word template hooks keep session tokens inside the canonical API layer", a
     "oaDocumentTemplates:generateSourceUploadUrl",
     "oaDocumentTemplates:createOrGetVersion",
     "oaDocumentTemplates:getManageVersion",
-    "oaDocumentTemplates:saveAnalysis",
-    "oaDocumentTemplates:activateCompiledVersion",
   ]) assert.match(code, new RegExp(reference.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
   for (const hook of [
     "useGenerateOADocumentTemplateSourceUploadUrl",
     "useCreateOrGetOADocumentTemplateVersion",
     "useOADocumentTemplateVersion",
-    "useSaveOADocumentTemplateReview",
-    "useActivateOADocumentTemplateVersion",
   ]) assert.match(code, new RegExp(`export function ${hook}`))
+  assert.doesNotMatch(code, /oaDocumentTemplates:(?:saveAnalysis|activateCompiledVersion)|use(?:SaveOADocumentTemplateReview|ActivateOADocumentTemplateVersion)/)
 })
 
 test("document-template controller uploads, hashes, analyzes, reviews, compiles, and merges fields", async () => {

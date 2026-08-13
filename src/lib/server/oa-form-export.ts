@@ -26,7 +26,6 @@ export interface AuthorizedExportAccess {
     manifest: OADocumentTemplateManifest
   }
   compiledUrl?: string | null
-  sourceUrl?: string | null
 }
 
 export type ExportArtifact = { bytes: Buffer; fileName: string; contentType: string }

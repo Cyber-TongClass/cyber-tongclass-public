@@ -42,6 +42,18 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libreoffice-writer poppler-utils fontconfig fonts-liberation \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /opt/oa-fonts
+
+ENV LIBREOFFICE_PATH=/usr/bin/libreoffice
+ENV OA_TEMPLATE_FONT_DIR=/opt/oa-fonts
+ENV OA_PDFINFO_PATH=/usr/bin/pdfinfo
+ENV OA_PDFTOTEXT_PATH=/usr/bin/pdftotext
+ENV OA_PDFTOPPM_PATH=/usr/bin/pdftoppm
+ENV OA_PDFFONTS_PATH=/usr/bin/pdffonts
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 

@@ -70,6 +70,14 @@ test("parses top-left normalized Poppler bbox XML and rejects unsafe or invalid 
   assert.throws(() => pdfLayout.parsePdfBboxXml(deeplyNested), /深度.*限制/)
 })
 
+test("accepts only Poppler's fixed XHTML doctype without resolving external entities", () => {
+  const body = `<html><body><doc><page width="100" height="100"><word xMin="1" yMin="2" xMax="10" yMax="12">字段</word></page></doc></body></html>`
+  const poppler = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">${body}`
+  assert.equal(pdfLayout.parsePdfBboxXml(poppler).pages.length, 1)
+  assert.throws(() => pdfLayout.parsePdfBboxXml(`<!DOCTYPE foo SYSTEM "file:///etc/passwd">${body}`), /DTD/)
+  assert.throws(() => pdfLayout.parsePdfBboxXml(`<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>${body}`), /实体/)
+})
+
 test("choice visuals cover the complete option group instead of a small box after its label", () => {
   const nodes = wordLayout.indexWordWritableNodes(pkg(xml)).filter((node) => node.writeTarget === "choice")
   const pdf = pdfLayout.parsePdfBboxXml(bbox([[['类型', 30, 200, 70, 220], ['教学', 90, 200, 125, 220], ['科研', 140, 200, 175, 220], ['管理', 190, 200, 225, 220]]]))

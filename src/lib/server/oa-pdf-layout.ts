@@ -56,9 +56,12 @@ function directText(element: XmlElement) {
 
 export function parsePdfBboxXml(xml: string): OAPdfLayout {
   if (Buffer.byteLength(xml, "utf8") > MAX_BBOX_XML_BYTES) throw new Error("PDF bbox XML 大小超过限制")
-  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error("PDF bbox XML 不允许 DTD 或实体声明")
+  if (/<!ENTITY/i.test(xml)) throw new Error("PDF bbox XML 不允许实体声明")
+  const popplerDoctype = /^<!DOCTYPE html PUBLIC "-\/\/W3C\/\/DTD XHTML 1\.0 Transitional\/\/EN" "http:\/\/www\.w3\.org\/TR\/xhtml1\/DTD\/xhtml1-transitional\.dtd">/
+  if (/<!DOCTYPE/i.test(xml) && !popplerDoctype.test(xml)) throw new Error("PDF bbox XML 不允许未知 DTD 声明")
+  const safeXml = xml.replace(popplerDoctype, "")
   const errors: string[] = []
-  const document = new DOMParser({ onError(level, message) { if (level !== "warning") errors.push(String(message)) } }).parseFromString(xml, "application/xml")
+  const document = new DOMParser({ onError(level, message) { if (level !== "warning") errors.push(String(message)) } }).parseFromString(safeXml, "application/xml")
   if (errors.length || !document.documentElement || localName(document.documentElement) === "parsererror") throw new Error("PDF bbox XML 解析失败")
   const pages: OAPdfPageInfo[] = []
   const textBoxes: OAPdfTextBox[] = []

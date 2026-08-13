@@ -12,6 +12,8 @@ export interface OAPreviewLayout {
   candidates: OADocumentBindingCandidate[]
 }
 
+export const OA_PREVIEW_ANALYZER_VERSION = "aia-pdf-ooxml-1"
+
 const PDF_MAGIC = Buffer.from("%PDF-")
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const MAX_PAGES = 100

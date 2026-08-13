@@ -3,6 +3,7 @@ import { makeFunctionReference } from "convex/server"
 
 import { OA_DOCUMENT_LIMITS } from "@/lib/oa-document-templates"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
+import { getOADocumentServiceToken } from "@/lib/server/oa-document-service-token"
 
 const getProcessingAccessRef = makeFunctionReference<"query">("oaDocumentTemplates:getProcessingAccess")
 const getExportAccessRef = makeFunctionReference<"query">("oaDocumentTemplates:getExportAccess")
@@ -19,6 +20,10 @@ export interface ProcessingAccess {
   sourceSize: number
   sourceFileName: string
   manifest: unknown
+  workingUrl: string | null
+  previewUrl: string | null
+  warnings?: unknown[]
+  capabilities?: unknown
 }
 
 export interface DerivedUploadTarget {
@@ -37,16 +42,48 @@ export function assertSmallJsonRequest(request: Request, maximum = 64 * 1024) {
   if (Number.isFinite(declared) && declared > maximum) throw new Error("请求内容过大")
 }
 
+export async function parseBoundedJson(request: Request, maximum = 64 * 1024): Promise<unknown> {
+  assertSmallJsonRequest(request, maximum)
+  if (!request.body) throw new Error("请求内容为空")
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > maximum) {
+      await reader.cancel()
+      throw new Error("请求内容过大")
+    }
+    chunks.push(value)
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), size).toString("utf8"))
+  } catch {
+    throw new Error("请求 JSON 无效")
+  }
+}
+
 export async function processingAccess(sessionToken: string, versionId: string) {
   if (!sessionToken) throw new Error("请先登录")
-  const access = await getConvexHttpClient().query(getProcessingAccessRef, { sessionToken, versionId: versionId as never } as never) as ProcessingAccess | null
+  const access = await getConvexHttpClient().query(getProcessingAccessRef, {
+    serviceToken: getOADocumentServiceToken(),
+    sessionToken,
+    versionId: versionId as never,
+  } as never) as ProcessingAccess | null
   if (!access || access.versionId !== versionId) throw new Error("无权处理该 Word 模板")
   return access
 }
 
 export async function exportAccess(sessionToken: string, submissionId: string, batch = false) {
   if (!sessionToken) throw new Error("请先登录")
-  const access = await getConvexHttpClient().query(getExportAccessRef, { sessionToken, submissionId: submissionId as never, batch } as never) as any
+  const access = await getConvexHttpClient().query(getExportAccessRef, {
+    serviceToken: getOADocumentServiceToken(),
+    sessionToken,
+    submissionId: submissionId as never,
+    batch,
+  } as never) as any
   if (!access) throw new Error("无权导出该申请")
   return access
 }
@@ -92,7 +129,11 @@ export function verifyAuthorizedSource(bytes: Uint8Array, access: Pick<Processin
 
 export async function createDerivedTarget(sessionToken: string, formId: string, fileName: string, mimeType: string) {
   const target = await getConvexHttpClient().mutation(generateDerivedUploadUrlRef, {
-    sessionToken, formId: formId as never, fileName, mimeType,
+    serviceToken: getOADocumentServiceToken(),
+    sessionToken,
+    formId: formId as never,
+    fileName,
+    mimeType,
   } as never) as DerivedUploadTarget
   if (!target?.storageId?.startsWith("r2:") || !target.uploadUrl) throw new Error("派生文件存储未就绪")
   return target
@@ -120,6 +161,7 @@ export async function persistAnalysis(args: {
 }) {
   await getConvexHttpClient().mutation(saveAnalysisRef, {
     ...args,
+    serviceToken: getOADocumentServiceToken(),
     versionId: args.versionId as never,
   } as never)
 }
@@ -127,6 +169,7 @@ export async function persistAnalysis(args: {
 export async function activateCompiled(args: { sessionToken: string; versionId: string; compiledStorageId: string; manifest: unknown }) {
   await getConvexHttpClient().mutation(activateCompiledVersionRef, {
     ...args,
+    serviceToken: getOADocumentServiceToken(),
     versionId: args.versionId as never,
   } as never)
 }

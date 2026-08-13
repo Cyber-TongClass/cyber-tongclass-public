@@ -7,6 +7,7 @@ import {
   r2StorageIdMatches,
 } from "./lib/r2"
 import { getUserBySession } from "./reviewer/lib"
+import { requireOADocumentServiceToken } from "./lib/oaDocumentServiceAuth"
 
 const sourceType = v.union(v.literal("doc"), v.literal("docx"))
 
@@ -55,12 +56,14 @@ export const generateSourceUploadUrl = mutation({
 
 export const generateDerivedUploadUrl = mutation({
   args: {
+    serviceToken: v.string(),
     sessionToken: v.string(),
     formId: v.id("oaForms"),
     fileName: v.string(),
     mimeType: v.string(),
   },
   handler: async (ctx, args) => {
+    requireOADocumentServiceToken(args.serviceToken)
     const { actor } = await requireManagedForm(ctx, args.sessionToken, args.formId)
     const target = await createR2UploadTarget({
       purpose: "oa-form-template-derived",
@@ -144,6 +147,7 @@ export const getManageVersion = query({
 
 export const saveAnalysis = mutation({
   args: {
+    serviceToken: v.string(),
     sessionToken: v.string(),
     versionId: v.id("oaDocumentTemplateVersions"),
     manifest: v.any(),
@@ -153,18 +157,24 @@ export const saveAnalysis = mutation({
     previewStorageId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireOADocumentServiceToken(args.serviceToken)
     const version = await ctx.db.get(args.versionId)
     if (!version) throw new Error("模板版本不存在")
-    await requireManagedForm(ctx, args.sessionToken, version.formId)
+    const { actor } = await requireManagedForm(ctx, args.sessionToken, version.formId)
     if (version.status === "compiled" || version.status === "archived") {
       throw new Error("不可修改已编译或已归档模板")
+    }
+    for (const storageId of [args.workingStorageId, args.previewStorageId]) {
+      if (storageId?.startsWith("r2:") && !r2StorageIdMatches(storageId, { ownerId: String(actor._id), purpose: "oa-form-template-derived" })) {
+        throw new Error("派生文件归属无效")
+      }
     }
     await ctx.db.patch(args.versionId, {
       manifest: args.manifest,
       warnings: args.warnings,
       capabilities: args.capabilities,
-      workingStorageId: args.workingStorageId,
-      previewStorageId: args.previewStorageId,
+      ...(args.workingStorageId !== undefined ? { workingStorageId: args.workingStorageId } : {}),
+      ...(args.previewStorageId !== undefined ? { previewStorageId: args.previewStorageId } : {}),
       status: unresolvedCount(args.manifest) === 0 ? "reviewed" : "analyzed",
       updatedAt: Date.now(),
     })
@@ -173,17 +183,19 @@ export const saveAnalysis = mutation({
 
 export const activateCompiledVersion = mutation({
   args: {
+    serviceToken: v.string(),
     sessionToken: v.string(),
     versionId: v.id("oaDocumentTemplateVersions"),
     compiledStorageId: v.string(),
     manifest: v.any(),
   },
   handler: async (ctx, args) => {
+    requireOADocumentServiceToken(args.serviceToken)
     const version = await ctx.db.get(args.versionId)
     if (!version) throw new Error("模板版本不存在")
     const { actor } = await requireManagedForm(ctx, args.sessionToken, version.formId)
     if (unresolvedCount(args.manifest) > 0) throw new Error("仍有未确认或冲突字段")
-    if (args.compiledStorageId.startsWith("r2:") && !r2StorageIdMatches(args.compiledStorageId, {
+    if (!args.compiledStorageId.startsWith("r2:") || !r2StorageIdMatches(args.compiledStorageId, {
       ownerId: String(actor._id),
       purpose: "oa-form-template-derived",
     })) throw new Error("编译文件归属无效")
@@ -203,13 +215,26 @@ export const activateCompiledVersion = mutation({
 })
 
 export const getProcessingAccess = query({
-  args: { sessionToken: v.string(), versionId: v.id("oaDocumentTemplateVersions") },
+  args: {
+    serviceToken: v.string(),
+    sessionToken: v.string(),
+    versionId: v.id("oaDocumentTemplateVersions"),
+  },
   handler: async (ctx, args) => {
+    requireOADocumentServiceToken(args.serviceToken)
     const version = await ctx.db.get(args.versionId)
     if (!version) return null
     await requireManagedForm(ctx, args.sessionToken, version.formId)
     const sourceUrl = await getR2DownloadUrl(version.sourceStorageId)
       || (version.sourceStorageId.startsWith("r2:") ? null : await ctx.storage.getUrl(version.sourceStorageId))
+    const previewUrl = version.previewStorageId
+      ? await getR2DownloadUrl(version.previewStorageId)
+        || (version.previewStorageId.startsWith("r2:") ? null : await ctx.storage.getUrl(version.previewStorageId))
+      : null
+    const workingUrl = version.workingStorageId
+      ? await getR2DownloadUrl(version.workingStorageId)
+        || (version.workingStorageId.startsWith("r2:") ? null : await ctx.storage.getUrl(version.workingStorageId))
+      : null
     return {
       versionId: String(version._id),
       formId: String(version.formId),
@@ -219,17 +244,23 @@ export const getProcessingAccess = query({
       sourceSize: version.sourceSize,
       sourceFileName: version.sourceFileName,
       manifest: version.manifest,
+      workingUrl,
+      previewUrl,
+      warnings: version.warnings,
+      capabilities: version.capabilities,
     }
   },
 })
 
 export const getExportAccess = query({
   args: {
+    serviceToken: v.string(),
     sessionToken: v.string(),
     submissionId: v.id("oaFormSubmissions"),
     batch: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    requireOADocumentServiceToken(args.serviceToken)
     const actor = await getUserBySession(ctx, args.sessionToken)
     const submission = await ctx.db.get(args.submissionId)
     if (!submission) return null
@@ -248,8 +279,6 @@ export const getExportAccess = query({
     const compiledStorageId = version.compiledStorageId || version.workingStorageId || version.sourceStorageId
     const compiledUrl = await getR2DownloadUrl(compiledStorageId)
       || (compiledStorageId.startsWith("r2:") ? null : await ctx.storage.getUrl(compiledStorageId))
-    const sourceUrl = await getR2DownloadUrl(version.sourceStorageId)
-      || (version.sourceStorageId.startsWith("r2:") ? null : await ctx.storage.getUrl(version.sourceStorageId))
-    return { submission, form, version, compiledUrl, sourceUrl }
+    return { submission, form, version, compiledUrl }
   },
 })
