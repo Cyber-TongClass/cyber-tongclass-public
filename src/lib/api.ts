@@ -49,6 +49,9 @@ const getUserByEmailRef = makeFunctionReference<"query">("users:getByEmail")
 const getUserByStudentIdRef = makeFunctionReference<"query">("users:getByStudentId")
 const searchPublicTongClassMembersRef = makeFunctionReference<"query">("users:searchPublicTongClassMembers")
 const getPublicTongClassMemberBySlugRef = makeFunctionReference<"query">("users:getPublicTongClassMemberBySlug")
+const listInstituteTeacherAuthorOptionsRef = makeFunctionReference<"query">(
+  "publications:listInstituteTeacherAuthorOptions",
+)
 const academicExchangeProfileRef = makeFunctionReference<"query">("academicExchange:getStudentFormProfile")
 const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("academicExchange:upsertStudentFormProfile")
 const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
@@ -1147,6 +1150,14 @@ export function useEventsCount() {
 }
 
 // ==================== 出版物相关 ====================
+
+export function usePublicationTeacherAuthorOptions() {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(
+    listInstituteTeacherAuthorOptionsRef,
+    sessionToken ? { sessionToken } : "skip",
+  ) as Array<{ slug: string; nameZh: string; nameEn: string }> | undefined
+}
 
 export function usePublications(args?: { category?: string; year?: number; skip?: number; limit?: number }) {
   const sessionToken = useTongClassSessionToken()

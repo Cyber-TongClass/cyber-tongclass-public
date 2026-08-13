@@ -281,3 +281,28 @@ test("public publication DTOs preserve safe corresponding-author metadata", asyn
     /PublicPublicationAuthor[\s\S]{0,500}accountUserId/,
   )
 })
+
+test("publication editors bind institute teachers through the canonical API hook", async () => {
+  const [editorSource, apiSource, myPageSource, adminPageSource] = await Promise.all([
+    readFile(new URL("../src/components/publications/publication-author-editor.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/my-publications/[id]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/admin/publications/[id]/page.tsx", import.meta.url), "utf8"),
+  ])
+
+  for (const expected of [
+    "instituteTeacherOptions",
+    "institutePersonSlug",
+    "toPublicationAuthorInput",
+    "关联研究院教师",
+    "共同第一作者",
+    "通讯作者",
+  ]) assert.match(editorSource, new RegExp(expected))
+  assert.match(apiSource, /publications:listInstituteTeacherAuthorOptions/)
+  assert.match(apiSource, /export function usePublicationTeacherAuthorOptions/)
+  for (const pageSource of [myPageSource, adminPageSource]) {
+    assert.match(pageSource, /usePublicationTeacherAuthorOptions/)
+    assert.match(pageSource, /authorDetails/)
+    assert.doesNotMatch(pageSource, /from\s+["'][^"']*convex\//)
+  }
+})

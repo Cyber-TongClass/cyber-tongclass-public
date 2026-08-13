@@ -14,12 +14,14 @@ import { useAuth } from "@/lib/hooks/use-auth"
 import {
   usePublicationById,
   usePublicationVenues,
+  usePublicationTeacherAuthorOptions,
   usePublications,
   useAdminUsers,
   useCreatePublication,
   useUpdatePublication,
 } from "@/lib/api"
 import { findSimilarPublicationTitle } from "@/lib/publication-title-match"
+import { parsePublicationAuthor, toPublicationAuthorInput } from "@/lib/publication-authors"
 import { getPublicationVenueOptions } from "@/lib/publication-venues"
 import {
   CUSTOM_PUBLICATION_CATEGORY_VALUE,
@@ -30,7 +32,7 @@ import {
   isKnownPublicationCategory,
   isKnownPublicationSubCategory,
 } from "@/lib/publication-taxonomy"
-import type { Publication } from "@/types"
+import type { Publication, PublicationAuthorInput } from "@/types"
 
 type PublicationFormData = {
   title: string
@@ -62,6 +64,7 @@ export default function AdminPublicationEditorPage() {
   const [formError, setFormError] = useState("")
   const [authorError, setAuthorError] = useState("")
   const [hasInvalidTongClassAuthor, setHasInvalidTongClassAuthor] = useState(false)
+  const [authorDetails, setAuthorDetails] = useState<PublicationAuthorInput[]>([])
   const [customCategory, setCustomCategory] = useState("")
   const [customSubCategory, setCustomSubCategory] = useState("")
 
@@ -77,6 +80,7 @@ export default function AdminPublicationEditorPage() {
   // Fetch users from Convex
   const usersData = useAdminUsers({ limit: 1000 })
   const users: any[] = usersData || []
+  const instituteTeacherOptions = usePublicationTeacherAuthorOptions() || []
 
   // Mutations
   const createPublication = useCreatePublication()
@@ -127,6 +131,9 @@ export default function AdminPublicationEditorPage() {
           : "",
         userId: publication.userId,
       })
+      setAuthorDetails(publication.authors.map((author) => (
+        toPublicationAuthorInput(parsePublicationAuthor(author))
+      )))
     }
   }, [currentUser?._id, isCreateMode, publication])
 
@@ -239,6 +246,7 @@ export default function AdminPublicationEditorPage() {
     const payload = {
       title: formData.title.trim(),
       authors: parsedAuthors,
+      authorDetails,
       venue: finalVenue,
       year: parsedYear,
       abstract: formData.abstract.trim(),
@@ -355,8 +363,10 @@ export default function AdminPublicationEditorPage() {
               <PublicationAuthorEditor
                 value={formData.authors}
                 users={users}
+                instituteTeacherOptions={instituteTeacherOptions}
                 error={authorError}
                 onValidationChange={setHasInvalidTongClassAuthor}
+                onStructuredChange={setAuthorDetails}
                 onChange={(authors) => {
                   setAuthorError("")
                   setFormData((previous) => ({ ...previous, authors }))

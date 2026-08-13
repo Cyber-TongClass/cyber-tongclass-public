@@ -14,13 +14,14 @@ import { useAuth } from "@/lib/hooks/use-auth"
 import {
   usePublicationById,
   usePublicationVenues,
+  usePublicationTeacherAuthorOptions,
   usePublications,
   useCreatePublication,
   useUpdatePublication,
   useUsers,
 } from "@/lib/api"
 import { findSimilarPublicationTitle } from "@/lib/publication-title-match"
-import { canEditPublication } from "@/lib/publication-authors"
+import { canEditPublication, parsePublicationAuthor, toPublicationAuthorInput } from "@/lib/publication-authors"
 import { getPublicationVenueOptions } from "@/lib/publication-venues"
 import {
   CUSTOM_PUBLICATION_CATEGORY_VALUE,
@@ -31,7 +32,7 @@ import {
   isKnownPublicationCategory,
   isKnownPublicationSubCategory,
 } from "@/lib/publication-taxonomy"
-import type { Publication } from "@/types"
+import type { Publication, PublicationAuthorInput } from "@/types"
 
 type PublicationFormData = {
   title: string
@@ -68,6 +69,7 @@ export default function MyPublicationEditorPage() {
   const publicationVenuesData = useMemo(() => publicationVenuesResponse || [], [publicationVenuesResponse])
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const users = usersData || []
+  const instituteTeacherOptions = usePublicationTeacherAuthorOptions() || []
   const createPublication = useCreatePublication()
   const updatePublicationFn = useUpdatePublication()
 
@@ -77,6 +79,7 @@ export default function MyPublicationEditorPage() {
   const [formError, setFormError] = useState("")
   const [authorError, setAuthorError] = useState("")
   const [hasInvalidTongClassAuthor, setHasInvalidTongClassAuthor] = useState(false)
+  const [authorDetails, setAuthorDetails] = useState<PublicationAuthorInput[]>([])
   const [customCategory, setCustomCategory] = useState("")
   const [customSubCategory, setCustomSubCategory] = useState("")
   const [formData, setFormData] = useState<PublicationFormData>({
@@ -146,6 +149,9 @@ export default function MyPublicationEditorPage() {
         ? (subCategoryIsKnown ? publicationSubCategory : CUSTOM_PUBLICATION_SUBCATEGORY_VALUE)
         : "",
     })
+    setAuthorDetails(publicationData.authors.map((author) => (
+      toPublicationAuthorInput(parsePublicationAuthor(author))
+    )))
     setLoading(false)
   }, [currentUser, isCreateMode, publicationData])
 
@@ -256,6 +262,7 @@ export default function MyPublicationEditorPage() {
     const payload = {
       title: formData.title.trim(),
       authors: parsedAuthors,
+      authorDetails,
       venue: finalVenue,
       year: parsedYear,
       abstract: formData.abstract.trim(),
@@ -361,8 +368,10 @@ export default function MyPublicationEditorPage() {
                 <PublicationAuthorEditor
                   value={formData.authors}
                   users={users}
+                  instituteTeacherOptions={instituteTeacherOptions}
                   error={authorError}
                   onValidationChange={setHasInvalidTongClassAuthor}
+                  onStructuredChange={setAuthorDetails}
                   onChange={(authors) => {
                     setAuthorError("")
                     setFormData((previous) => ({ ...previous, authors }))

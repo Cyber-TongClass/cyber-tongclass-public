@@ -5,14 +5,17 @@ import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import {
-  encodePublicationAuthor,
   normalizePublicationAuthorSearchValue,
   parsePublicationAuthor,
+  toPublicationAuthorInput,
   type PublicationAuthor,
 } from "@/lib/publication-authors"
-import type { User } from "@/types"
+import type { PublicationAuthorInput, User } from "@/types"
+
+type InstituteTeacherAuthorOption = { slug: string; nameZh: string; nameEn: string }
 
 type AuthorRow = PublicationAuthor & {
   key: string
@@ -24,8 +27,10 @@ type AuthorRow = PublicationAuthor & {
 type PublicationAuthorEditorProps = {
   value: string[]
   users: User[]
+  instituteTeacherOptions: InstituteTeacherAuthorOption[]
   onChange: (authors: string[]) => void
-  onValidationChange?: (hasInvalidTongClassSelection: boolean) => void
+  onStructuredChange: (authors: PublicationAuthorInput[]) => void
+  onValidationChange?: (hasInvalidSelection: boolean) => void
   error?: string
 }
 
@@ -70,7 +75,25 @@ function hasUnresolvedMemberMatch(rows: AuthorRow[], users: User[]) {
   })
 }
 
-export function PublicationAuthorEditor({ value, users, onChange, onValidationChange, error }: PublicationAuthorEditorProps) {
+function hasInvalidInstituteSelection(
+  rows: AuthorRow[],
+  instituteTeacherOptions: InstituteTeacherAuthorOption[],
+) {
+  const availableSlugs = new Set(instituteTeacherOptions.map((option) => option.slug))
+  return rows.some((row) => (
+    Boolean(row.institutePersonSlug) && !availableSlugs.has(row.institutePersonSlug as string)
+  ))
+}
+
+export function PublicationAuthorEditor({
+  value,
+  users,
+  instituteTeacherOptions,
+  onChange,
+  onStructuredChange,
+  onValidationChange,
+  error,
+}: PublicationAuthorEditorProps) {
   const lastEmittedValue = useRef<string | null>(null)
   const [rows, setRows] = useState<AuthorRow[]>(() => {
     const parsed = value.length > 0 ? value.map(parsePublicationAuthor) : []
@@ -87,31 +110,45 @@ export function PublicationAuthorEditor({ value, users, onChange, onValidationCh
   useEffect(() => {
     const incomingValue = JSON.stringify(value)
     if (incomingValue === lastEmittedValue.current) {
-      onValidationChange?.(hasUnresolvedMemberMatch(rowsRef.current, users))
+      onValidationChange?.(
+        hasUnresolvedMemberMatch(rowsRef.current, users)
+        || hasInvalidInstituteSelection(rowsRef.current, instituteTeacherOptions),
+      )
       return
     }
 
     if (value.length === 0) {
       const nextRows = [buildRow()]
       setRows(nextRows)
-      onValidationChange?.(hasUnresolvedMemberMatch(nextRows, users))
+      onValidationChange?.(
+        hasUnresolvedMemberMatch(nextRows, users)
+        || hasInvalidInstituteSelection(nextRows, instituteTeacherOptions),
+      )
       return
     }
 
     const nextRows = value.map((author) => buildRow(parsePublicationAuthor(author)))
     setRows(nextRows)
-    onValidationChange?.(hasUnresolvedMemberMatch(nextRows, users))
-  }, [onValidationChange, users, value])
+    onValidationChange?.(
+      hasUnresolvedMemberMatch(nextRows, users)
+      || hasInvalidInstituteSelection(nextRows, instituteTeacherOptions),
+    )
+  }, [instituteTeacherOptions, onValidationChange, users, value])
 
   const emitChange = (nextRows: AuthorRow[]) => {
-    const encodedRows = nextRows
-      .map((row) => encodePublicationAuthor(row))
-      .filter(Boolean)
+    const structured = nextRows
+      .filter((row) => row.name.trim())
+      .map((row) => toPublicationAuthorInput(row))
+    const encodedRows = structured.map((row) => row.snapshot)
 
     lastEmittedValue.current = JSON.stringify(encodedRows)
     setRows(nextRows)
-    onValidationChange?.(hasUnresolvedMemberMatch(nextRows, users))
+    onValidationChange?.(
+      hasUnresolvedMemberMatch(nextRows, users)
+      || hasInvalidInstituteSelection(nextRows, instituteTeacherOptions),
+    )
     onChange(encodedRows)
+    onStructuredChange(structured)
   }
 
   const updateRow = (key: string, patch: Partial<AuthorRow>) => {
@@ -158,6 +195,19 @@ export function PublicationAuthorEditor({ value, users, onChange, onValidationCh
     })
   }
 
+  const selectInstituteTeacher = (row: AuthorRow, value: string) => {
+    if (value === "__none__") {
+      updateRow(row.key, { institutePersonSlug: undefined })
+      return
+    }
+    const option = instituteTeacherOptions.find((candidate) => candidate.slug === value)
+    if (!option) return
+    updateRow(row.key, {
+      institutePersonSlug: option.slug,
+      ...(!row.name.trim() ? { name: option.nameEn || option.nameZh } : {}),
+    })
+  }
+
   const addRow = () => emitChange([...rows, buildRow()])
   const removeRow = (key: string) => emitChange(rows.length > 1 ? rows.filter((row) => row.key !== key) : rows)
 
@@ -182,7 +232,7 @@ export function PublicationAuthorEditor({ value, users, onChange, onValidationCh
 
           return (
             <div key={row.key} className="rounded-lg border border-slate-200 bg-white p-3">
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)]">
                 <Input
                   value={row.name}
                   onChange={(event) => handleNameChange(row.key, event.target.value)}
@@ -190,14 +240,34 @@ export function PublicationAuthorEditor({ value, users, onChange, onValidationCh
                   required={index === 0}
                 />
 
-                <div className="flex flex-wrap items-center gap-3 text-sm">
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-600">关联研究院教师（可选）</Label>
+                  <Select
+                    value={row.institutePersonSlug || "__none__"}
+                    onValueChange={(value) => selectInstituteTeacher(row, value)}
+                  >
+                    <SelectTrigger aria-label={`作者 ${index + 1} 关联研究院教师`}>
+                      <SelectValue placeholder="不关联教师主页" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">不关联教师主页</SelectItem>
+                      {instituteTeacherOptions.map((option) => (
+                        <SelectItem key={option.slug} value={option.slug}>
+                          {option.nameZh} · {option.nameEn}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 text-sm md:col-span-2">
                   <label className="inline-flex items-center gap-1.5">
                     <input
                       type="checkbox"
                       checked={Boolean(row.coFirst)}
                       onChange={(event) => updateRow(row.key, { coFirst: event.target.checked })}
                     />
-                    Co-first author
+                    共同第一作者
                   </label>
                   <label className="inline-flex items-center gap-1.5">
                     <input
@@ -205,7 +275,7 @@ export function PublicationAuthorEditor({ value, users, onChange, onValidationCh
                       checked={Boolean(row.corresponding)}
                       onChange={(event) => updateRow(row.key, { corresponding: event.target.checked })}
                     />
-                    Corresponding author
+                    通讯作者
                   </label>
                   {rows.length > 1 && (
                     <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.key)}>
