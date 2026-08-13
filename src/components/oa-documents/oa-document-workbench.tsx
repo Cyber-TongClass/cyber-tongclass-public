@@ -106,7 +106,19 @@ export function OADocumentWorkbench({
           <p className="aia-mono py-3 text-center text-xs">{String(page).padStart(2, "0")}</p>
           <button type="button" onClick={() => setPage(page + 1)} className="aia-focus w-full p-2" aria-label="下一页"><ChevronRight className="mx-auto h-4 w-4" /></button>
         </nav>
-        <OADocumentCanvas suggestions={manifest.suggestions} activeRegionId={activeRegionId} onActivate={setActiveRegionId} />
+        <OADocumentCanvas
+          page={page}
+          pageCount={1}
+          previewPageUrl="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 595 842'%3E%3Crect width='595' height='842' fill='white'/%3E%3Ctext x='297.5' y='421' text-anchor='middle' fill='%23737373' font-size='14'%3EPDF preview pending%3C/text%3E%3C/svg%3E"
+          suggestions={manifest.suggestions}
+          activeRegionId={activeRegionId}
+          mode="select"
+          onActivate={setActiveRegionId}
+          onDraw={() => undefined}
+          onChange={() => undefined}
+          onDelete={(id) => decide(id, "deleted")}
+          onEdit={setActiveRegionId}
+        />
         <OADocumentAnnotationPanel
           suggestions={manifest.suggestions}
           activeRegionId={activeRegionId}

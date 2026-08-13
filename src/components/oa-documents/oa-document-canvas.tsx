@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, type PointerEvent } from "react"
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react"
 
 import { clientRectToVisualAnchor } from "@/lib/oa-document-geometry"
 import type { OADocumentSuggestion, OADocumentVisualAnchor } from "@/lib/oa-document-templates"
@@ -9,26 +9,26 @@ import { OADocumentOverlay } from "./oa-document-overlay"
 type DrawState = { pointerId: number; startX: number; startY: number }
 
 export interface OADocumentCanvasProps {
-  page?: number
-  pageCount?: number
-  previewPageUrl?: string
+  page: number
+  pageCount: number
+  previewPageUrl: string
   suggestions: OADocumentSuggestion[]
   activeRegionId?: string
-  mode?: "select" | "draw"
+  mode: "select" | "draw"
   onActivate: (id: string) => void
-  onDraw?: (visual: OADocumentVisualAnchor) => void
-  onChange?: (id: string, visual: OADocumentVisualAnchor) => void
-  onDelete?: (id: string) => void
-  onEdit?: (id: string) => void
+  onDraw: (visual: OADocumentVisualAnchor) => void
+  onChange: (id: string, visual: OADocumentVisualAnchor) => void
+  onDelete: (id: string) => void
+  onEdit: (id: string) => void
 }
 
 export function OADocumentCanvas({
-  page = 1,
-  pageCount = 1,
+  page,
+  pageCount,
   previewPageUrl,
   suggestions,
   activeRegionId,
-  mode = "select",
+  mode,
   onActivate,
   onDraw,
   onChange,
@@ -69,7 +69,18 @@ export function OADocumentCanvas({
     const next = draft || visualFromPointer(draw.current.startX, draw.current.startY, event.clientX, event.clientY)
     draw.current = null
     setDraft(null)
-    if (next) onDraw?.(next)
+    if (next) onDraw(next)
+  }
+
+  const cancelDraw = () => {
+    draw.current = null
+    setDraft(null)
+  }
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Escape" || (!draw.current && !draft)) return
+    event.preventDefault()
+    cancelDraw()
   }
 
   const visible = suggestions.filter((suggestion) => suggestion.visual?.page === page
@@ -79,34 +90,28 @@ export function OADocumentCanvas({
     <section aria-label={`Word 文档 PDF 预览，第 ${page} 页，共 ${pageCount} 页`} className="min-h-[42rem] bg-neutral-200/70 p-4 sm:p-8">
       <div
         ref={pageRef}
+        tabIndex={mode === "draw" ? 0 : -1}
+        onKeyDown={handleKeyDown}
         onPointerDown={beginDraw}
         onPointerMove={moveDraw}
         onPointerUp={finishDraw}
-        onPointerCancel={finishDraw}
+        onPointerCancel={cancelDraw}
         className="relative mx-auto max-w-[52rem] overflow-visible border aia-border-rule bg-white shadow-md"
         style={{ aspectRatio: `${pageSize.width} / ${pageSize.height}`, cursor: mode === "draw" ? "crosshair" : "default" }}
       >
-        {previewPageUrl ? (
-          <>
-            {/* Blob-backed authenticated previews cannot be routed through Next Image optimization. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewPageUrl}
-              alt={`原 Word 文档转换后的第 ${page} 页`}
-              draggable={false}
-              onLoad={(event) => {
-                if (event.currentTarget.naturalWidth > 0 && event.currentTarget.naturalHeight > 0) {
-                  setPageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })
-                }
-              }}
-              className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
-            />
-          </>
-        ) : (
-          <p role="status" className="absolute inset-0 grid place-items-center px-8 text-center text-sm aia-text-muted">
-            PDF 页面预览尚未就绪，请重新分析此 Word 模板。
-          </p>
-        )}
+        {/* Blob-backed authenticated previews cannot be routed through Next Image optimization. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={previewPageUrl}
+          alt={`原 Word 文档转换后的第 ${page} 页`}
+          draggable={false}
+          onLoad={(event) => {
+            if (event.currentTarget.naturalWidth > 0 && event.currentTarget.naturalHeight > 0) {
+              setPageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })
+            }
+          }}
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
+        />
         {visible.map((suggestion) => (
           <OADocumentOverlay
             key={suggestion.id}
@@ -117,9 +122,9 @@ export function OADocumentCanvas({
             selected={activeRegionId === suggestion.id}
             pageElement={pageRef.current}
             onActivate={onActivate}
-            onChange={onChange || (() => undefined)}
-            onDelete={onDelete || (() => undefined)}
-            onEdit={onEdit || (() => undefined)}
+            onChange={onChange}
+            onDelete={onDelete}
+            onEdit={onEdit}
           />
         ))}
         {draft ? (

@@ -32,6 +32,8 @@ test("canvas renders a real authenticated page image with normalized editable ov
   assert.match(canvas, /draggable=\{false\}/)
   assert.match(canvas, /pointerId/)
   assert.match(canvas, /setPointerCapture/)
+  assert.match(canvas, /Escape/)
+  assert.match(canvas, /cancelDraw/)
   assert.match(canvas, /mode.*select.*draw/s)
   assert.doesNotMatch(canvas, /结构化预览 · 非原始 Word HTML/)
 
@@ -44,6 +46,8 @@ test("canvas renders a real authenticated page image with normalized editable ov
   assert.match(overlay, /删除/)
   assert.match(overlay, /top-left/)
   assert.match(overlay, /bottom-right/)
+  assert.match(overlay, /min-h-11|min-w-11/)
+  assert.match(overlay, /pointer-events-none absolute inset-[028]/)
 })
 
 test("workbench has AIA states, page controls, edit decisions, and publish blocking", async () => {

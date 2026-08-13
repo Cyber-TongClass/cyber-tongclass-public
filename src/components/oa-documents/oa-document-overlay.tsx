@@ -130,11 +130,19 @@ export function OADocumentOverlay({
         onPointerUp={stopDrag}
         onPointerCancel={stopDrag}
         className={cn(
-          "aia-focus pointer-events-auto absolute inset-0 border-2 transition-[border-width,background-color] hover:border-[3px]",
-          tone[state],
-          selected && "border-[3px] outline outline-2 outline-offset-2 outline-[hsl(var(--aia-ink))]",
+          "aia-focus group pointer-events-auto absolute -inset-2 min-h-11 min-w-11",
+          selected && "outline outline-2 outline-offset-2 outline-[hsl(var(--aia-ink))]",
         )}
-      />
+      >
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-2 border-2 transition-[border-width,background-color] group-hover:border-[3px]",
+            tone[state],
+            selected && "border-[3px]",
+          )}
+        />
+      </button>
       {selected ? (
         <>
           <div className="pointer-events-auto absolute -top-11 right-0 z-30 flex border border-[hsl(var(--aia-ink))] bg-[hsl(var(--aia-paper))] shadow-md">
@@ -154,8 +162,10 @@ export function OADocumentOverlay({
               onPointerMove={moveDrag}
               onPointerUp={stopDrag}
               onPointerCancel={stopDrag}
-              className={cn("pointer-events-auto absolute z-20 h-3 w-3 border border-white bg-[hsl(var(--aia-ink))]", handle.className, handle.cursor)}
-            />
+              className={cn("pointer-events-auto absolute z-20 grid min-h-11 min-w-11 place-items-center bg-transparent", handle.className, handle.cursor)}
+            >
+              <span aria-hidden="true" className="pointer-events-none h-3 w-3 border border-white bg-[hsl(var(--aia-ink))]" />
+            </button>
           ))}
         </>
       ) : null}
