@@ -206,6 +206,12 @@ export function PortalClient() {
       href: "/forms/manage",
       ...copy.modules.forms,
     },
+    ...(isTeacher
+      ? [{
+          href: "/services/teacher-recognitions",
+          ...copy.modules.teacherRecognitions,
+        }]
+      : []),
     ...(canManageResearchGroups
       ? [{
           href: "/groups/manage",

@@ -77,6 +77,13 @@ assert.match(portalClient, /total % 2 === 0 \? 2 : 1/)
 assert.match(portalClient, /moduleIndex === section\.modules\.length - 1 && "border-b-0"/)
 assert.match(portalClient, /isDesktopLastGridRow\(moduleIndex, section\.modules\.length\) && "sm:border-b-0"/)
 assert.match(portalClient, /<ul className="grid content-center gap-x-10 sm:grid-cols-2">/)
+assert.match(siteCopy, /teacherRecognitions:\s*\{\s*title:\s*"荣誉与职务申报"/)
+assert.match(siteCopy, /申报学术职务、审稿服务及各类荣誉奖励，查看审核进度。/)
+assert.match(
+  portalClient,
+  /\.\.\.\(isTeacher[\s\S]*?href:\s*"\/services\/teacher-recognitions"[\s\S]*?copy\.modules\.teacherRecognitions/,
+  "Teacher portal should expose the personal recognition workspace only to teachers",
+)
 
 const portalPage = readSource("src/app/portal/page.tsx")
 const portalListPage = readSource("src/app/portal/list/page.tsx")
