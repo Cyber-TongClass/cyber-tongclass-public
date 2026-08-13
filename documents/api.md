@@ -326,3 +326,8 @@ await fetch('/api/request-verification', { method: 'POST', body: JSON.stringify(
 - Add client helpers in `src/lib/api.ts` to expose typed hooks for new functions.
 
 End of document.
+# OA Word 原格式模板
+
+`oaDocumentTemplates` 提供表单管理者授权的不可变 Word 模板版本生命周期：原件上传、结构分析结果保存、编译启用、处理访问与提交导出访问。页面组件必须继续通过 `src/lib/api.ts` hooks 调用 Convex；二进制分析、编译和导出由 `/api/oa/document-templates/*` 与 `/api/oa/forms/*/exports` 等 Node 路由完成。
+
+浏览器只提交模板版本标识和批注决策。答案、字段定义、存储对象 URL、文件显示名和导出权限均由服务端重新读取并验证。`.doc` 与 PDF 输出依赖显式 LibreOffice/字体能力；缺失时返回可说明的不可用状态。完整运维限制见 `docs/operations/oa-word-conversion.md`。
