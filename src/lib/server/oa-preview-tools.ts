@@ -39,6 +39,21 @@ const MAX_STDOUT_BYTES = 5 * 1024 * 1024
 const MAX_STDERR_BYTES = 128 * 1024
 const TOOL_TIMEOUT_MS = 60_000
 const RENDER_DPI = 144
+const POPPLER_FONT_TYPES = [
+  "CID TrueType (OT)",
+  "CID Type 0C (OT)",
+  "TrueType (OT)",
+  "Type 1C (OT)",
+  "CID TrueType",
+  "CID Type 0C",
+  "CID Type 0",
+  "TrueType",
+  "Type 1C",
+  "Type 1",
+  "Type 3",
+  "OpenType",
+  "unknown",
+] as const
 
 const TOOL_CONFIG = [
   { key: "pdfInfoPath", env: ["OA_PDFINFO_PATH", "PDFINFO_PATH"], basename: "pdfinfo", label: "pdfinfo" },
@@ -225,10 +240,26 @@ export async function renderPdfPages(bytes: Uint8Array, caps: OAPreviewToolCapab
 }
 
 function parsePdfFonts(output: string): OAPdfFontInfo[] {
-  const pattern = /^(.*?)\s+(Type 1|Type 3|TrueType|CID Type 0C?|CID TrueType|OpenType|unknown)\s+(\S+)\s+(yes|no)\s+(yes|no)\s+(yes|no)\s+(\d+)\s+(\d+)\s*$/i
   return output.split(/\r?\n/).flatMap((line) => {
-    const match = line.trim().match(pattern)
-    return match ? [{ name: match[1].trim(), type: match[2], encoding: match[3], embedded: match[4].toLowerCase() === "yes", subset: match[5].toLowerCase() === "yes", unicode: match[6].toLowerCase() === "yes", objectId: `${match[7]} ${match[8]}` }] : []
+    const trimmed = line.trim()
+    const parsed = POPPLER_FONT_TYPES.flatMap((type) => {
+      const escapedType = type.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      const match = trimmed.match(new RegExp(`^(.*?)\\s+(${escapedType})\\s+(\\S+)\\s+(yes|no)\\s+(yes|no)\\s+(yes|no)\\s+(\\d+)\\s+(\\d+)\\s*$`, "i"))
+      return match ? [{ type, match }] : []
+    })[0]
+    if (!parsed) return []
+    const { type: fontType, match } = parsed
+    const name = match[1].trim()
+    if (!name) return []
+    return [{
+      name,
+      type: fontType,
+      encoding: match[3],
+      embedded: match[4].toLowerCase() === "yes",
+      subset: match[5].toLowerCase() === "yes",
+      unicode: match[6].toLowerCase() === "yes",
+      objectId: `${match[7]} ${match[8]}`,
+    }]
   })
 }
 

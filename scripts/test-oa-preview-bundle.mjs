@@ -126,3 +126,24 @@ test("runs Poppler tools without a shell and parses bounded outputs", async () =
   assert.equal((await tools.renderPdfPages(pdf, caps)).length, 2)
   assert.deepEqual(await tools.inspectPdfFonts(pdf, caps), [{ name: "SimSun", type: "TrueType", encoding: "WinAnsi", embedded: true, subset: false, unicode: true, objectId: "10 0" }])
 })
+
+test("parses the complete common Poppler font type column", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "oa-poppler-font-types-"))
+  const executable = path.join(directory, "pdffonts")
+  const fontTypes = [
+    "Type 1", "Type 1C", "Type 1C (OT)", "Type 3", "TrueType", "TrueType (OT)",
+    "CID Type 0", "CID Type 0C", "CID Type 0C (OT)", "CID TrueType", "CID TrueType (OT)", "OpenType", "unknown",
+  ]
+  const rows = fontTypes.map((type, index) => `Fixture Font ${index + 1}  ${type}  Identity-H  yes  no  yes  ${index + 1}  0`).join("\n")
+  writeFileSync(executable, `#!/bin/sh\nprintf '%s\\n' 'name type encoding emb sub uni object ID' '${rows}'\n`)
+  chmodSync(executable, 0o700)
+  const inspected = await tools.inspectPdfFonts(pdf, {
+    pdfInfoPath: null,
+    pdfTextPath: null,
+    pdfToPpmPath: null,
+    pdfFontsPath: executable,
+    unavailableReasons: [],
+  })
+  assert.deepEqual(inspected.map((font) => font.type), fontTypes)
+  assert.deepEqual(inspected.map((font) => font.name), fontTypes.map((_, index) => `Fixture Font ${index + 1}`))
+})
