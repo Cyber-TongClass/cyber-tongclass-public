@@ -50,6 +50,22 @@ export interface User {
 }
 
 // Publication types
+export interface PublicationAuthorWriteInput {
+  name: string
+  userId?: string
+  username?: string
+  institutePersonSlug?: string
+  coFirst?: boolean
+  corresponding?: boolean
+}
+
+export interface PublicationPublicAuthorDetail {
+  name: string
+  coFirst?: boolean
+  corresponding?: boolean
+  personSlug?: string
+}
+
 export interface Publication {
   _id: string
   title: string
