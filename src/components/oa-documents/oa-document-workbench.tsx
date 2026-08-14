@@ -123,6 +123,7 @@ export function OADocumentWorkbench({
 }) {
   const [manifest, setManifest] = useState(initialManifest)
   const [activeRegionId, setActiveRegionId] = useState(initialManifest.suggestions[0]?.id)
+  const [selectedRegionId, setSelectedRegionId] = useState<string>()
   const [mode, setMode] = useState<"select" | "draw">("select")
   const [page, setPage] = useState(1)
   const [pageCount, setPageCount] = useState(0)
@@ -188,17 +189,30 @@ export function OADocumentWorkbench({
     if (selected?.visual?.page) setPage(selected.visual.page)
   }, [manifest.suggestions])
 
+  const clearRegionSelection = useCallback(() => setSelectedRegionId(undefined), [])
+  const selectRegion = useCallback((id: string) => {
+    setSelectedRegionId(id)
+    activate(id)
+  }, [activate])
+
   useEffect(() => {
     if (active?.visual?.page) setPage(active.visual.page)
   }, [active?.visual?.page])
 
   useEffect(() => {
     const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setMode("select")
+      if (event.key === "Escape") {
+        setMode("select")
+        clearRegionSelection()
+      }
     }
     window.addEventListener("keydown", handleEscape)
     return () => window.removeEventListener("keydown", handleEscape)
-  }, [])
+  }, [clearRegionSelection])
+
+  useEffect(() => {
+    clearRegionSelection()
+  }, [clearRegionSelection, page])
 
   useEffect(() => {
     previewPageAbortRef.current?.abort()
@@ -339,6 +353,7 @@ export function OADocumentWorkbench({
     const suggestion = { ...newSuggestion(manifest.suggestions.length, visual), bindingCandidateIds: candidateIdsForVisual(visual) }
     commit({ ...manifest, suggestions: [...manifest.suggestions, suggestion] })
     setActiveRegionId(suggestion.id)
+    clearRegionSelection()
     setMode("select")
   }
 
@@ -369,6 +384,7 @@ export function OADocumentWorkbench({
       delete copy[id]
       return copy
     })
+    setSelectedRegionId((current) => current === id ? undefined : current)
     commit({
       ...detached,
       suggestions: detached.suggestions.map((item) => item.id === id ? { ...item, reviewState: "deleted" } : item),
@@ -385,6 +401,7 @@ export function OADocumentWorkbench({
       return
     }
     const detached = reviewState === "ignored" ? removeFieldBinding(manifest, suggestion) : manifest
+    if (reviewState === "ignored") setSelectedRegionId((current) => current === id ? undefined : current)
     commit({
       ...detached,
       suggestions: detached.suggestions.map((item) => item.id === id
@@ -499,7 +516,7 @@ export function OADocumentWorkbench({
         </div>
         <div className="ml-auto flex border aia-border-rule" aria-label="批注模式">
           <button type="button" aria-pressed={mode === "select"} onClick={() => setMode("select")} className={`aia-focus inline-flex items-center gap-1.5 px-3 py-2 text-xs ${mode === "select" ? "bg-[hsl(var(--aia-ink))] text-white" : ""}`}><MousePointer2 className="h-3.5 w-3.5" />选择</button>
-          <button type="button" aria-pressed={mode === "draw"} onClick={() => setMode("draw")} className={`aia-focus inline-flex items-center gap-1.5 border-l aia-border-rule px-3 py-2 text-xs ${mode === "draw" ? "bg-[hsl(var(--aia-ink))] text-white" : ""}`}><Pencil className="h-3.5 w-3.5" />框选新增</button>
+          <button type="button" aria-pressed={mode === "draw"} onClick={() => { clearRegionSelection(); setMode("draw") }} className={`aia-focus inline-flex items-center gap-1.5 border-l aia-border-rule px-3 py-2 text-xs ${mode === "draw" ? "bg-[hsl(var(--aia-ink))] text-white" : ""}`}><Pencil className="h-3.5 w-3.5" />框选新增</button>
         </div>
         <div className="aia-mono flex flex-wrap gap-3 text-[10px] aia-text-muted" aria-live="polite">
           <span className="text-emerald-700">{counts.confirmed} 已确认</span><span className="text-amber-700">{counts.unresolved} 待确认</span><span className="text-[hsl(var(--aia-red))]">{counts.conflicts} 冲突</span>
@@ -524,7 +541,7 @@ export function OADocumentWorkbench({
           {(metadataLoading || pageLoading) && !renderedPage ? <p role="status" className="min-h-[42rem] bg-neutral-200/70 p-8 text-sm aia-text-muted">正在加载文档预览…</p> : null}
           {previewError && !renderedPage ? <p role="alert" className="min-h-[42rem] bg-neutral-200/70 p-8 text-sm text-[hsl(var(--aia-red))]">文档预览加载失败：{previewError}</p> : null}
           {previewPageUrl && renderedPage ? (
-            <OADocumentCanvas page={renderedPage.page} pageCount={pageCount} previewPageUrl={previewPageUrl} suggestions={manifest.suggestions} activeRegionId={activeRegionId} mode={mode} onActivate={activate} onDraw={handleDraw} onChange={handleVisualChange} onDelete={deleteSuggestion} onEdit={activate} />
+            <OADocumentCanvas page={renderedPage.page} pageCount={pageCount} previewPageUrl={previewPageUrl} suggestions={manifest.suggestions} activeRegionId={activeRegionId} selectedRegionId={selectedRegionId} mode={mode} onActivate={activate} onSelect={selectRegion} onDeselect={clearRegionSelection} onDraw={handleDraw} onChange={handleVisualChange} onDelete={deleteSuggestion} onEdit={activate} />
           ) : null}
           {pageLoading && renderedPage ? <p role="status" className="pointer-events-none absolute right-3 top-3 z-40 bg-[hsl(var(--aia-paper))]/95 px-2 py-1 text-xs aia-text-muted shadow-sm">正在切换到第 {page} 页…</p> : null}
         </div>

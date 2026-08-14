@@ -14,8 +14,11 @@ export interface OADocumentCanvasProps {
   previewPageUrl: string
   suggestions: OADocumentSuggestion[]
   activeRegionId?: string
+  selectedRegionId?: string
   mode: "select" | "draw"
   onActivate: (id: string) => void
+  onSelect: (id: string) => void
+  onDeselect: () => void
   onDraw: (visual: OADocumentVisualAnchor) => void
   onChange: (id: string, visual: OADocumentVisualAnchor) => void
   onDelete: (id: string) => void
@@ -28,8 +31,11 @@ export function OADocumentCanvas({
   previewPageUrl,
   suggestions,
   activeRegionId,
+  selectedRegionId,
   mode,
   onActivate,
+  onSelect,
+  onDeselect,
   onDraw,
   onChange,
   onDelete,
@@ -53,7 +59,12 @@ export function OADocumentCanvas({
   }
 
   const beginDraw = (event: PointerEvent<HTMLDivElement>) => {
-    if (mode !== "draw" || event.target !== event.currentTarget) return
+    if (event.target !== event.currentTarget) return
+    if (mode === "select") {
+      onDeselect()
+      return
+    }
+    onDeselect()
     draw.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -87,7 +98,13 @@ export function OADocumentCanvas({
     && suggestion.reviewState !== "ignored" && suggestion.reviewState !== "deleted")
 
   return (
-    <section aria-label={`Word 文档 PDF 预览，第 ${page} 页，共 ${pageCount} 页`} className="min-h-[42rem] bg-neutral-200/70 p-4 sm:p-8">
+    <section
+      aria-label={`Word 文档 PDF 预览，第 ${page} 页，共 ${pageCount} 页`}
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onDeselect()
+      }}
+      className="min-h-[42rem] bg-neutral-200/70 p-4 sm:p-8"
+    >
       <div
         ref={pageRef}
         tabIndex={mode === "draw" ? 0 : -1}
@@ -119,9 +136,11 @@ export function OADocumentCanvas({
             label={suggestion.label}
             state={suggestion.reviewState}
             visual={suggestion.visual!}
-            selected={activeRegionId === suggestion.id}
+            active={activeRegionId === suggestion.id}
+            selected={selectedRegionId === suggestion.id}
             pageElement={pageRef.current}
             onActivate={onActivate}
+            onSelect={onSelect}
             onChange={onChange}
             onDelete={onDelete}
             onEdit={onEdit}

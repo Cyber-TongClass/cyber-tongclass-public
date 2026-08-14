@@ -43,9 +43,11 @@ export function OADocumentOverlay({
   label,
   state,
   visual,
+  active,
   selected,
   pageElement,
   onActivate,
+  onSelect,
   onChange,
   onEdit,
   onDelete,
@@ -54,9 +56,11 @@ export function OADocumentOverlay({
   label: string
   state: OADocumentSuggestionReviewState
   visual: OADocumentVisualAnchor
+  active: boolean
   selected: boolean
   pageElement: HTMLElement | null
   onActivate: (id: string) => void
+  onSelect: (id: string) => void
   onChange: (id: string, visual: OADocumentVisualAnchor) => void
   onEdit: (id: string) => void
   onDelete: (id: string) => void
@@ -75,6 +79,7 @@ export function OADocumentOverlay({
   const startDrag = (event: PointerEvent<HTMLElement>, handle?: OADocumentResizeHandle) => {
     event.stopPropagation()
     onActivate(id)
+    onSelect(id)
     drag.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, start: visual, handle }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -136,7 +141,7 @@ export function OADocumentOverlay({
         className={cn(
           "pointer-events-none absolute inset-0 border-2 transition-[border-width,background-color] group-hover/region:border-[3px]",
           tone[state],
-          selected && "border-[3px]",
+          (active || selected) && "border-[3px]",
         )}
       />
       <button
@@ -145,7 +150,10 @@ export function OADocumentOverlay({
         aria-pressed={selected}
         onMouseEnter={() => onActivate(id)}
         onFocus={() => onActivate(id)}
-        onClick={() => onActivate(id)}
+        onClick={() => {
+          onActivate(id)
+          onSelect(id)
+        }}
         onKeyDown={onKeyDown}
         onPointerDown={(event) => startDrag(event, resizeHandleAtPointer(event))}
         onPointerMove={moveDrag}
@@ -160,12 +168,18 @@ export function OADocumentOverlay({
       </button>
       {selected ? (
         <>
-          <div className="pointer-events-auto absolute -top-11 right-0 z-30 flex border border-[hsl(var(--aia-ink))] bg-[hsl(var(--aia-paper))] shadow-md">
-            <button type="button" onClick={() => onEdit(id)} className="aia-focus inline-flex items-center gap-1 px-2.5 py-1.5 text-xs">
-              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />编辑
+          <div
+            role="toolbar"
+            aria-label={`${label}操作`}
+            className="pointer-events-auto absolute bottom-[calc(100%+0.5rem)] left-1/2 z-30 flex w-max -translate-x-1/2 items-center whitespace-nowrap border aia-border-rule bg-[hsl(var(--aia-paper))] shadow-md"
+          >
+            <button type="button" onClick={() => onEdit(id)} className="aia-focus inline-flex min-h-10 shrink-0 items-center gap-1.5 px-3 text-xs font-medium leading-none text-[hsl(var(--aia-ink))]">
+              <Pencil className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>编辑</span>
             </button>
-            <button type="button" onClick={() => onDelete(id)} className="aia-focus inline-flex items-center gap-1 border-l border-[hsl(var(--aia-rule))] px-2.5 py-1.5 text-xs text-[hsl(var(--aia-red))]">
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />删除
+            <button type="button" onClick={() => onDelete(id)} className="aia-focus inline-flex min-h-10 shrink-0 items-center gap-1.5 border-l aia-border-rule px-3 text-xs font-medium leading-none text-[hsl(var(--aia-red))]">
+              <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>删除</span>
             </button>
           </div>
           {visualHandles.map(([position, handle]) => (

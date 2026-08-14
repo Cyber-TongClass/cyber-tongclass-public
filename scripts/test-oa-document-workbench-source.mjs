@@ -54,6 +54,32 @@ test("canvas renders a real authenticated page image with normalized editable ov
   assert.doesNotMatch(overlay, /handles\.map/)
 })
 
+test("document actions require explicit region selection and dismiss from blank canvas", async () => {
+  const [workbench, canvas, overlay] = await Promise.all([
+    read("oa-document-workbench.tsx"),
+    read("oa-document-canvas.tsx"),
+    read("oa-document-overlay.tsx"),
+  ])
+
+  assert.match(workbench, /selectedRegionId/)
+  assert.match(workbench, /activeRegionId=\{activeRegionId\}/)
+  assert.match(workbench, /selectedRegionId=\{selectedRegionId\}/)
+  assert.match(workbench, /onSelect=\{selectRegion\}/)
+  assert.match(workbench, /onDeselect=\{clearRegionSelection\}/)
+
+  assert.match(canvas, /selectedRegionId\?: string/)
+  assert.match(canvas, /onSelect: \(id: string\) => void/)
+  assert.match(canvas, /onDeselect: \(\) => void/)
+  assert.match(canvas, /mode === "select"[\s\S]*onDeselect\(\)/)
+  assert.match(canvas, /selected=\{selectedRegionId === suggestion\.id\}/)
+
+  assert.match(overlay, /onSelect\(id\)/)
+  assert.match(overlay, /\{selected \? \(/)
+  assert.match(overlay, /w-max/)
+  assert.match(overlay, /whitespace-nowrap/)
+  assert.match(overlay, /shrink-0/)
+})
+
 test("workbench has AIA states, page controls, edit decisions, and publish blocking", async () => {
   const code = `${await read("oa-document-workbench.tsx")}\n${await read("oa-document-annotation-panel.tsx")}`
   for (const token of ["aia-serif", "aia-mono", "aia-border-rule", "aia-paper"]) assert.match(code, new RegExp(token))
