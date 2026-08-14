@@ -6,6 +6,7 @@ import { Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useReviewContentSubmission, type ContentSubmission } from "@/lib/api"
+import { resolveMyContentReviewTask } from "@/components/class-work/content-review-task"
 
 type Decision = "approved" | "rejected"
 
@@ -20,9 +21,8 @@ export function ContentReviewDecisionPanel({
   const [comment, setComment] = useState("")
   const [busy, setBusy] = useState<Decision | null>(null)
   const [error, setError] = useState("")
-  const myTask = submission.myTaskId
-    ? submission.tasks?.find((task) => task._id === submission.myTaskId)
-    : undefined
+  const myTask = resolveMyContentReviewTask(submission.tasks, submission.myTaskId)
+  const myTaskId = myTask?._id ?? submission.myTaskId
 
   async function decide(decision: "approved" | "rejected") {
     if (busy) return
@@ -36,7 +36,7 @@ export function ContentReviewDecisionPanel({
     try {
       await review({
         id: submission._id,
-        ...(submission.myTaskId ? { taskId: submission.myTaskId } : {}),
+        ...(myTaskId ? { taskId: myTaskId } : {}),
         decision,
         ...(normalizedComment ? { comment: normalizedComment } : {}),
       })
@@ -54,7 +54,7 @@ export function ContentReviewDecisionPanel({
       ? "来源审阅需在新闻来源审阅台处理。"
       : submission.status !== "pending"
         ? "该提交已完成审核。"
-        : myTask && myTask.status !== "pending"
+        : myTask && (myTask.status ?? "pending") !== "pending"
           ? "你的审核任务已经结束，无需重复操作。"
           : "你当前没有处理这份提交的审核资格，仅可查看进度。"
     return <p role="status" className="aia-text-muted mt-3 text-sm leading-6">{reason}</p>

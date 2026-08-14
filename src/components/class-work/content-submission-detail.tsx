@@ -5,6 +5,7 @@ import { CalendarDays, ExternalLink, MapPin } from "lucide-react"
 
 import { ContentReviewStatus } from "@/components/class-work/content-review-status"
 import { ContentReviewDecisionPanel } from "@/components/class-work/content-review-decision-panel"
+import { resolveMyContentReviewTask } from "@/components/class-work/content-review-task"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import {
   useContentSubmissionDetail,
@@ -94,16 +95,15 @@ function SubmissionResult({ submission, category, canManage }: {
   }
 
   const workflowStage = submission.workflowStage ?? "publication_approval"
-  const myTask = submission.myTaskId
-    ? submission.tasks?.find((task) => task._id === submission.myTaskId)
-    : undefined
+  const myTask = resolveMyContentReviewTask(submission.tasks, submission.myTaskId)
   const decisionSubmission: ContentSubmission = {
     ...submission,
+    myTaskId: myTask?._id ?? submission.myTaskId,
     workflowStage,
     canReview: canManage
       && submission.status === "pending"
       && workflowStage === "publication_approval"
-      && (!myTask || myTask.status === "pending"),
+      && (!myTask || (myTask.status ?? "pending") === "pending"),
   }
 
   return (

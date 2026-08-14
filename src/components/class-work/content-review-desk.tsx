@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react"
 
 import { ContentReviewDecisionPanel } from "@/components/class-work/content-review-decision-panel"
 import { ContentReviewStatus } from "@/components/class-work/content-review-status"
+import { resolveMyContentReviewTask } from "@/components/class-work/content-review-task"
 import { PublishedContentManager } from "@/components/class-work/published-content-manager"
 import {
   useContentReviewQueue,
@@ -87,12 +88,10 @@ export function ContentReviewDesk({ category }: { category: ContentReviewCategor
         <div className="divide-y divide-[hsl(var(--aia-rule))] border-b aia-border-rule">
           {submissions.map((submission, index) => {
             const isPending = submission.status === "pending"
-            const myTask = submission.myTaskId
-              ? submission.tasks?.find((task) => task._id === submission.myTaskId)
-              : undefined
+            const myTask = resolveMyContentReviewTask(submission.tasks, submission.myTaskId)
             const canReview = isPending
               && submission.canReview === true
-              && (!myTask || myTask.status === "pending")
+              && (!myTask || (myTask.status ?? "pending") === "pending")
             return (
               <article key={submission._id} className="py-6 sm:grid sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:gap-5">
                 <span className="aia-mono text-xs aia-text-muted">{String(index + 1).padStart(2, "0")}</span>
@@ -125,7 +124,7 @@ export function ContentReviewDesk({ category }: { category: ContentReviewCategor
 
                   <div className="mt-5 border-t aia-border-rule pt-4">
                     <ContentReviewDecisionPanel
-                      submission={{ ...submission, canReview }}
+                      submission={{ ...submission, myTaskId: myTask?._id ?? submission.myTaskId, canReview }}
                       onComplete={(decision) => setMessage(decision === "approved" ? "审核已通过，内容已自动发布。" : "已退回给创建者。")}
                     />
                   </div>

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import test from "node:test"
+import { resolveMyContentReviewTask } from "../src/components/class-work/content-review-task.ts"
 
 const backend = await readFile("convex/contentReview.ts", "utf8")
 const api = await readFile("src/lib/api.ts", "utf8")
@@ -79,9 +80,25 @@ test("detail and review desk share one decision panel", () => {
   assert.doesNotMatch(reviewDesk, /useReviewContentSubmission/)
 })
 
+test("legacy review tasks without a status remain actionable while the submission is pending", () => {
+  assert.match(decisionPanel, /\(myTask\.status\s*\?\?\s*"pending"\)\s*!==\s*"pending"/)
+  assert.match(detailComponent, /\(myTask\.status\s*\?\?\s*"pending"\)\s*===\s*"pending"/)
+  assert.match(reviewDesk, /\(myTask\.status\s*\?\?\s*"pending"\)\s*===\s*"pending"/)
+})
+
+test("a pending owned task wins over a stale referenced task for the same reviewer", () => {
+  assert.deepEqual(
+    resolveMyContentReviewTask([
+      { _id: "stale", isMine: true, status: "skipped" },
+      { _id: "current", isMine: true, status: "pending" },
+    ], "stale"),
+    { _id: "current", isMine: true, status: "pending" },
+  )
+})
+
 test("review desk enables any currently authorized manager, including one without a legacy stored task", () => {
   assert.match(reviewDesk, /submission\.canReview\s*===\s*true/)
-  assert.match(reviewDesk, /\(!myTask\s*\|\|\s*myTask\.status\s*===\s*"pending"\)/)
+  assert.match(reviewDesk, /\(!myTask\s*\|\|\s*\(myTask\.status\s*\?\?\s*"pending"\)\s*===\s*"pending"\)/)
 })
 
 test("a manage-only reviewer is not offered an unauthorized create route", () => {
