@@ -200,7 +200,7 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
       return <div className="space-y-2">{commonLabel}<Input id={fieldId} aria-describedby={describedBy} aria-required={field.required} className="aia-focus rounded-none border aia-border-rule bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0" type="number" value={asNumberInput(answers[field.id])} placeholder={field.placeholder} onChange={(event) => updateAnswer(field.id, event.target.value === "" ? undefined : Number(event.target.value))} /></div>
     }
     if (field.type === "date") {
-      return <div className="space-y-2">{commonLabel}<Input id={fieldId} aria-describedby={describedBy} aria-required={field.required} className="aia-focus rounded-none border aia-border-rule bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0" type="date" value={asString(answers[field.id])} onChange={(event) => updateAnswer(field.id, event.target.value)} /></div>
+      return <div className="space-y-2">{commonLabel}<Input id={fieldId} aria-describedby={describedBy} aria-required={field.required} className="aia-focus rounded-none border aia-border-rule bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0" type="date" value={asString(answers[field.id])} onInput={(event) => updateAnswer(field.id, event.currentTarget.value)} onChange={(event) => updateAnswer(field.id, event.target.value)} /></div>
     }
     if (field.type === "select") {
       return (

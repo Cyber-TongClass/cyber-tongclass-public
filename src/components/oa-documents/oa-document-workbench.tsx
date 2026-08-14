@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, FileCheck2, MousePointer2, Pencil, Save } from "lucide-react"
 
 import { getTongClassStoredSessionToken } from "@/lib/api"
+import { normalizeDocumentBindingLabel, resolveDocumentCandidateBindings } from "@/lib/oa-document-candidate-binding"
 import { hasBlockingDocumentReview } from "@/lib/oa-document-template-client"
 import type {
   OADocumentBindingCandidate,
@@ -67,6 +68,18 @@ function positiveOverlap(left: OADocumentVisualAnchor, right: OADocumentVisualAn
     && Math.min(left.y + left.height, right.y + right.height) > Math.max(left.y, right.y)
 }
 
+function candidateIdsForSuggestion(suggestion: OADocumentSuggestion, candidates: PreviewCandidate[]) {
+  const explicit = new Set(suggestion.bindingCandidateIds || [])
+  const matching = candidates.filter((candidate) => (
+    explicit.has(candidate.id)
+    || Boolean(suggestion.visual && positiveOverlap(candidate.visual, suggestion.visual))
+  ))
+  if (matching.length) return matching.map((candidate) => candidate.id)
+  const normalizedLabel = normalizeDocumentBindingLabel(suggestion.label)
+  const exactLabels = candidates.filter((candidate) => normalizeDocumentBindingLabel(candidate.label) === normalizedLabel)
+  return exactLabels.length === 1 ? [exactLabels[0].id] : []
+}
+
 function selectedCandidatesFromManifest(manifest: OADocumentTemplateManifest) {
   const selected: Record<string, string> = {}
   for (const suggestion of manifest.suggestions) {
@@ -117,6 +130,10 @@ export function OADocumentWorkbench({
   const [message, setMessage] = useState("")
   const revisionRef = useRef(0)
   const counts = useMemo(() => reviewCounts(manifest.suggestions), [manifest.suggestions])
+  const resolvedCandidateBindings = useMemo(
+    () => resolveDocumentCandidateBindings(manifest.suggestions, candidates),
+    [candidates, manifest.suggestions],
+  )
   const active = manifest.suggestions.find((item) => item.id === activeRegionId)
   const blocking = hasBlockingDocumentReview(manifest)
 
@@ -167,13 +184,20 @@ export function OADocumentWorkbench({
         setPage((current) => Math.min(boundedCount, Math.max(1, current)))
         setCandidates(payload.candidates)
         if (metadataRevision === revisionRef.current) {
-          setManifest((current) => ({
-            ...current,
-            suggestions: current.suggestions.map((suggestion) => {
+          setManifest((current) => {
+            const mergedSuggestions = current.suggestions.map((suggestion) => {
               const metadata = payload.suggestions!.find((item) => item.id === suggestion.id)
               return metadata ? { ...suggestion, visual: metadata.visual, bindingCandidateIds: metadata.bindingCandidateIds } : suggestion
-            }),
-          }))
+            })
+            const resolved = resolveDocumentCandidateBindings(mergedSuggestions, payload.candidates!)
+            const suggestions = mergedSuggestions.map((suggestion) => {
+              const candidateId = resolved[suggestion.id]
+              if (!candidateId) return suggestion
+              const candidate = payload.candidates!.find((item) => item.id === candidateId)!
+              return { ...suggestion, visual: candidate.visual, bindingCandidateIds: [candidate.id] }
+            })
+            return { ...current, suggestions }
+          })
         }
       } catch (error) {
         if (!controller.signal.aborted) setPreviewError(error instanceof Error ? error.message : "文档预览加载失败")
@@ -184,6 +208,11 @@ export function OADocumentWorkbench({
     void loadMetadata()
     return () => controller.abort()
   }, [versionId])
+
+  useEffect(() => {
+    if (!candidates.length) return
+    setSelectedCandidates(resolvedCandidateBindings)
+  }, [candidates.length, resolvedCandidateBindings])
 
   useEffect(() => {
     if (!pageCount) return
@@ -308,7 +337,12 @@ export function OADocumentWorkbench({
     commit({
       ...detached,
       suggestions: detached.suggestions.map((item) => item.id === active.id
-        ? { ...item, reviewState: "unresolved", bindingCandidateIds: [...new Set([...(item.bindingCandidateIds || []), candidateId])] }
+        ? {
+            ...item,
+            reviewState: "unresolved",
+            visual: candidates.find((candidate) => candidate.id === candidateId)?.visual || item.visual,
+            bindingCandidateIds: [candidateId],
+          }
         : item),
     })
   }
@@ -380,8 +414,11 @@ export function OADocumentWorkbench({
     }
   }
 
+  const claimedByOtherSuggestions = active
+    ? new Set(Object.entries(resolvedCandidateBindings).filter(([suggestionId]) => suggestionId !== active.id).map(([, candidateId]) => candidateId))
+    : new Set<string>()
   const activeCandidateIds = active
-    ? [...new Set([...(active.bindingCandidateIds || []), ...candidateIdsForVisual(active.visual || { page: 0, x: 0, y: 0, width: 0, height: 0, pageWidth: 1, pageHeight: 1, rotation: 0, coordinateSpace: "normalized-pdf" })])]
+    ? candidateIdsForSuggestion(active, candidates).filter((candidateId) => !claimedByOtherSuggestions.has(candidateId))
     : []
   const activeCandidates = candidates.filter((candidate) => activeCandidateIds.includes(candidate.id))
 

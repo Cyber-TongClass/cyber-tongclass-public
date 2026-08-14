@@ -92,6 +92,11 @@ test("workbench connects select and draw modes to binding-aware canvas edits", a
   assert.match(code, /已绑定 Word 可写位置/)
   assert.match(code, /未绑定 Word 位置/)
   assert.match(code, /reviewState:\s*"unresolved"/)
+  assert.match(code, /candidateIdsForSuggestion/)
+  assert.match(code, /resolveDocumentCandidateBindings/)
+  assert.match(code, /visual:\s*candidate\.visual/)
+  assert.match(code, /bindingCandidateIds:\s*\[candidateId\]/)
+  assert.match(code, /setSelectedCandidates/)
 })
 
 test("workbench removes field anchors on delete, follows selection pages, and avoids conflict double counts", async () => {

@@ -1482,10 +1482,12 @@ export const listEditorVisibleTargets = query({
 })
 
 export const manageGet = query({
-  args: { sessionToken: v.string(), id: v.id("oaForms") },
+  args: { sessionToken: v.string(), id: v.string() },
   handler: async (ctx, args) => {
     const manager = await requireManageSurfaceActor(ctx, await getUserBySession(ctx, args.sessionToken))
-    const form = await ctx.db.get(args.id)
+    const normalizedId = ctx.db.normalizeId("oaForms", args.id)
+    if (!normalizedId) return null
+    const form = await ctx.db.get(normalizedId)
     if (!form) return null
     assertNotSystemManagedForm(form)
     await assertCanManageFormWithRights(ctx, manager, form)

@@ -16,6 +16,7 @@ const expectations = [
   ['sticky row index column', 'sticky left-0 z-10'],
   ['compact cells without rounded card inputs', 'rounded-none border-0 bg-transparent'],
   ['bounded horizontal worksheet scroll', 'overflow-x-auto border aia-border-rule'],
+  ['date input persists native input events', 'onInput={(event) => updateAnswer(field.id, event.currentTarget.value)}'],
 ]
 
 const missing = expectations.filter(([, needle]) => !source.includes(needle))
