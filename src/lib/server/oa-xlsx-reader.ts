@@ -52,8 +52,8 @@ function attribute(element: XmlElement, name: string) {
   return ""
 }
 
-function textContent(element: XmlElement) {
-  return (element.textContent || "").normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
+function normalizedText(value: string) {
+  return value.normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
 }
 
 function workbookPart(pkg: OoxmlPackage) {
@@ -156,9 +156,12 @@ export function analyzeXlsxHeaders(input: Uint8Array | Buffer): { sheets: OASpre
   const strings = sharedStrings(pkg)
   const sheets: OASpreadsheetSheet[] = []
   const names = new Set<string>()
+  let visibleSheetCount = 0
   for (const sheet of elements(workbook, "sheet")) {
     if (attribute(sheet, "state").toLocaleLowerCase("en-US") !== "" && attribute(sheet, "state").toLocaleLowerCase("en-US") !== "visible") continue
-    const name = textContent({ ...sheet, textContent: attribute(sheet, "name") } as XmlElement)
+    visibleSheetCount += 1
+    if (visibleSheetCount > OA_SPREADSHEET_LIMITS.maxSheets) throw new Error(`Excel 可见工作表不能超过 ${OA_SPREADSHEET_LIMITS.maxSheets} 个`)
+    const name = normalizedText(attribute(sheet, "name"))
     if (!name || name.length > 100 || names.has(name.toLocaleLowerCase("en-US"))) throw new Error("XLSX 工作表名称无效或重复")
     names.add(name.toLocaleLowerCase("en-US"))
     const relationship = relationshipById.get(attribute(sheet, "id"))
@@ -169,7 +172,6 @@ export function analyzeXlsxHeaders(input: Uint8Array | Buffer): { sheets: OASpre
     const analyzed = analyzeWorksheet(parseXml(pkg.readText(worksheetName), `XLSX 工作表“${name}”`), strings)
     if (!analyzed) continue
     sheets.push({ name, ...analyzed })
-    if (sheets.length > OA_SPREADSHEET_LIMITS.maxSheets) throw new Error(`Excel 可用工作表不能超过 ${OA_SPREADSHEET_LIMITS.maxSheets} 个`)
   }
   if (!sheets.length) throw new Error("Excel 没有包含可用表头的可见工作表")
   return { sheets }

@@ -141,6 +141,22 @@ function workbookPackage({
   return buildSimpleZip(entries)
 }
 
+function manySheetPackage(sheetCount) {
+  const sheetTags = Array.from({ length: sheetCount }, (_, index) => `<sheet name="Sheet${index + 1}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")
+  const relationshipTags = Array.from({ length: sheetCount }, (_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")
+  const worksheetEntries = Array.from({ length: sheetCount }, (_, index) => ({
+    name: `xl/worksheets/sheet${index + 1}.xml`,
+    data: index === 0 ? worksheetWithInlineHeaders(["姓名", "电话"]) : `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>`,
+  }))
+  return buildSimpleZip([
+    { name: "[Content_Types].xml", data: `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="${spreadsheetContentType}"/></Types>` },
+    { name: "_rels/.rels", data: `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="root1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>` },
+    { name: "xl/workbook.xml", data: `<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheetTags}</sheets></workbook>` },
+    { name: "xl/_rels/workbook.xml.rels", data: `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationshipTags}</Relationships>` },
+    ...worksheetEntries,
+  ])
+}
+
 test("reads ordered shared-string headers and omits empty worksheets", () => {
   const analyzed = reader.analyzeXlsxHeaders(workbookPackage({ headers: ["序号", "拟创办期刊名称", "主编"], headerRow: 3 }))
   assert.equal(analyzed.sheets.length, 1)
@@ -166,4 +182,5 @@ test("fails closed for unsafe relationships, macros, duplicate headers, and exce
 
 test("requires at least one visible worksheet with a usable header row", () => {
   assert.throws(() => reader.analyzeXlsxHeaders(workbookPackage({ headers: ["只有一列"] })), /表头|工作表/)
+  assert.throws(() => reader.analyzeXlsxHeaders(manySheetPackage(51)), /50/)
 })
