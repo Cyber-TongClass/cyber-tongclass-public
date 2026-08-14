@@ -13,6 +13,7 @@ import {
   type OASpreadsheetImportMode,
   type OASpreadsheetSheet,
 } from "@/lib/oa-spreadsheet-import"
+import { cn } from "@/lib/utils"
 
 type SpreadsheetAnalysis = {
   fileName: string
@@ -25,7 +26,13 @@ function columnTypeLabel(type: string) {
   return "文本"
 }
 
-export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string }) {
+export function OASpreadsheetNewFormImport({
+  creatorId,
+  compact = false,
+}: {
+  creatorId: string
+  compact?: boolean
+}) {
   const router = useRouter()
   const upsertForm = useManageUpsertOAForm()
   const [analysis, setAnalysis] = useState<SpreadsheetAnalysis | null>(null)
@@ -117,18 +124,21 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
   }
 
   return (
-    <div className="border aia-border-rule bg-[hsl(var(--aia-paper))] p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className={cn("border aia-border-rule bg-[hsl(var(--aia-paper))]", compact ? "p-4" : "p-5 sm:p-6")}>
+      <div className={cn("flex flex-wrap items-start justify-between gap-4", compact && "block")}>
         <div className="max-w-2xl">
           <div className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-[hsl(var(--aia-red))]" aria-hidden="true" />
-            <h3 className="aia-serif text-lg font-semibold text-[hsl(var(--aia-ink))]">从 Excel 表头生成</h3>
+            <FileSpreadsheet className={cn("text-[hsl(var(--aia-red))]", compact ? "h-4 w-4" : "h-5 w-5")} aria-hidden="true" />
+            <h3 className={cn("aia-serif font-semibold text-[hsl(var(--aia-ink))]", compact ? "text-base" : "text-lg")}>从 Excel 导入</h3>
           </div>
-          <p className="aia-text-muted mt-2 text-sm leading-6">
-            上传 .xlsx 后先预览工作表与表头，再选择生成一个可增删行的表格，或把每个表头变成独立问题。
+          <p className={cn("aia-text-muted", compact ? "mt-1 text-xs leading-5" : "mt-2 text-sm leading-6")}>
+            {compact ? "识别表头后选择表格或独立问题结构。" : "上传 .xlsx 后先预览工作表与表头，再选择生成一个可增删行的表格，或把每个表头变成独立问题。"}
           </p>
         </div>
-        <label className="aia-focus inline-flex cursor-pointer items-center border aia-border-rule px-4 py-2 text-sm font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]">
+        <label className={cn(
+          "aia-focus inline-flex cursor-pointer items-center border aia-border-rule px-4 py-2 text-sm font-medium text-[hsl(var(--aia-ink))] transition-colors hover:border-[hsl(var(--aia-red))] hover:text-[hsl(var(--aia-red))]",
+          compact && "mt-4 min-h-11 w-full justify-center",
+        )}>
           {busy === "analyze" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
           {busy === "analyze" ? "正在识别…" : "选择 .xlsx"}
           <input
@@ -147,8 +157,8 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
       {error ? <p role="alert" className="mt-4 text-sm text-[hsl(var(--aia-red))]">{error}</p> : null}
 
       {analysis && sheet ? (
-        <div className="mt-5 border-t aia-border-rule pt-5">
-          <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className={cn("border-t aia-border-rule", compact ? "mt-4 pt-4" : "mt-5 pt-5")}>
+          <div className={cn("flex flex-wrap items-end justify-between gap-4", compact && "block")}>
             <div>
               <p className="aia-mono text-[10px] uppercase tracking-[0.16em] aia-text-muted">{analysis.fileName}</p>
               <p className="mt-1 text-sm text-[hsl(var(--aia-ink))]">
@@ -172,7 +182,7 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
           </div>
 
           {sheet.layout === "fixed_form" ? (
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className={cn("mt-4 grid gap-4", !compact && "lg:grid-cols-2")}>
               <div className="border aia-border-rule p-4">
                 <p className="aia-mono text-[10px] uppercase tracking-[0.14em] aia-text-muted">独立问题</p>
                 <ol className="mt-3 space-y-2 text-sm text-[hsl(var(--aia-ink))]">
@@ -219,7 +229,7 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
               按原版式结构生成表单
               <span className="mt-1 block text-xs font-normal text-white/80">独立填写区生成问题，费用和行程明细生成可增删行表格；创建后可继续校对。</span>
             </button>
-          ) : <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          ) : <div className={cn("mt-5 grid gap-3", !compact && "sm:grid-cols-2")}>
             <button
               type="button"
               disabled={busy !== null}

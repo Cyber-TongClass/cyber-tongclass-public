@@ -50,7 +50,13 @@ async function analyzeVersion(versionId: string) {
   }
 }
 
-export function OADocumentNewFormImport({ creatorId }: { creatorId: string }) {
+export function OADocumentNewFormImport({
+  creatorId,
+  compact = false,
+}: {
+  creatorId: string
+  compact?: boolean
+}) {
   const router = useRouter()
   const upsertForm = useManageUpsertOAForm()
   const generateUpload = useGenerateOADocumentTemplateSourceUploadUrl()
@@ -81,5 +87,5 @@ export function OADocumentNewFormImport({ creatorId }: { creatorId: string }) {
     router.push(`/forms/manage/${formId}/document-template?versionId=${encodeURIComponent(versionId)}`)
   }
 
-  return <OADocumentImport onSelect={importWord} />
+  return <OADocumentImport onSelect={importWord} compact={compact} />
 }

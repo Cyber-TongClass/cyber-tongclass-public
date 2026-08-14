@@ -38,9 +38,15 @@ test("XLSX importer previews fixed-layout questions and repeatable tables", asyn
 })
 
 test("new form editor offers Word, XLSX, and manual creation paths", async () => {
-  const code = await source("src/app/forms/manage/form-editor.tsx")
+  const [code, importer] = await Promise.all([
+    source("src/app/forms/manage/form-editor.tsx"),
+    source("src/components/oa-spreadsheets/oa-spreadsheet-new-form-import.tsx"),
+  ])
   assert.match(code, /OADocumentNewFormImport/)
   assert.match(code, /OASpreadsheetNewFormImport/)
-  assert.match(code, /从 Excel 表头自动生成表单/)
-  assert.match(code, /或手动创建/)
+  assert.match(code, /快速导入/)
+  assert.match(code, /OASpreadsheetNewFormImport creatorId=\{currentUserId\} compact/)
+  assert.doesNotMatch(code, /或手动创建/)
+  assert.match(importer, /compact\s*=\s*false/)
+  assert.match(importer, /compact \? "p-4" : "p-5 sm:p-6"/)
 })

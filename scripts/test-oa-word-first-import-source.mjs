@@ -35,16 +35,25 @@ test("Word-first draft is private, titled from the file, and uses one removable 
 })
 
 test("new-form editor offers Word import before the ordinary manual builder", async () => {
-  const [editor, launcher] = await Promise.all([
+  const [editor, launcher, importer, page] = await Promise.all([
     source("src/app/forms/manage/form-editor.tsx"),
     source("src/components/oa-documents/oa-document-new-form-import.tsx"),
+    source("src/components/oa-documents/oa-document-import.tsx"),
+    source("src/app/forms/manage/new/page.tsx"),
   ])
   assert.match(editor, /OADocumentNewFormImport/)
   assert.match(editor, /!form[\s\S]*OADocumentNewFormImport/)
-  assert.match(editor, /OADocumentNewFormImport creatorId=\{currentUserId\}[\s\S]*form-scope-title/)
-  assert.match(editor, /OADocumentNewFormImport[\s\S]*OAFormBuilder/)
+  assert.match(editor, /xl:grid-cols-\[minmax\(0,1fr\)_20rem\]/)
+  assert.match(editor, /<aside[\s\S]*xl:sticky[\s\S]*xl:top-24/)
+  assert.match(editor, /OADocumentNewFormImport creatorId=\{currentUserId\} compact/)
+  assert.match(editor, /form-scope-title[\s\S]*OAFormBuilder/)
   assert.doesNotMatch(editor, /保存新表单后，即可导入/)
+  assert.match(importer, /compact\s*=\s*false/)
+  assert.match(importer, /compact \?/)
+  assert.match(page, /max-w-6xl/)
   assert.match(launcher, /useManageUpsertOAForm/)
+  assert.match(launcher, /compact\s*=\s*false/)
+  assert.match(launcher, /<OADocumentImport onSelect=\{importWord\} compact=\{compact\}/)
   assert.match(launcher, /useGenerateOADocumentTemplateSourceUploadUrl/)
   assert.match(launcher, /useCreateOrGetOADocumentTemplateVersion/)
   assert.match(launcher, /createWordImportDraftPayload/)

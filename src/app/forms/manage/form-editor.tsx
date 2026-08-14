@@ -227,37 +227,9 @@ export function ManageFormEditor({
     if (!form) router.push("/forms/manage")
   }
 
-  return (
+  const editorContent = (
     <>
-      {!form && currentUserId ? (
-        <section aria-labelledby="file-first-import-title" className="mt-10 border-t aia-border-rule pt-8">
-          <div className="mb-5">
-            <p className="aia-kicker">FILE FIRST</p>
-            <h2 id="file-first-import-title" className="aia-serif mt-2 text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
-              从文件自动生成表单
-            </h2>
-            <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">
-              无需先填写标题、可见范围或审批流程。Word 会进入原文批注工作台；Excel 会先识别工作表和表头，再由你选择表单结构。
-            </p>
-          </div>
-          <div>
-            <p className="aia-mono mb-3 text-[10px] uppercase tracking-[0.18em] aia-text-muted">Word 原格式</p>
-            <OADocumentNewFormImport creatorId={currentUserId} />
-          </div>
-          <div className="mt-6">
-            <p className="aia-mono mb-3 text-[10px] uppercase tracking-[0.18em] aia-text-muted">Excel 表头</p>
-            <h3 className="sr-only">从 Excel 表头自动生成表单</h3>
-            <OASpreadsheetNewFormImport creatorId={currentUserId} />
-          </div>
-          <div className="aia-mono my-8 flex items-center gap-3 text-[10px] uppercase tracking-[0.18em] aia-text-muted" aria-hidden="true">
-            <span className="h-px flex-1 bg-[hsl(var(--aia-rule))]" />
-            或手动创建
-            <span className="h-px flex-1 bg-[hsl(var(--aia-rule))]" />
-          </div>
-        </section>
-      ) : null}
-
-      <section aria-labelledby="form-scope-title" className="mt-10 border-t aia-border-rule pt-8">
+      <section aria-labelledby="form-scope-title" className={cn("border-t aia-border-rule pt-8", form && "mt-10")}>
         <h2 id="form-scope-title" className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
           可见范围
         </h2>
@@ -319,6 +291,32 @@ export function ManageFormEditor({
       {form && canViewSubmissions ? <FormSubmissionsSection form={form} /> : null}
     </>
   )
+
+  if (!form && currentUserId) {
+    return (
+      <div className="mt-10 grid items-start gap-10 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <aside aria-labelledby="quick-import-title" className="border-t aia-border-rule pt-6 xl:sticky xl:top-24 xl:col-start-2 xl:row-start-1 xl:border-t-0 xl:border-l xl:pl-6 xl:pt-0">
+          <h2 id="quick-import-title" className="aia-serif text-lg font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+            快速导入
+          </h2>
+          <p className="aia-text-muted mt-1 text-xs leading-5">
+            从现有文件生成草稿，之后仍可继续编辑字段、范围和流程。
+          </p>
+          <div className="mt-4">
+            <OADocumentNewFormImport creatorId={currentUserId} compact />
+          </div>
+          <div className="mt-4">
+            <OASpreadsheetNewFormImport creatorId={currentUserId} compact />
+          </div>
+        </aside>
+        <div className="min-w-0 xl:col-start-1 xl:row-start-1">
+          {editorContent}
+        </div>
+      </div>
+    )
+  }
+
+  return editorContent
 }
 
 export function ManageFormEditorHeader({ isEdit }: { isEdit: boolean }) {

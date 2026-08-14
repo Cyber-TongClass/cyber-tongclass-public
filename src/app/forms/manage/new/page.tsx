@@ -48,7 +48,7 @@ export default function FormNewPage() {
   }
 
   return (
-    <main className="container-custom max-w-4xl py-10 sm:py-12">
+    <main className="container-custom max-w-6xl py-10 sm:py-12">
       <ManageFormEditorHeader isEdit={false} />
       <ManageFormEditor form={null} currentUserId={String(currentUser._id)} />
     </main>
