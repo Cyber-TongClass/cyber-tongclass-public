@@ -10,6 +10,7 @@ import { OAWorkflowEditor } from "@/components/oa/oa-workflow-editor"
 import { OAFormBuilder } from "@/components/oa-forms/oa-form-builder"
 import { OADocumentBatchExportActions } from "@/components/oa-documents/oa-document-export-actions"
 import { OADocumentNewFormImport } from "@/components/oa-documents/oa-document-new-form-import"
+import { OASpreadsheetNewFormImport } from "@/components/oa-spreadsheets/oa-spreadsheet-new-form-import"
 import { formatAiaOATime } from "@/components/oa/aia-oa-shared"
 import {
   useEditorVisibleOAForms,
@@ -229,17 +230,25 @@ export function ManageFormEditor({
   return (
     <>
       {!form && currentUserId ? (
-        <section aria-labelledby="word-first-import-title" className="mt-10 border-t aia-border-rule pt-8">
+        <section aria-labelledby="file-first-import-title" className="mt-10 border-t aia-border-rule pt-8">
           <div className="mb-5">
-            <p className="aia-kicker">WORD FIRST</p>
-            <h2 id="word-first-import-title" className="aia-serif mt-2 text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
-              从 Word 自动生成表单
+            <p className="aia-kicker">FILE FIRST</p>
+            <h2 id="file-first-import-title" className="aia-serif mt-2 text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">
+              从文件自动生成表单
             </h2>
             <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">
-              无需先填写标题、可见范围或审批流程。上传后将创建仅你可见的临时草稿，并进入现有文档批注工作台。
+              无需先填写标题、可见范围或审批流程。Word 会进入原文批注工作台；Excel 会先识别工作表和表头，再由你选择表单结构。
             </p>
           </div>
-          <OADocumentNewFormImport creatorId={currentUserId} />
+          <div>
+            <p className="aia-mono mb-3 text-[10px] uppercase tracking-[0.18em] aia-text-muted">Word 原格式</p>
+            <OADocumentNewFormImport creatorId={currentUserId} />
+          </div>
+          <div className="mt-6">
+            <p className="aia-mono mb-3 text-[10px] uppercase tracking-[0.18em] aia-text-muted">Excel 表头</p>
+            <h3 className="sr-only">从 Excel 表头自动生成表单</h3>
+            <OASpreadsheetNewFormImport creatorId={currentUserId} />
+          </div>
           <div className="aia-mono my-8 flex items-center gap-3 text-[10px] uppercase tracking-[0.18em] aia-text-muted" aria-hidden="true">
             <span className="h-px flex-1 bg-[hsl(var(--aia-rule))]" />
             或手动创建
@@ -286,7 +295,7 @@ export function ManageFormEditor({
           <div>
             <h2 className="aia-serif text-xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">表单内容</h2>
             <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">
-              可从 Word 自动识别生成字段，也可以手动插入填空、选择、表格、附件等字段。新表单保存后为草稿。
+              可从 Word 或 Excel 自动识别生成字段，也可以手动插入填空、选择、表格、附件等字段。新表单保存后为草稿。
             </p>
           </div>
           {form ? (
@@ -326,7 +335,7 @@ export function ManageFormEditorHeader({ isEdit }: { isEdit: boolean }) {
         <p className="aia-text-muted mt-2 max-w-2xl text-sm leading-6">
           {isEdit
             ? "调整可见范围与字段后保存；范围内成员看到的始终是最新版本。"
-            : "可直接导入 Word 自动生成字段，或从空白表单开始。完善可见范围和审批流程后再发布。"}
+            : "可直接导入 Word 或 Excel 自动生成字段，也可从空白表单开始。完善可见范围和审批流程后再发布。"}
         </p>
       </header>
     </>
