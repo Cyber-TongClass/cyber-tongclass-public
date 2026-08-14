@@ -9,6 +9,12 @@ const EXPECTED_PAGE_COUNT = 6
 const EXPECTED_FILLED_PAGE_COUNT = 7
 const EXPECTED_APPLICANT_FIELDS = 25
 const NARRATIVE_LABELS = ["基本概况", "主要做法", "应用成效", "创新点"]
+const NARRATIVE_INSTRUCTIONS = {
+  基本概况: "阐述本案例所针对的人工智能赋能行业发展的痛点",
+  主要做法: "结合案例申报方向，阐述传统发展模式的局限与挑战",
+  应用成效: "阐述本案例的标志性成果产出、转型效率提升",
+  创新点: "总结本案例的创新点和亮点，包括但不限于技术创新",
+}
 const root = path.resolve(import.meta.dirname, "..")
 const require = createRequire(import.meta.url)
 
@@ -99,11 +105,11 @@ function packageXml(pkg, partName) {
   return pkg.readText(partName)
 }
 
-function assertInstructionPrecedesSdt(pkg, label, anchor) {
+function assertInstructionPrecedesSdt(pkg, label, instruction, anchor) {
   const xml = packageXml(pkg, anchor.partName)
-  const instructionIndex = xml.indexOf(label)
+  const instructionIndex = xml.indexOf(instruction)
   const tagIndex = xml.indexOf(`oa-field:${anchor.fieldId}`)
-  assert.notEqual(instructionIndex, -1, `编译结果中未找到说明文字：${label}`)
+  assert.notEqual(instructionIndex, -1, `编译结果中未找到 ${label} 的真实说明文字`)
   assert.notEqual(tagIndex, -1, `编译结果中未找到叙述字段 SDT：${anchor.fieldId}`)
   assert.ok(instructionIndex < tagIndex, `${label} 的 SDT 必须位于说明文字之后`)
 }
@@ -357,7 +363,7 @@ async function main() {
       const field = manifest.fields.find((item) => item.label === label)
       const anchor = manifest.anchors.find((item) => item.fieldId === field.fieldId)
       assert.equal(anchor.structural.writeTarget, "paragraph-after")
-      assertInstructionPrecedesSdt(compiledPkg, label, anchor)
+      assertInstructionPrecedesSdt(compiledPkg, label, NARRATIVE_INSTRUCTIONS[label], anchor)
     }
 
     const answers = Object.fromEntries(manifest.fields.map((field) => [field.fieldId, answerFor(field)]))
