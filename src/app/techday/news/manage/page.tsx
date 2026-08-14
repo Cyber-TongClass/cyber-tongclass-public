@@ -7,13 +7,20 @@ import { TechDayAccessGuard } from "@/components/techday/techday-access-guard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useDeleteTechDayPost, useExportTechDayPosts, useManageTechDayPosts, usePublishTechDayPost, useTechDayActorArgs } from "@/lib/api"
+import { useDeleteTechDayPost, useExportTechDayPosts, useManageTechDayPosts, usePublishTechDayPost, useTechDayActorArgs, useTechDayCurrentPrincipal } from "@/lib/api"
 import { downloadCsv } from "@/types/techday"
 
 export default function TechDayNewsManagePage() {
   const actorArgs = useTechDayActorArgs()
-  const posts = useManageTechDayPosts(actorArgs)
-  const exportRows = useExportTechDayPosts(actorArgs)
+  const principal = useTechDayCurrentPrincipal(actorArgs)
+  const canManageNews = principal !== undefined && (
+    principal?.techDayUser?.role === "admin"
+    || principal?.mainUser?.role === "admin"
+    || principal?.mainUser?.role === "super_admin"
+    || principal?.techDayUser?.canPublishNews === true
+  )
+  const posts = useManageTechDayPosts(canManageNews ? actorArgs : null)
+  const exportRows = useExportTechDayPosts(canManageNews ? actorArgs : null)
   const publish = usePublishTechDayPost()
   const remove = useDeleteTechDayPost()
 

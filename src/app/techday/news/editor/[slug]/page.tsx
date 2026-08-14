@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { type TechDayActorArgs, useTechDayActorArgs, useTechDayPostBySlug, useUpdateTechDayPost } from "@/lib/api"
+import { type TechDayActorArgs, useTechDayActorArgs, useTechDayCurrentPrincipal, useTechDayPostBySlug, useUpdateTechDayPost } from "@/lib/api"
 
 type TechDayPost = {
   _id: string
@@ -83,7 +83,14 @@ function EditTechDayPostForm({ actorArgs, post }: { actorArgs: TechDayActorArgs;
 export default function EditTechDayPostPage() {
   const params = useParams<{ slug: string }>()
   const actorArgs = useTechDayActorArgs()
-  const post = useTechDayPostBySlug(params.slug, actorArgs)
+  const principal = useTechDayCurrentPrincipal(actorArgs)
+  const canManageNews = principal !== undefined && (
+    principal?.techDayUser?.role === "admin"
+    || principal?.mainUser?.role === "admin"
+    || principal?.mainUser?.role === "super_admin"
+    || principal?.techDayUser?.canPublishNews === true
+  )
+  const post = useTechDayPostBySlug(params.slug, canManageNews ? actorArgs : null)
 
   return (
     <TechDayShell title="编辑公告">

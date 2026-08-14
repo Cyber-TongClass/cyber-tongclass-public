@@ -226,6 +226,11 @@ test("public detail reads return sanitized DTOs with audiences and public relati
       audiences: ["graduate"],
       title: "Public research",
       authors: ["Public Author"],
+      authorDetails: [{
+        name: "Public Author",
+        coFirst: false,
+        corresponding: false,
+      }],
       venue: "SafeConf",
       year: 2026,
       abstract: "Public abstract",

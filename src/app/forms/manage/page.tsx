@@ -38,7 +38,10 @@ const actionButtonClass =
 export default function FormsManagePage() {
   const { currentUser, isLoading, isAuthenticated } = useAuth()
   const contentPermissions = useMyContentPermissions()
-  const forms = useManageOAForms() as ManagedForm[] | undefined
+  const canAccessFormManagement = currentUser?.role === "super_admin"
+    || currentUser?.identityType === "teacher"
+    || contentPermissions?.reimbursement.canCreate === true
+  const forms = useManageOAForms(canAccessFormManagement) as ManagedForm[] | undefined
   const setStatus = useManageSetOAFormStatus()
   const removeForm = useManageRemoveOAForm()
   const setPinned = useManageSetOAFormPinned()

@@ -29,12 +29,17 @@ test("submission resolves every current manager, including the creator, and refu
     backend.indexOf("export const submit"),
     backend.indexOf("export const reviewQueue"),
   )
-  assert.match(submit, /uniqueEligibleReviewerIds/)
-  assert.doesNotMatch(submit, /uniqueEligibleReviewerIds\([\s\S]*?user\._id\s*,?\s*\)/)
-  assert.doesNotMatch(submit, /candidate\.role\s*===\s*"super_admin"/)
-  assert.match(submit, /没有可用审核人/)
-  assert.match(submit, /contentReviewTasks/)
-  assert.match(submit, /contentReviewTaskNaturalKey/)
+  const createTasks = backend.slice(
+    backend.indexOf("export async function createPublicationApprovalTasks"),
+    backend.indexOf("async function retirePendingReviewTasks"),
+  )
+  assert.match(submit, /createPublicationApprovalTasks\(ctx,\s*submission,\s*now\)/)
+  assert.match(createTasks, /uniqueEligibleReviewerIds/)
+  assert.doesNotMatch(createTasks, /uniqueEligibleReviewerIds\([\s\S]*?submission\.createdBy\s*,?\s*\)/)
+  assert.doesNotMatch(createTasks, /candidate\.role\s*===\s*"super_admin"/)
+  assert.match(createTasks, /没有可用发布审核人/)
+  assert.match(createTasks, /contentReviewTasks/)
+  assert.match(createTasks, /contentReviewTaskNaturalKey\(submission\._id,\s*reviewerId,\s*"publication_approval"\)/)
 })
 
 test("any current manager can acquire an idempotent task and finalise publication once", () => {

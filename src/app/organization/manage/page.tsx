@@ -51,7 +51,7 @@ const inputClass =
 
 export default function OrganizationManagementPage() {
   const { isSuperAdmin, isLoading: authLoading, isAuthenticated } = useAuth()
-  const data = useUserGroups() as UserGroupsData | undefined
+  const data = useUserGroups(isSuperAdmin) as UserGroupsData | undefined
   const createGroup = useCreateUserGroup()
   const updateGroup = useUpdateUserGroup()
   const deleteGroup = useDeleteUserGroup()
@@ -92,7 +92,7 @@ export default function OrganizationManagementPage() {
     }
   }
 
-  if (authLoading || (isAuthenticated && data === undefined)) {
+  if (authLoading || (isSuperAdmin && data === undefined)) {
     return (
       <main className="container-custom py-12">
         <p role="status" className="aia-text-muted py-6 text-sm">正在加载组织管理信息…</p>

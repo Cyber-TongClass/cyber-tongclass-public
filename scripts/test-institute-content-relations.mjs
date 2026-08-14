@@ -121,6 +121,11 @@ test("public institute content DTOs allow-list research and update fields", () =
     audiences: ["undergrad", "graduate"],
     title: "Safe Research",
     authors: ["Private Author"],
+    authorDetails: [{
+      name: "Private Author",
+      coFirst: false,
+      corresponding: false,
+    }],
     venue: "Conference",
     year: 2026,
     abstract: "Abstract",

@@ -73,6 +73,6 @@ test("a manage-only reviewer is not offered an unauthorized create route", () =>
   assert.match(reviewDesk, /permissions\?\.\[category\]\?\.canCreate/)
 })
 
-test("exact detail routes defer authorization to the server relationship query", () => {
-  assert.match(accessGuard, /capability === "either"\s*\?\s*true/)
+test("exact detail routes keep the client gate aligned with every server-side review capability", () => {
+  assert.match(accessGuard, /capability === "either"[\s\S]*?rights\?\.canCreate === true[\s\S]*?rights\?\.canReview === true[\s\S]*?rights\?\.canManage === true/)
 })

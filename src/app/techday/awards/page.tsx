@@ -10,14 +10,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useTechDayActorArgs, useTechDayAwardSubmissions, useUpsertTechDayRecommendation } from "@/lib/api"
+import { useTechDayActorArgs, useTechDayAwardSubmissions, useTechDayCurrentPrincipal, useUpsertTechDayRecommendation } from "@/lib/api"
 import type { TechDayTrack } from "@/types/techday"
 
 export default function TechDayAwardsPage() {
   const actorArgs = useTechDayActorArgs()
+  const principal = useTechDayCurrentPrincipal(actorArgs)
+  const canReviewAwards = principal !== undefined && (
+    principal?.techDayUser?.role === "reviewer"
+    || principal?.techDayUser?.role === "admin"
+    || principal?.mainUser?.role === "admin"
+    || principal?.mainUser?.role === "super_admin"
+  )
   const [track, setTrack] = useState<TechDayTrack>("poster")
   const [year, setYear] = useState(String(new Date().getFullYear()))
-  const submissions = useTechDayAwardSubmissions({ ...actorArgs, track, year: year === "all" ? undefined : Number(year) } as any)
+  const submissions = useTechDayAwardSubmissions(canReviewAwards ? { ...actorArgs, track, year: year === "all" ? undefined : Number(year) } : null)
   const upsert = useUpsertTechDayRecommendation()
   const [reason, setReason] = useState("")
 

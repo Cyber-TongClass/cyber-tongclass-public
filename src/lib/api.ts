@@ -641,9 +641,9 @@ export function useSetTeacherGroupVisibility() {
 }
 
 /** Super-admin organization management: user groups with members and the account list. */
-export function useUserGroups() {
+export function useUserGroups(enabled = true) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(listUserGroupsRef, sessionToken ? ({ sessionToken } as any) : "skip")
+  return useQuery(listUserGroupsRef, enabled && sessionToken ? ({ sessionToken } as any) : "skip")
 }
 
 /** Group names and sizes for scope pickers; available to any signed-in account. */
@@ -1407,9 +1407,9 @@ export function useTeacherRecognitionCategories(includeRetired = false) {
   return useQuery(teacherRecognitionCategoriesRef, sessionToken ? ({ sessionToken, includeRetired } as any) : "skip")
 }
 
-export function useMyTeacherRecognitions() {
+export function useMyTeacherRecognitions(enabled = true) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(teacherRecognitionMineRef, sessionToken ? ({ sessionToken } as any) : "skip")
+  return useQuery(teacherRecognitionMineRef, enabled && sessionToken ? ({ sessionToken } as any) : "skip")
 }
 
 export function useMyTeacherRecognitionDetail(input?: { draftId?: string; submissionId?: string } | null) {
@@ -1535,9 +1535,9 @@ export function useAdminSetOAFormPinned() {
 }
 
 /** Canonical form-management surface for owner teachers and all-seeing super administrators. */
-export function useManageOAForms() {
+export function useManageOAForms(enabled = true) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(manageListOAFormsRef, sessionToken ? ({ sessionToken } as any) : "skip")
+  return useQuery(manageListOAFormsRef, enabled && sessionToken ? ({ sessionToken } as any) : "skip")
 }
 
 /** Target forms the current form editor is authorized to reference. */
@@ -2253,15 +2253,15 @@ export function useTechDayPublicSubmissions(args?: {
   return useQuery(techdayApi.techday.submissions.listPublic, (args || {}) as any)
 }
 
-export function useTechDaySubmissionById(id?: string | null, args?: TechDayActorArgs) {
+export function useTechDaySubmissionById(id?: string | null, args?: TechDayActorArgs | null) {
   return useQuery(
     techdayApi.techday.submissions.getById,
-    id ? ({ ...(args || {}), id: id as any } as any) : "skip"
+    id && args !== null ? ({ ...(args || {}), id: id as any } as any) : "skip"
   )
 }
 
-export function useMyTechDaySubmissions(args?: TechDayActorArgs) {
-  return useQuery(techdayApi.techday.submissions.listMine, args || {})
+export function useMyTechDaySubmissions(args?: TechDayActorArgs | null) {
+  return useQuery(techdayApi.techday.submissions.listMine, args === null ? "skip" : args || {})
 }
 
 export function useCreateTechDaySubmission() {
@@ -2348,15 +2348,15 @@ export function useDeleteTechDayAward() {
   return useMutation(techdayApi.techday.awards.deleteAward)
 }
 
-export function useTechDayAwardSubmissions(args?: TechDayActorArgs & {
+export function useTechDayAwardSubmissions(args?: (TechDayActorArgs & {
   directionIds?: string[]
   status?: string[]
   sortBy?: "sequence" | "id"
   sortOrder?: "asc" | "desc"
   track?: "poster" | "demo"
   year?: number
-}) {
-  return useQuery(techdayApi.techday.awards.listAwardSubmissions, (args || {}) as any)
+}) | null) {
+  return useQuery(techdayApi.techday.awards.listAwardSubmissions, args === null ? "skip" : (args || {}) as any)
 }
 
 export function useUpsertTechDayRecommendation() {
@@ -2375,12 +2375,12 @@ export function useTechDayPosts(args?: TechDayActorArgs) {
   return useQuery(techdayApi.techday.posts.listPublished, args || {})
 }
 
-export function useTechDayPostBySlug(slug?: string | null, args?: TechDayActorArgs) {
-  return useQuery(techdayApi.techday.posts.getBySlug, slug ? ({ ...(args || {}), slug } as any) : "skip")
+export function useTechDayPostBySlug(slug?: string | null, args?: TechDayActorArgs | null) {
+  return useQuery(techdayApi.techday.posts.getBySlug, slug && args !== null ? ({ ...(args || {}), slug } as any) : "skip")
 }
 
-export function useManageTechDayPosts(args?: TechDayActorArgs) {
-  return useQuery(techdayApi.techday.posts.listManage, args || {})
+export function useManageTechDayPosts(args?: TechDayActorArgs | null) {
+  return useQuery(techdayApi.techday.posts.listManage, args === null ? "skip" : args || {})
 }
 
 export function useExportTechDayPosts(args?: TechDayActorArgs | null) {

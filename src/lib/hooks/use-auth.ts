@@ -4,6 +4,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery, useMutation } from "convex/react"
 import { makeFunctionReference } from "convex/server"
+import { publicLoginError, shouldRetryLegacyLogin } from "@/lib/auth-errors"
 import type { UserRole } from "@/types"
 
 const TONGCLASS_SESSION_TOKEN_KEY = "tongclass_session_token"
@@ -77,7 +78,9 @@ export function useAuth() {
           identifier: trimmedIdentifier,
           password: password
         })
-      } catch {
+      } catch (error: unknown) {
+        if (!shouldRetryLegacyLogin(error)) throw error
+
         // The currently served frontend can be newer than the deployed Convex
         // schema. Retry the legacy payload so existing Tong Class sessions keep
         // working until the backend deployment catches up.
@@ -96,8 +99,7 @@ export function useAuth() {
       }
       return { ok: false, error: "登录失败" }
     } catch (error: unknown) {
-      const err = error as { message?: string }
-      return { ok: false, error: err.message || "登录失败" }
+      return { ok: false, error: publicLoginError(error) }
     }
   }, [loginMutation])
 

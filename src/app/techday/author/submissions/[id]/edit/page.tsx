@@ -9,13 +9,21 @@ import { TechDayFileUpload } from "@/components/techday/techday-file-controls"
 import { TechDaySubmissionForm } from "@/components/techday/techday-submission-form"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { useFinalizeTechDayPoster, useTechDayActorArgs, useTechDaySubmissionById, useUpdateTechDaySubmission } from "@/lib/api"
+import { useFinalizeTechDayPoster, useTechDayActorArgs, useTechDayCurrentPrincipal, useTechDaySubmissionById, useUpdateTechDaySubmission } from "@/lib/api"
+import { canUseTechDayAuthorTools } from "@/types/techday"
 
 export default function EditTechDaySubmissionPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const actorArgs = useTechDayActorArgs()
-  const submission = useTechDaySubmissionById(params.id, actorArgs)
+  const principal = useTechDayCurrentPrincipal(actorArgs)
+  const canAccessAuthorTools = principal !== undefined && (
+    canUseTechDayAuthorTools(principal?.techDayUser)
+    || principal?.techDayUser?.role === "admin"
+    || principal?.mainUser?.role === "admin"
+    || principal?.mainUser?.role === "super_admin"
+  )
+  const submission = useTechDaySubmissionById(params.id, canAccessAuthorTools ? actorArgs : null)
   const update = useUpdateTechDaySubmission()
   const finalizePoster = useFinalizeTechDayPoster()
 

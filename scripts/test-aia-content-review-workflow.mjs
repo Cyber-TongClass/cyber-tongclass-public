@@ -34,7 +34,11 @@ test("submission fingerprints are stable across object-key order and change with
 test("task natural keys are deterministic per submission and reviewer", () => {
   assert.equal(
     contentReviewTaskNaturalKey("submission-1", "reviewer-1"),
-    "content-review:submission-1:reviewer:reviewer-1",
+    "content-review:submission-1:publication_approval:reviewer:reviewer-1",
+  )
+  assert.equal(
+    contentReviewTaskNaturalKey("submission-1", "reviewer-1", "source_review"),
+    "content-review:submission-1:source_review:reviewer:reviewer-1",
   )
 })
 

@@ -8,11 +8,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useDeleteTechDaySubmission, useMyTechDaySubmissions, useTechDayActorArgs, useTechDayCurrentPrincipal } from "@/lib/api"
+import { canUseTechDayAuthorTools } from "@/types/techday"
 
 export default function TechDayAuthorProfilePage() {
   const actorArgs = useTechDayActorArgs()
   const principal = useTechDayCurrentPrincipal(actorArgs)
-  const submissions = useMyTechDaySubmissions(actorArgs)
+  const canAccessAuthorTools = principal !== undefined && (
+    canUseTechDayAuthorTools(principal?.techDayUser)
+    || principal?.techDayUser?.role === "admin"
+    || principal?.mainUser?.role === "admin"
+    || principal?.mainUser?.role === "super_admin"
+  )
+  const submissions = useMyTechDaySubmissions(canAccessAuthorTools ? actorArgs : null)
   const remove = useDeleteTechDaySubmission()
 
   return (

@@ -27,6 +27,6 @@ test("permission mutations do not persist empty permission rows", () => {
     permissions.indexOf("export const setPermissionsForScope"),
     permissions.indexOf("export const removePermission"),
   )
-  assert.match(direct, /!args\.canCreate\s*&&\s*!args\.canManage[\s\S]*?ctx\.db\.delete/)
-  assert.match(scoped, /!args\.canCreate\s*&&\s*!args\.canManage[\s\S]*?ctx\.db\.delete/)
+  assert.match(direct, /!args\.canCreate\s*&&\s*!canReview\s*&&\s*!args\.canManage[\s\S]*?ctx\.db\.delete/)
+  assert.match(scoped, /!args\.canCreate\s*&&\s*!canReview\s*&&\s*!args\.canManage[\s\S]*?ctx\.db\.delete/)
 })

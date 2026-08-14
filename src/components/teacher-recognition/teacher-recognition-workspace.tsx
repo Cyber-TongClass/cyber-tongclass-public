@@ -38,7 +38,7 @@ export function TeacherRecognitionWorkspace() {
   const { isAuthenticated, isLoading } = useAuth()
   const access = useTeacherRecognitionAccess() as { isTeacher: boolean; canReview: boolean; canManage: boolean } | undefined
   const categories = useTeacherRecognitionCategories() as Array<{ id: string; label: string }> | undefined
-  const rows = useMyTeacherRecognitions() as any[] | undefined
+  const rows = useMyTeacherRecognitions(access?.isTeacher === true) as any[] | undefined
   const saveDraft = useSaveTeacherRecognitionDraft()
   const removeDraft = useRemoveTeacherRecognitionDraft()
   const submitDraft = useSubmitTeacherRecognitionDraft()
