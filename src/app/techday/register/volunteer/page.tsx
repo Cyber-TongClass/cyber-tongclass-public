@@ -96,6 +96,7 @@ export default function TechDayVolunteerRegisterPage() {
         router.push("/techday/volunteer/profile")
         return
       }
+      setForm((current) => ({ ...current, password: "" }))
       setMessage("报名已提交，需管理员启用并分配组织后才能进入报销与志愿者工作区。")
     } catch (error) {
       setError(error instanceof Error ? error.message : "报名失败")

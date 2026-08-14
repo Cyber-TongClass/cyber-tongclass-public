@@ -15,7 +15,14 @@ import {
   Trophy,
   Users,
 } from "lucide-react"
-import { useAdminEvents, useAdminUsers, useCourseListWithReviews, useNews, usePendingReviews } from "@/lib/api"
+import {
+  useAdminEvents,
+  useAdminUsers,
+  useCourseListWithReviews,
+  useMyContentPermissions,
+  useNews,
+  usePendingReviews,
+} from "@/lib/api"
 
 type Activity = {
   key: string
@@ -39,9 +46,10 @@ function formatRelativeTime(timestamp: number) {
 export default function AdminDashboard() {
   const [stats, setStats] = useState({ users: 0, news: 0, events: 0, pendingReviews: 0, courses: 0 })
   const [activities, setActivities] = useState<Activity[]>([])
+  const permissions = useMyContentPermissions()
   const usersData = useAdminUsers({ limit: 1000 })
   const newsData = useNews()
-  const eventsData = useAdminEvents()
+  const eventsData = useAdminEvents({ disabled: permissions?.events.canManage !== true })
   const coursesData = useCourseListWithReviews()
   const pendingReviewsData = usePendingReviews()
 

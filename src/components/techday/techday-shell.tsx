@@ -1,11 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { CalendarDays, FileText, Receipt, Settings, Trophy, UserRound } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { CalendarDays, FileText, LogOut, Receipt, Settings, Trophy, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useTechDayActorArgs, useTechDayCurrentPrincipal, useSyncInternalTechDayUser } from "@/lib/api"
+import {
+  notifyTechDayActorStorageChanged,
+  useSyncInternalTechDayUser,
+  useTechDayActorArgs,
+  useTechDayCurrentPrincipal,
+  useTechDayLogout,
+} from "@/lib/api"
 import { canUseTechDayAuthorTools } from "@/types/techday"
 import { useEffect } from "react"
 
@@ -38,9 +44,11 @@ export function TechDayShell({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const actorArgs = useTechDayActorArgs()
   const principal = useTechDayCurrentPrincipal(actorArgs)
   const syncInternal = useSyncInternalTechDayUser()
+  const logout = useTechDayLogout()
 
   useEffect(() => {
     const shouldSyncAdmin = principal?.mainUser?.role === "admin" || principal?.mainUser?.role === "super_admin"
@@ -53,6 +61,20 @@ export function TechDayShell({
   const role = principal?.techDayUser?.role
   const isAdmin = role === "admin" || principal?.mainUser?.role === "admin" || principal?.mainUser?.role === "super_admin"
   const visibleLinks = links.filter((item) => item.visible({ role, isAdmin }))
+
+  const handleTechDayLogout = async () => {
+    const techDaySessionToken = actorArgs.techDaySessionToken
+    if (!techDaySessionToken) return
+
+    try {
+      await logout({ techDaySessionToken })
+    } finally {
+      window.localStorage.removeItem("techday_session_token")
+      notifyTechDayActorStorageChanged()
+      router.push("/techday/login")
+      router.refresh()
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[hsl(211,30%,97%)]">
@@ -99,6 +121,12 @@ export function TechDayShell({
                 <Link href="/techday/login">TechDay 登录</Link>
               </Button>
             )}
+            {actorArgs.techDaySessionToken ? (
+              <Button type="button" variant="ghost" size="sm" onClick={() => void handleTechDayLogout()}>
+                <LogOut className="mr-2 h-4 w-4" />
+                退出
+              </Button>
+            ) : null}
             <Button asChild variant="secondary" size="sm">
               <Link href={principal?.mainUser || canUseTechDayAuthorTools(principal?.techDayUser) ? "/techday/author/submissions/new" : "/techday/register/author"}>
                 {principal?.mainUser || canUseTechDayAuthorTools(principal?.techDayUser) ? "投稿" : "作者注册"}

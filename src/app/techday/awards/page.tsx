@@ -1,13 +1,14 @@
 "use client"
 
-import { FormEvent, useState } from "react"
+import { FormEvent, useRef, useState } from "react"
 import { TechDayShell } from "@/components/techday/techday-shell"
 import { TechDayAccessGuard } from "@/components/techday/techday-access-guard"
 import { TechDayAwardBadge } from "@/components/techday/techday-badges"
 import { TechDayTrackSelect, TechDayYearSelect } from "@/components/techday/techday-filters"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useTechDayActorArgs, useTechDayAwardSubmissions, useTechDayCurrentPrincipal, useUpsertTechDayRecommendation } from "@/lib/api"
@@ -27,11 +28,23 @@ export default function TechDayAwardsPage() {
   const submissions = useTechDayAwardSubmissions(canReviewAwards ? { ...actorArgs, track, year: year === "all" ? undefined : Number(year) } : null)
   const upsert = useUpsertTechDayRecommendation()
   const [reason, setReason] = useState("")
+  const [openSubmissionId, setOpenSubmissionId] = useState<string | null>(null)
+  const openSubmissionIdRef = useRef<string | null>(null)
+  const [submittingRecommendationId, setSubmittingRecommendationId] = useState<string | null>(null)
 
   const recommend = async (event: FormEvent<HTMLFormElement>, submissionId: string) => {
     event.preventDefault()
-    await upsert({ ...actorArgs, submissionId: submissionId as any, reason, confidence: 0.8 })
-    setReason("")
+    setSubmittingRecommendationId(submissionId)
+    try {
+      await upsert({ ...actorArgs, submissionId: submissionId as any, reason, confidence: 0.8 })
+      if (openSubmissionIdRef.current === submissionId) {
+        openSubmissionIdRef.current = null
+        setReason("")
+        setOpenSubmissionId(null)
+      }
+    } finally {
+      setSubmittingRecommendationId((current) => current === submissionId ? null : current)
+    }
   }
 
   return (
@@ -56,13 +69,36 @@ export default function TechDayAwardsPage() {
                     <TableCell><div className="flex flex-wrap gap-1">{item.awardBadges?.map((award: any) => <TechDayAwardBadge key={award._id} name={award.name} color={award.color} />)}</div></TableCell>
                     <TableCell>{item.reviewerTags?.length || 0}</TableCell>
                     <TableCell className="text-right">
-                      <Dialog>
+                      <Dialog
+                        open={openSubmissionId === String(item._id)}
+                        onOpenChange={(open) => {
+                          if (submittingRecommendationId === String(item._id)) return
+                          const nextSubmissionId = open ? String(item._id) : null
+                          openSubmissionIdRef.current = nextSubmissionId
+                          setOpenSubmissionId(nextSubmissionId)
+                          if (!open) setReason("")
+                        }}
+                      >
                         <DialogTrigger asChild><Button size="sm" variant="outline">推荐</Button></DialogTrigger>
                         <DialogContent>
-                          <DialogHeader><DialogTitle>推荐作品</DialogTitle></DialogHeader>
+                          <DialogHeader>
+                            <DialogTitle>推荐作品</DialogTitle>
+                            <DialogDescription>填写推荐理由并保存；同一审阅者再次提交会更新原有推荐。</DialogDescription>
+                          </DialogHeader>
                           <form className="space-y-3" onSubmit={(event) => recommend(event, item._id)}>
-                            <Textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="推荐理由" required />
-                            <Button type="submit">保存推荐</Button>
+                            <div className="space-y-2">
+                              <Label htmlFor="recommendation-reason">推荐理由</Label>
+                              <Textarea
+                                id="recommendation-reason"
+                                value={reason}
+                                onChange={(event) => setReason(event.target.value)}
+                                placeholder="请说明推荐依据"
+                                required
+                              />
+                            </div>
+                            <Button type="submit" disabled={submittingRecommendationId === String(item._id)}>
+                              {submittingRecommendationId === String(item._id) ? "保存中..." : "保存推荐"}
+                            </Button>
                           </form>
                         </DialogContent>
                       </Dialog>
