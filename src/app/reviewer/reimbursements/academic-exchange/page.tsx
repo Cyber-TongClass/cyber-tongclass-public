@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatCurrency, formatDate } from "@/lib/academic-exchange"
+import { formatCurrency, formatDate, getAcademicExchangePdfDownloadName } from "@/lib/academic-exchange"
 import { getAcademicExchangePaperPdfLabel } from "@/lib/academic-exchange-pdf-source"
 import type { AcademicExchangeSupportApplication } from "@/types"
 
@@ -36,7 +36,7 @@ async function downloadReviewerPdf(application: AcademicExchangeSupportApplicati
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
-  anchor.download = getDownloadFileName(response, `通班学术交流支持项目申请表-${application.projectName}-${application.applicantName}.pdf`)
+  anchor.download = getDownloadFileName(response, getAcademicExchangePdfDownloadName(application))
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()

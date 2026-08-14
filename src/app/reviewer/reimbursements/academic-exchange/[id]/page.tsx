@@ -7,7 +7,7 @@ import { ArrowLeft, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatCurrency, formatDate, formatPaperAuthors } from "@/lib/academic-exchange"
+import { formatCurrency, formatDate, formatPaperAuthors, getAcademicExchangePdfDownloadName } from "@/lib/academic-exchange"
 import { getAcademicExchangePaperPdfLabel, hasAcademicExchangePaperPdfAttachment } from "@/lib/academic-exchange-pdf-source"
 import type { AcademicExchangeSupportApplication } from "@/types"
 
@@ -45,7 +45,7 @@ async function downloadReviewerPdf(application: AcademicExchangeSupportApplicati
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
-  anchor.download = getDownloadFileName(response, `通班学术交流支持项目申请表-${application.projectName}-${application.applicantName}.pdf`)
+  anchor.download = getDownloadFileName(response, getAcademicExchangePdfDownloadName(application))
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()

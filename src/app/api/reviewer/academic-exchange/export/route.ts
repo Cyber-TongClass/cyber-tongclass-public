@@ -5,7 +5,8 @@ import { REVIEWER_SESSION_COOKIE } from "@/lib/server/reviewer-session"
 import { getPublicationAuthorName } from "@/lib/publication-authors"
 import { getAcademicExchangePaperPdfLabel } from "@/lib/academic-exchange-pdf-source"
 import { fetchUploadedAcademicExchangePaperPdf } from "@/lib/server/academic-exchange-paper-pdf"
-import { buildAcademicExchangePdf, sanitizeAcademicExchangePdfFileName } from "@/lib/server/academic-exchange-pdf"
+import { buildAcademicExchangePdf } from "@/lib/server/academic-exchange-pdf"
+import { getAcademicExchangeFileNameDate, sanitizeAcademicExchangePdfFileName } from "@/lib/academic-exchange"
 import { buildSimpleXlsx } from "@/lib/server/simple-xlsx"
 import { buildSimpleZip } from "@/lib/server/simple-zip"
 
@@ -22,6 +23,34 @@ function formatDate(value?: string | number | null) {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(value))
+}
+
+/**
+ * 会议简称提取：优先取括号/斜杠/全角括号内的英文缩写（如 "AAAI 2025"、"CVPR 2025"），
+ * 没有则取全称中的英文缩写段（含年份，如 "ICML 2025"、"NeurIPS 2025"），仍无则返回全称。
+ */
+function getConferenceShortName(projectName: string): string {
+  const name = String(projectName || "").trim()
+  if (!name) return ""
+  // 1) 括号内优先（如 "第38届AAAI会议（AAAI 2025）"、"CVPR 2025 (Conference on ...)"）
+  const bracket = name.match(/[（(]([^（）()]*[A-Za-z][^（）()]*)[）)]/)
+  if (bracket) {
+    const inner = bracket[1].trim()
+    // 括号内是简短缩写（含年份且较短）直接用；是长全称则忽略括号
+    const shortMatch = inner.match(/\b([A-Z][A-Za-z]*\s*\d{4})\b|\b([A-Z]{2,})\b/)
+    if (shortMatch) {
+      const short = (shortMatch[1] || shortMatch[2] || "").trim()
+      if (short.length <= 20) return short
+    }
+  }
+  // 2) 全称中独立的英文缩写段（含年份）："ICML 2025"、"NeurIPS 2025"
+  const english = name.match(/\b([A-Z][A-Za-z]*\s+\d{4})\b|\b([A-Z]{2,})\b/)
+  if (english) {
+    const short = (english[1] || english[2] || "").trim()
+    if (short.length <= 20) return short
+  }
+  // 3) 兜底：整串全称
+  return name
 }
 
 function getApplicationYear(application: any) {
@@ -66,7 +95,7 @@ function buildSummaryRows(applications: any[], allApplications: any[]) {
     application.applicantName || "",
     application.studentId || "",
     application.projectCategory || "",
-    application.projectName || "",
+    getConferenceShortName(application.projectName || ""),
     application.projectTime || "",
     application.exchangeLocation || "",
     application.otherFunding || "",
@@ -128,9 +157,9 @@ export async function POST(request: NextRequest) {
       const paperPdfBytes = await fetchUploadedAcademicExchangePaperPdf(client, application, { reviewerSessionToken })
       const pdfBytes = await buildAcademicExchangePdf(application, { paperPdfBytes })
       const applicantName = sanitizeAcademicExchangePdfFileName(application.applicantName || "申请人")
-      const projectName = sanitizeAcademicExchangePdfFileName(application.projectName || String(application._id))
+      const fileDate = getAcademicExchangeFileNameDate(application)
       zipEntries.push({
-        name: `${folderName}/申请表PDF/通班学术交流支持项目申请表-${projectName}-${applicantName}.pdf`,
+        name: `${folderName}/申请表PDF/通班学术交流支持申请表-${applicantName}-${fileDate}.pdf`,
         data: Buffer.from(pdfBytes),
       })
       await client.mutation(logDownloadRef, {

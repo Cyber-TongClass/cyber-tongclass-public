@@ -28,6 +28,44 @@ export function formatDate(value?: number | string | null) {
   }).format(new Date(value))
 }
 
+/**
+ * 从项目时间（如 "2026.08.01-2026.08.18"）提取开会年月 YYYYMM（如 "202608"）。
+ * 取第一段日期的年月；解析失败时回退到 applicationDate / createdAt / 当前时间。
+ */
+export function getAcademicExchangeFileNameDate(application: { projectTime?: string; applicationDate?: string; createdAt?: number | string }): string {
+  const extractFromDate = (date: Date): string => `${date.getFullYear()}${`${date.getMonth() + 1}`.padStart(2, "0")}`
+  const fallback = (source?: string | number | null): string => {
+    if (source === undefined || source === null || source === "") return ""
+    // 数字时间戳（毫秒）→ 转 Date
+    if (typeof source === "number" && source > 100000000000) {
+      return extractFromDate(new Date(source))
+    }
+    const str = String(source)
+    // 字符串日期：优先 YYYYMMDD / YYYY-MM-DD / YYYY.MM.DD / YYYY年MM月
+    const m = str.match(/(\d{4})[.\-\/年]?(\d{1,2})/)
+    return m ? `${m[1]}${m[2].padStart(2, "0")}` : ""
+  }
+  // 1) 优先从 projectTime 取开会年月（第一段日期）
+  const projectTime = String(application.projectTime || "")
+  const firstDate = projectTime.split("-")[0] || projectTime.split("至")[0] || projectTime
+  const fromProjectTime = fallback(firstDate)
+  if (fromProjectTime) return fromProjectTime
+  // 2) 回退 applicationDate / createdAt
+  return fallback(application.applicationDate) || fallback(application.createdAt) || extractFromDate(new Date())
+}
+
+/** 申请表下载文件名：通班学术交流支持申请表-姓名-YYYYMM.pdf */
+export function getAcademicExchangePdfDownloadName(application: AcademicExchangeSupportApplication): string {
+  const applicantName = sanitizeAcademicExchangePdfFileName(application.applicantName || "申请人")
+  return `通班学术交流支持申请表-${applicantName}-${getAcademicExchangeFileNameDate(application)}.pdf`
+}
+
+export function sanitizeAcademicExchangePdfFileName(name: string) {
+  return String(name || "")
+    .replace(/[\\/:*?"<>|\n\r\t]/g, "_")
+    .trim()
+}
+
 export function formatCurrency(value: number) {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
@@ -107,7 +145,7 @@ export async function downloadAcademicExchangePdf(application: AcademicExchangeS
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
-  anchor.download = `通班学术交流支持项目申请表-${application.projectName || application._id}-${application.applicantName || "申请人"}.pdf`
+  anchor.download = getAcademicExchangePdfDownloadName(application)
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
