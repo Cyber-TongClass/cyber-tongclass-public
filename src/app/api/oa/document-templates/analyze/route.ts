@@ -20,7 +20,7 @@ import {
   verifyAuthorizedSource,
 } from "@/lib/server/oa-document-access"
 import { createMarkerPlan, matchWordNodesToPdf, validateMarkerLayout } from "@/lib/server/oa-layout-matcher"
-import { parsePdfBboxXml } from "@/lib/server/oa-pdf-layout"
+import { parsePdfBboxXml, reconcilePdfPageGeometry } from "@/lib/server/oa-pdf-layout"
 import { buildOAPreviewBundle, OA_PREVIEW_ANALYZER_VERSION } from "@/lib/server/oa-preview-bundle"
 import {
   detectPreviewToolCapabilities,
@@ -59,10 +59,6 @@ function jsonError(error: unknown) {
   if (/请求内容|JSON|ZIP|OOXML|源文件|大小|magic|解析失败|格式/.test(message)) return NextResponse.json({ ok: false, code: "INVALID_DOCUMENT", message: "Word 模板文件或请求无效" }, { status: 422, headers: noStoreHeaders() })
   if (/Office|LibreOffice|PDF|pdf|字体|转换|超时|布局|几何|工具|不可用/.test(message)) return NextResponse.json({ ok: false, code: "PREVIEW_CONFLICT", message: "文档预览转换失败，请检查 Office、字体与 PDF 工具配置" }, { status: 409, headers: noStoreHeaders() })
   return NextResponse.json({ ok: false, code: "OA_DOCUMENT_ERROR", message: "Word 模板分析失败" }, { status: 500, headers: noStoreHeaders() })
-}
-
-function samePageGeometry(left: { width: number; height: number; rotation: number }, right: { width: number; height: number; rotation: number }) {
-  return Math.abs(left.width - right.width) <= 0.1 && Math.abs(left.height - right.height) <= 0.1 && left.rotation === right.rotation
 }
 
 function outputMode(node: OAWordWritableNode): OADocumentAnchor["output"]["mode"] {
@@ -118,8 +114,10 @@ async function resolveHardBlanksWithMarkers(args: {
     })
     const markedPdf = await convertFilledDocxToPdf(filled.bytes, args.workingFileName, { capabilities: args.officeCapabilities })
     const markedPages = await inspectPdf(markedPdf.bytes, args.previewTools)
-    const markedLayout = parsePdfBboxXml(await extractPdfBboxXml(markedPdf.bytes, args.previewTools))
-    markedLayout.pages = markedPages
+    const markedLayout = reconcilePdfPageGeometry(
+      parsePdfBboxXml(await extractPdfBboxXml(markedPdf.bytes, args.previewTools)),
+      markedPages,
+    )
     const resolution = validateMarkerLayout(plan, args.cleanPages, markedLayout)
     const nodeById = new Map(eligible.map((node) => [node.id, node]))
     return resolution.resolved.flatMap((item) => {
@@ -182,12 +180,12 @@ export async function POST(request: Request) {
     const capabilities = publicOfficeCapabilities(officeCapabilities)
     if (!officeCapabilities.canExportPdf) throw new OADocumentRouteError("OFFICE_UNAVAILABLE", officeCapabilities.unavailableReasons[0] || "模板字体未就绪", 409)
     const convertedPdf = await convertFilledDocxToPdf(workingBytes, workingFileName, { capabilities: officeCapabilities })
-    const pages = await inspectPdf(convertedPdf.bytes, previewTools)
-    const layout = parsePdfBboxXml(await extractPdfBboxXml(convertedPdf.bytes, previewTools))
-    if (layout.pages.length !== pages.length || layout.pages.some((page, index) => !samePageGeometry(page, pages[index]))) {
-      throw new OADocumentRouteError("PDF_LAYOUT_MISMATCH", "PDF 页面与文字布局几何不一致", 409)
-    }
-    layout.pages = pages
+    const inspectedPages = await inspectPdf(convertedPdf.bytes, previewTools)
+    const layout = reconcilePdfPageGeometry(
+      parsePdfBboxXml(await extractPdfBboxXml(convertedPdf.bytes, previewTools)),
+      inspectedPages,
+    )
+    const pages = layout.pages
     const fonts = await inspectPdfFonts(convertedPdf.bytes, previewTools)
     if (!fonts.length) throw new OADocumentRouteError("PDF_FONTS_UNVERIFIED", "无法验证 PDF 字体，请检查模板字体配置", 409)
     const unembedded = fonts.filter((font) => !font.embedded)

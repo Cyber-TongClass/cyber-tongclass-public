@@ -25,6 +25,27 @@ export interface OAPdfLayout {
   textBoxes: OAPdfTextBox[]
 }
 
+/**
+ * pdfinfo and pdftotext can round the same PDF page to slightly different
+ * decimal point sizes. Text boxes are normalized against pdftotext's bbox
+ * page, so that geometry must remain canonical instead of being overwritten
+ * with the rounded pdfinfo value.
+ */
+export function reconcilePdfPageGeometry(layout: OAPdfLayout, inspectedPages: OAPdfPageInfo[]) {
+  if (layout.pages.length !== inspectedPages.length) throw new Error("PDF 页面与文字布局几何不一致")
+  layout.pages.forEach((page, index) => {
+    const inspected = inspectedPages[index]
+    if (
+      !inspected
+      || page.page !== inspected.page
+      || Math.abs(page.width - inspected.width) > 0.1
+      || Math.abs(page.height - inspected.height) > 0.1
+      || page.rotation !== inspected.rotation
+    ) throw new Error("PDF 页面与文字布局几何不一致")
+  })
+  return layout
+}
+
 function localName(node: XmlNode) {
   return (node.localName || node.nodeName.split(":").at(-1) || "").toLocaleLowerCase("en-US")
 }

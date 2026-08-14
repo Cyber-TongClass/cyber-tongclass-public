@@ -162,6 +162,21 @@ test("accepts only Poppler's fixed XHTML doctype without resolving external enti
   assert.throws(() => pdfLayout.parsePdfBboxXml(`<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>${body}`), /实体/)
 })
 
+test("keeps bbox page geometry canonical when pdfinfo differs only by rounding", () => {
+  const layout = pdfLayout.parsePdfBboxXml(bbox([[['姓名', 60, 80, 120, 100]]]))
+  const reconciled = pdfLayout.reconcilePdfPageGeometry(layout, [
+    { page: 1, width: 600.08, height: 799.94, rotation: 0 },
+  ])
+  assert.equal(reconciled, layout)
+  assert.equal(reconciled.pages[0].width, 600)
+  assert.equal(reconciled.pages[0].height, 800)
+  assert.equal(reconciled.textBoxes[0].pageWidth, 600)
+  assert.equal(reconciled.textBoxes[0].pageHeight, 800)
+  assert.throws(() => pdfLayout.reconcilePdfPageGeometry(layout, [
+    { page: 1, width: 601, height: 800, rotation: 0 },
+  ]), /几何不一致/)
+})
+
 test("choice visuals cover the complete option group instead of a small box after its label", () => {
   const nodes = wordLayout.indexWordWritableNodes(pkg(xml)).filter((node) => node.writeTarget === "choice")
   const pdf = pdfLayout.parsePdfBboxXml(bbox([[['类型', 30, 200, 70, 220], ['教学', 90, 200, 125, 220], ['科研', 140, 200, 175, 220], ['管理', 190, 200, 225, 220]]]))
