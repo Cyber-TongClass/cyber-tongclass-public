@@ -30,6 +30,7 @@ function manifestField(suggestion: OADocumentSuggestion, fieldId: string): OADoc
     ...(suggestion.maxLength ? { maxLength: suggestion.maxLength } : {}),
     ...(suggestion.placeholder ? { placeholder: suggestion.placeholder.trim() } : {}),
     ...(suggestion.options?.length ? { options: suggestion.options.map((option) => option.trim()).filter(Boolean) } : {}),
+    ...(suggestion.columns?.length ? { columns: suggestion.columns } : {}),
   }
 }
 
@@ -109,6 +110,7 @@ function oaFieldType(answerType: OADocumentAnswerType): OAFormField["type"] {
   if (answerType === "single_choice") return "radio"
   if (answerType === "multiple_choice") return "checkbox"
   if (answerType === "file") return "file"
+  if (answerType === "table") return "table"
   return "text"
 }
 
@@ -127,6 +129,7 @@ export function documentManifestToOAFormFields(manifest: OADocumentTemplateManif
       ...(field.options?.length
         ? { options: field.options.map((option) => ({ label: option, value: option })) }
         : {}),
+      ...(field.columns?.length ? { columns: field.columns } : {}),
       ...(anchor ? { documentOutput: { ...anchor.output } } : {}),
       ...(field.answerType === "file" ? { maxFiles: 1, maxFileSizeMB: 20 } : {}),
     }

@@ -79,6 +79,24 @@ test("validates stable, unique manifest fields and anchor natural keys", () => {
   assert.throws(() => domain.validateTemplateManifest({ ...manifest, anchors: [{ ...anchor, fieldId: "missing" }] }), /不存在的字段/)
 })
 
+test("validates table fields with safe deterministic columns", () => {
+  const tableField = {
+    fieldId: "education_rows",
+    label: "主要教育经历",
+    answerType: "table",
+    required: false,
+    columns: [
+      { id: "column_1", label: "起止年月", type: "text", required: true },
+      { id: "column_2", label: "学校名称", type: "text" },
+      { id: "column_3", label: "学位", type: "text" },
+    ],
+  }
+  const manifest = { syntaxVersion: 1, compilerVersion: "test", fields: [tableField], anchors: [], suggestions: [] }
+  assert.doesNotThrow(() => domain.validateTemplateManifest(manifest))
+  assert.throws(() => domain.validateTemplateManifest({ ...manifest, fields: [{ ...tableField, columns: [] }] }), /表格字段.*列/)
+  assert.throws(() => domain.validateTemplateManifest({ ...manifest, fields: [{ ...tableField, columns: [{ id: "bad id", label: "列", type: "text" }] }] }), /表格列 ID/)
+})
+
 const visual = {
   page: 4,
   x: 0.12,

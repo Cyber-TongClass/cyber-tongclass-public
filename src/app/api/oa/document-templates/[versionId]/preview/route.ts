@@ -54,6 +54,7 @@ export async function GET(request: Request, context: { params: Promise<{ version
         required: suggestion.required,
         maxLength: suggestion.maxLength,
         options: suggestion.options,
+        columns: suggestion.columns,
         visual: suggestion.visual,
         bindingCandidateIds: suggestion.bindingCandidateIds,
       })),

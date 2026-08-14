@@ -39,6 +39,15 @@ function normalizeFontName(value: string) {
   return value.normalize("NFKC").toLocaleLowerCase("zh-CN").replace(/[\s_-]+/g, "")
 }
 
+const COMPATIBLE_FONT_NAMES: Record<string, string[]> = {
+  仿宋: ["仿宋_GB2312", "FangSong", "FandolFang", "方正仿宋_GBK", "FZFangSong-Z02", "FZFSK", "FZFSK--GBK1-0"],
+  仿宋gb2312: ["仿宋", "FangSong", "FandolFang", "方正仿宋_GBK", "FZFangSong-Z02", "FZFSK", "FZFSK--GBK1-0"],
+}
+
+export function compatibleOfficeFontNames(value: string) {
+  return COMPATIBLE_FONT_NAMES[normalizeFontName(value)] || []
+}
+
 export function missingConvertedPdfFonts(required: string[], aliases: Record<string, string[]>, pdfFontNames: string[]) {
   const converted = pdfFontNames.map((name) => normalizeFontName(name.replace(/^[A-Z]{6}\+/, "")))
   return required.filter((name) => {
@@ -157,12 +166,12 @@ export async function resolveOfficeFontAliases(fontNames: string[], directory = 
   if (!fontNames.length) return {}
   const configured = directory?.trim() && path.isAbsolute(directory.trim()) ? path.normalize(directory.trim()) : null
   const directories = [configured, "/System/Library/Fonts", "/System/Library/Fonts/Supplemental", "/Library/Fonts"].filter((value): value is string => Boolean(value))
-  const preferredKeys = new Set(fontNames.map(normalizeFontName))
+  const preferredKeys = new Set(fontNames.flatMap((name) => [name, ...compatibleOfficeFontNames(name)]).map(normalizeFontName))
   const indexes = await Promise.all(directories.map((fontDirectory) => inspectFontAliases(fontDirectory, preferredKeys)))
   const result: Record<string, string[]> = {}
   for (const name of fontNames) {
     const key = normalizeFontName(name)
-    const compatibleKeys = [key, `${key}简`, `${key}繁`, `${key}sc`, `${key}tc`]
+    const compatibleKeys = [key, `${key}简`, `${key}繁`, `${key}sc`, `${key}tc`, ...compatibleOfficeFontNames(name).map(normalizeFontName)]
     const aliases = indexes.flatMap((index) => compatibleKeys.flatMap((candidate) => index.get(candidate) || []))
     if (aliases.length) result[name] = [...new Set(aliases)]
   }

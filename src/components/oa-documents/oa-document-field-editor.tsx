@@ -1,12 +1,13 @@
 "use client"
 
-import type { OADocumentAnswerType, OADocumentBindingCandidate, OADocumentOutputMode, OADocumentSuggestion, OADocumentWriteTarget } from "@/lib/oa-document-templates"
+import type { OADocumentAnswerType, OADocumentBindingCandidate, OADocumentOutputMode, OADocumentSuggestion, OADocumentTableColumn, OADocumentWriteTarget } from "@/lib/oa-document-templates"
 
 type PreviewCandidate = Pick<OADocumentBindingCandidate, "id" | "description" | "writeTarget">
 
 const answerTypes: Array<[OADocumentAnswerType, string]> = [
   ["text", "单行文本"], ["textarea", "多行文本"], ["number", "数字"], ["date", "日期"],
   ["email", "邮箱"], ["phone", "电话"], ["single_choice", "单选"], ["multiple_choice", "多选"], ["file", "附件"],
+  ["table", "可增删行表格"],
 ]
 
 const targetLabels: Record<OADocumentWriteTarget, string> = {
@@ -35,6 +36,7 @@ export function OADocumentFieldEditor({
   const outputMode: OADocumentOutputMode = suggestion.kind === "repeat_row" ? "repeat_row" : "replace"
   const selected = candidates.find((candidate) => candidate.id === selectedCandidateId)
   const hasOptions = suggestion.inferredAnswerType === "single_choice" || suggestion.inferredAnswerType === "multiple_choice"
+  const hasColumns = suggestion.inferredAnswerType === "table"
   return (
     <section aria-labelledby="document-field-editor-title" className="border-t aia-border-rule bg-[hsl(var(--aia-paper))] px-4 py-5 sm:px-6">
       <div className="grid gap-5 lg:grid-cols-4">
@@ -72,6 +74,23 @@ export function OADocumentFieldEditor({
           <label className="block lg:col-span-2">
             <span className="aia-mono text-[10px] uppercase tracking-[0.12em] aia-text-muted">选项（每行一项）</span>
             <textarea rows={4} value={(suggestion.options || []).join("\n")} onChange={(event) => update({ options: event.target.value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean) })} className="aia-focus mt-2 w-full border aia-border-rule bg-transparent p-2 text-sm" />
+          </label>
+        ) : null}
+        {hasColumns ? (
+          <label className="block lg:col-span-2">
+            <span className="aia-mono text-[10px] uppercase tracking-[0.12em] aia-text-muted">表格列（每行：名称, 类型）</span>
+            <textarea
+              rows={4}
+              value={(suggestion.columns || []).map((column) => `${column.label},${column.type}`).join("\n")}
+              onChange={(event) => update({
+                columns: event.target.value.split(/\r?\n/).map((line, index): OADocumentTableColumn | null => {
+                  const [label, rawType] = line.split(",").map((item) => item.trim())
+                  const type = rawType === "number" || rawType === "date" ? rawType : "text"
+                  return label ? { id: `column_${index + 1}`, label, type } : null
+                }).filter((column): column is OADocumentTableColumn => Boolean(column)),
+              })}
+              className="aia-focus mt-2 w-full border aia-border-rule bg-transparent p-2 text-sm"
+            />
           </label>
         ) : null}
       </div>

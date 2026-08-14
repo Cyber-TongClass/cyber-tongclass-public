@@ -139,3 +139,42 @@ test("detects complete structured questions without turning Word instructions in
   assert.ok(items.some((item) => item.label === "联合实施单位信息 · 联系人 · 联系方式"))
   assert.equal(items.some((item) => item.label === "基本概况" && item.path.includes("tbl")), false)
 })
+
+test("detects generic narrative questions inside a Word table after their instruction paragraphs", () => {
+  const tableNarratives = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>五、科学发现、影响与价值阐述（800字内）</w:t></w:r></w:p><w:p><w:r><w:t>（提炼核心科学发现并说明价值）</w:t></w:r></w:p><w:p/></w:tc></w:tr>
+    <w:tr><w:tc><w:p><w:r><w:t>六、一句话概述</w:t></w:r></w:p><w:p><w:r><w:t>（一句话概括该科学发现的本质及其意义）</w:t></w:r></w:p><w:p/></w:tc></w:tr>
+    <w:tr><w:tc><w:p><w:r><w:t>七、支持文件清单</w:t></w:r></w:p><w:p><w:r><w:t>（论文、专利等不超过5项）</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p><w:r><w:t>八、提名推荐信（限400字内）</w:t></w:r></w:p><w:p><w:r><w:t>（说明推荐理由）</w:t></w:r></w:p><w:p/></w:tc></w:tr>
+  </w:tbl></w:body></w:document>`
+  const items = detection.detectWordFormRegions(docx(tableNarratives))
+  const narratives = items.filter((item) => ["科学发现、影响与价值阐述", "一句话概述", "提名推荐信"].includes(item.label))
+  assert.deepEqual(narratives.map((item) => item.label), ["科学发现、影响与价值阐述", "一句话概述", "提名推荐信"])
+  assert.deepEqual(narratives.map((item) => item.maxLength), [800, undefined, 400])
+  assert.ok(narratives.every((item) => item.kind === "label_blank" && item.inferredAnswerType === "textarea"))
+  assert.ok(narratives.every((item) => /\/p\[2\]$/.test(item.path)), "答案锚点应绑定说明段落而非标题")
+  assert.equal(items.some((item) => item.label === "支持文件清单"), false)
+})
+
+test("anchors a table narrative with a separate blank answer row inside that blank row", () => {
+  const tableNarrative = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>八、提名推荐信（限400字内）</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p/><w:p/></w:tc></w:tr>
+  </w:tbl></w:body></w:document>`
+  const item = detection.detectWordFormRegions(docx(tableNarrative)).find((candidate) => candidate.label === "提名推荐信")
+  assert.ok(item)
+  assert.match(item.path, /tr\[2\]\/tc\[1\]\/p\[1\]$/)
+  assert.equal(item.maxLength, 400)
+})
+
+test("detects a signature date only when it is near a declaration or handwritten signature", () => {
+  const signatureDate = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+    <w:p><w:r><w:t>提名人声明</w:t></w:r></w:p><w:p><w:r><w:t>（提名人亲笔签名）</w:t></w:r></w:p>
+    <w:p><w:r><w:t>年   月   日</w:t></w:r></w:p>
+    <w:p><w:r><w:t>项目周期为年 月 日</w:t></w:r></w:p>
+  </w:body></w:document>`
+  const dates = detection.detectWordFormRegions(docx(signatureDate)).filter((candidate) => candidate.label === "签署日期")
+  assert.equal(dates.length, 1)
+  assert.equal(dates[0].inferredAnswerType, "date")
+  assert.match(dates[0].path, /p\[3\]\/r\[1\]$/)
+})

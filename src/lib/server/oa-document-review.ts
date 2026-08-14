@@ -7,6 +7,7 @@ import {
   type OADocumentRegionKind,
   type OADocumentSuggestion,
   type OADocumentSuggestionReviewState,
+  type OADocumentTableColumn,
   type OADocumentTemplateManifest,
   type OADocumentVisualAnchor,
 } from "@/lib/oa-document-templates"
@@ -21,6 +22,7 @@ export interface ReviewEdit {
   maxLength?: number
   placeholder?: string
   options?: string[]
+  columns?: Array<{ id: string; label: string; type: "text" | "number" | "date"; required?: boolean }>
   visual?: OADocumentVisualAnchor
   bindingCandidateId?: string
 }
@@ -33,10 +35,10 @@ export class OADocumentReviewError extends Error {
 }
 
 const ANSWER_TYPES = new Set<OADocumentAnswerType>([
-  "text", "textarea", "number", "date", "email", "phone", "single_choice", "multiple_choice", "file",
+  "text", "textarea", "number", "date", "email", "phone", "single_choice", "multiple_choice", "file", "table",
 ])
 const REVIEW_STATES = new Set<OADocumentSuggestionReviewState>(["confirmed", "unresolved", "ignored", "deleted", "conflict"])
-const EDIT_KEYS = new Set(["suggestionId", "reviewState", "label", "inferredAnswerType", "required", "maxLength", "placeholder", "options", "visual", "bindingCandidateId"])
+const EDIT_KEYS = new Set(["suggestionId", "reviewState", "label", "inferredAnswerType", "required", "maxLength", "placeholder", "options", "columns", "visual", "bindingCandidateId"])
 const VISUAL_KEYS = new Set(["page", "x", "y", "width", "height", "pageWidth", "pageHeight", "rotation", "coordinateSpace"])
 
 function objectRecord(value: unknown, message: string): Record<string, unknown> {
@@ -75,6 +77,22 @@ function parseVisual(value: unknown): OADocumentVisualAnchor {
   return visual as unknown as OADocumentVisualAnchor
 }
 
+function parseColumns(value: unknown): OADocumentTableColumn[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 50) throw new OADocumentReviewError("INVALID_REVIEW", "表格列无效", 422)
+  const seen = new Set<string>()
+  return value.map((raw, index) => {
+    const column = objectRecord(raw, `第 ${index + 1} 个表格列无效`)
+    for (const key of Object.keys(column)) if (!["id", "label", "type", "required"].includes(key)) throw new OADocumentReviewError("INVALID_REVIEW", `表格列字段不允许：${key}`, 422)
+    const id = stringValue(column.id, "表格列 ID", 128)
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,127}$/.test(id) || seen.has(id)) throw new OADocumentReviewError("INVALID_REVIEW", "表格列 ID 无效或重复", 422)
+    seen.add(id)
+    const type = column.type as OADocumentTableColumn["type"]
+    if (type !== "text" && type !== "number" && type !== "date") throw new OADocumentReviewError("INVALID_REVIEW", "表格列类型无效", 422)
+    if (column.required !== undefined && typeof column.required !== "boolean") throw new OADocumentReviewError("INVALID_REVIEW", "表格列 required 无效", 422)
+    return { id, label: stringValue(column.label, "表格列标签", 100), type, ...(column.required !== undefined ? { required: column.required } : {}) }
+  })
+}
+
 export function parseReviewEdits(input: unknown): ReviewEdit[] {
   const body = objectRecord(input, "审核请求无效")
   for (const key of Object.keys(body)) if (key !== "edits") throw new OADocumentReviewError("INVALID_REVIEW", `审核请求字段不允许：${key}`, 422)
@@ -95,6 +113,7 @@ export function parseReviewEdits(input: unknown): ReviewEdit[] {
     if (value.placeholder !== undefined && typeof value.placeholder !== "string") throw new OADocumentReviewError("INVALID_REVIEW", "提示文字无效", 422)
     if (value.options !== undefined && (!Array.isArray(value.options) || value.options.length < 1 || value.options.length > 100 || value.options.some((option) => typeof option !== "string" || !option.trim() || option.length > 500))) throw new OADocumentReviewError("INVALID_REVIEW", "options 无效", 422)
     if ((inferredAnswerType === "single_choice" || inferredAnswerType === "multiple_choice") && !value.options) throw new OADocumentReviewError("INVALID_REVIEW", "选项字段缺少 options", 422)
+    if (inferredAnswerType === "table" && !value.columns) throw new OADocumentReviewError("INVALID_REVIEW", "表格字段缺少 columns", 422)
     return {
       suggestionId,
       reviewState: value.reviewState as OADocumentSuggestionReviewState,
@@ -104,6 +123,7 @@ export function parseReviewEdits(input: unknown): ReviewEdit[] {
       ...(value.maxLength !== undefined ? { maxLength: value.maxLength as number } : {}),
       ...(value.placeholder !== undefined ? { placeholder: placeholderValue(value.placeholder) } : {}),
       ...(value.options !== undefined ? { options: (value.options as string[]).map((option) => option.trim()) } : {}),
+      ...(value.columns !== undefined ? { columns: parseColumns(value.columns) } : {}),
       ...(value.visual !== undefined ? { visual: parseVisual(value.visual) } : {}),
       ...(value.bindingCandidateId !== undefined ? { bindingCandidateId: stringValue(value.bindingCandidateId, "候选 ID", 128) } : {}),
     }
@@ -208,6 +228,7 @@ export function buildReviewedManifest(stored: OADocumentTemplateManifest, layout
       ...(edit.maxLength !== undefined ? { maxLength: edit.maxLength } : { maxLength: undefined }),
       ...(edit.placeholder ? { placeholder: edit.placeholder } : { placeholder: undefined }),
       ...(edit.options !== undefined ? { options: edit.options } : { options: undefined }),
+      ...(edit.columns !== undefined ? { columns: edit.columns } : { columns: undefined }),
       ...(visual ? { visual } : { visual: undefined }),
       ...(bindingCandidateIds.length ? { bindingCandidateIds } : { bindingCandidateIds: undefined }),
     } satisfies OADocumentSuggestion
@@ -226,6 +247,7 @@ export function buildReviewedManifest(stored: OADocumentTemplateManifest, layout
       ...(suggestion.maxLength !== undefined ? { maxLength: suggestion.maxLength } : {}),
       ...(suggestion.placeholder ? { placeholder: suggestion.placeholder } : {}),
       ...(suggestion.options?.length ? { options: suggestion.options } : {}),
+      ...(suggestion.columns?.length ? { columns: suggestion.columns } : {}),
     })
     const structural = {
       partName: candidate.partName,

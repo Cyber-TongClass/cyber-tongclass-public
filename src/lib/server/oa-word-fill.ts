@@ -81,6 +81,11 @@ function normalizeAnswer(field: OADocumentManifestField, value: unknown, authori
       else throw new Error(`字段“${field.label}”的授权文件名无效`)
       break
     }
+    case "table": {
+      if (value !== null && value !== undefined && !Array.isArray(value)) throw new Error(`字段“${field.label}”的表格答案无效`)
+      output = ""
+      break
+    }
     default:
       output = normalizeString(value, field)
   }
@@ -138,6 +143,71 @@ function fillSdtElement(sdt: WordXmlElement, value: string) {
   }
 }
 
+function tableCellValue(value: unknown, field: OADocumentManifestField, column: NonNullable<OADocumentManifestField["columns"]>[number]) {
+  if (value === null || value === undefined || value === "") return ""
+  if (column.type === "number") {
+    if (typeof value === "number" && Number.isFinite(value)) return String(value)
+    if (typeof value === "string" && /^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(value.trim())) return value.trim()
+    throw new Error(`字段“${field.label}”的列“${column.label}”数字无效`)
+  }
+  if (typeof value !== "string") throw new Error(`字段“${field.label}”的列“${column.label}”答案无效`)
+  const normalized = value.normalize("NFC")
+  if (column.type === "date" && normalized && !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) throw new Error(`字段“${field.label}”的列“${column.label}”日期无效`)
+  return normalized
+}
+
+function tableRows(field: OADocumentManifestField, value: unknown) {
+  const columns = field.columns || []
+  if (field.answerType !== "table" || !columns.length) throw new Error(`字段“${field.label}”缺少表格列`)
+  if (value === null || value === undefined || value === "") return []
+  if (!Array.isArray(value) || value.length > 100) throw new Error(`字段“${field.label}”的表格答案无效`)
+  return value.map((raw, rowIndex) => {
+    assertPlainRecord(raw, `字段“${field.label}”第 ${rowIndex + 1} 行`)
+    const allowed = new Set(columns.map((column) => column.id))
+    if (Object.keys(raw).some((key) => !allowed.has(key))) throw new Error(`字段“${field.label}”第 ${rowIndex + 1} 行包含未知列`)
+    return columns.map((column) => tableCellValue(raw[column.id], field, column))
+  })
+}
+
+function fillTableCell(document: WordXmlDocument, cell: WordXmlElement, value: string) {
+  const prototypeParagraph = descendantElements(cell, "p")[0]
+  const prototypeRun = descendantElements(cell, "r")[0]
+  const paragraphProperties = prototypeParagraph ? childElements(prototypeParagraph, "pPr")[0] : undefined
+  const runProperties = (prototypeRun ? childElements(prototypeRun, "rPr")[0] : undefined)
+    || (paragraphProperties ? childElements(paragraphProperties, "rPr")[0] : undefined)
+  const cellProperties = childElements(cell, "tcPr")[0]
+  for (const child of [...childElements(cell)]) if (child !== cellProperties) cell.removeChild(child)
+  const paragraph = createWordElement(document, "p")
+  if (paragraphProperties) paragraph.appendChild(cloneElementDeep(paragraphProperties))
+  paragraph.appendChild(createTextRuns(document, value, runProperties))
+  cell.appendChild(paragraph)
+}
+
+function fillTableControls(document: WordXmlDocument, submission: FillWordSubmission, fields: Map<string, OADocumentManifestField>, within?: WordXmlElement) {
+  let filled = 0
+  const repeats = descendantElements(within || document, "sdt").filter((sdt) => /^oa-repeat:/.test(sdtTag(sdt)))
+  for (const repeat of repeats) {
+    const fieldId = /^oa-repeat:([a-zA-Z][a-zA-Z0-9_-]{0,127})$/.exec(sdtTag(repeat))?.[1]
+    const field = fieldId ? fields.get(fieldId) : undefined
+    if (!field || field.answerType !== "table") continue
+    const content = childElements(repeat, "sdtContent")[0]
+    const prototype = content && descendantElements(content, "tr")[0]
+    const parent = repeat.parentNode
+    if (!prototype || !parent) throw new Error(`表格字段“${field.label}”缺少完整原型行`)
+    const rows = tableRows(field, submission.answers[field.fieldId])
+    for (const values of rows) {
+      const row = cloneElementDeep(prototype)
+      const cells = childElements(row, "tc")
+      if (cells.length !== field.columns!.length) throw new Error(`表格字段“${field.label}”的 Word 列数与表单列数不一致`)
+      cells.forEach((cell, index) => fillTableCell(document, cell, values[index]))
+      parent.insertBefore(row, repeat)
+    }
+    parent.removeChild(repeat)
+    filled += 1
+  }
+  return filled
+}
+
 function fillDocument(document: WordXmlDocument, submission: FillWordSubmission, within?: WordXmlElement) {
   assertPlainRecord(submission.answers, "answers")
   if (submission.fileDisplayNames !== undefined) assertPlainRecord(submission.fileDisplayNames, "fileDisplayNames")
@@ -173,6 +243,7 @@ function fillDocument(document: WordXmlDocument, submission: FillWordSubmission,
     fillSdtElement(sdt, selected ? "√" : "□")
     filled += 1
   }
+  filled += fillTableControls(document, submission, fields, within)
   return filled
 }
 

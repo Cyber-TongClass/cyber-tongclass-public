@@ -104,6 +104,41 @@ test("indexes instructional cells, one grouped choice, exact narratives, context
   assert.ok(nodes.some((node) => node.label === "报送单位/牵头单位基本信息 · 负责人 · 联系方式"))
 })
 
+test("indexes table-contained narrative headings at the following instruction paragraph", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tr><w:tc>
+    <w:p><w:r><w:t>五、科学发现、影响与价值阐述（800字内）</w:t></w:r></w:p>
+    <w:p><w:r><w:t>（提炼核心发现并说明价值）</w:t></w:r></w:p><w:p/>
+  </w:tc></w:tr></w:tbl></w:body></w:document>`
+  const nodes = wordLayout.indexWordWritableNodes(pkg(sourceXml))
+  const narrative = nodes.find((node) => node.label === "科学发现、影响与价值阐述")
+  assert.ok(narrative)
+  assert.equal(narrative.writeTarget, "paragraph-after")
+  assert.match(narrative.path, /\/p\[2\]$/)
+  assert.match(narrative.normalizedText, /提炼核心发现/)
+})
+
+test("writes a table narrative into its existing blank answer paragraph without adding a new paragraph", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>八、提名推荐信（限400字内）</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p/><w:p/></w:tc></w:tr>
+  </w:tbl></w:body></w:document>`
+  const node = wordLayout.indexWordWritableNodes(pkg(sourceXml)).find((candidate) => candidate.label === "提名推荐信")
+  assert.ok(node)
+  assert.equal(node.writeTarget, "inline-run")
+  assert.match(node.path, /tr\[2\]\/tc\[1\]\/p\[1\]$/)
+})
+
+test("indexes a declaration signature date at the exact Word run", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+    <w:p><w:r><w:t>提名人声明</w:t></w:r></w:p><w:p><w:r><w:t>（提名人亲笔签名）</w:t></w:r></w:p>
+    <w:p><w:r><w:t>年   月   日</w:t></w:r></w:p>
+  </w:body></w:document>`
+  const node = wordLayout.indexWordWritableNodes(pkg(sourceXml)).find((candidate) => candidate.label === "签署日期")
+  assert.ok(node)
+  assert.equal(node.writeTarget, "inline-run")
+  assert.match(node.path, /p\[3\]\/r\[1\]$/)
+})
+
 test("parses top-left normalized Poppler bbox XML and rejects unsafe or invalid geometry", () => {
   const parsed = pdfLayout.parsePdfBboxXml(bbox([[['姓名', 60, 80, 120, 100]]]))
   assert.deepEqual(parsed.pages, [{ page: 1, width: 600, height: 800, rotation: 0 }])
@@ -203,6 +238,48 @@ test("uses table row order from geometry when Poppler word order is reversed", (
   assert.equal(result.candidates.length, 2)
   const byPath = [...result.candidates].sort((left, right) => left.path.localeCompare(right.path, "en"))
   assert.deepEqual(byPath.map((candidate) => candidate.visual.y), [100 / 800, 400 / 800])
+})
+
+test("uses global document order for repeated labels across different tables", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+    <w:tbl><w:tr><w:tc><w:p><w:r><w:t>学科专业</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl>
+    <w:tbl><w:tr><w:tc><w:p><w:r><w:t>学科专业</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl>
+  </w:body></w:document>`
+  const nodes = wordLayout.indexWordWritableNodes(pkg(sourceXml)).filter((node) => node.kind === "table_cell")
+  const pdf = pdfLayout.parsePdfBboxXml(bbox([
+    [["学科专业", 30, 100, 100, 120]],
+    [["学科专业", 30, 100, 100, 120]],
+  ]))
+  const result = matcher.matchWordNodesToPdf(nodes, pdf)
+  assert.equal(result.candidates.length, 2)
+  const ordered = [...result.candidates].sort((left, right) => left.path.localeCompare(right.path, "en"))
+  assert.deepEqual(ordered.map((candidate) => candidate.visual.page), [1, 2])
+})
+
+test("maps repeat-row headers as one table question candidate", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>起止年月</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>学校名称</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>专业</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>学位</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+  </w:tbl></w:body></w:document>`
+  const nodes = wordLayout.indexWordWritableNodes(pkg(sourceXml)).filter((node) => node.writeTarget === "repeat-row")
+  assert.equal(nodes.length, 1)
+  const pdf = pdfLayout.parsePdfBboxXml(bbox([[["起止年月", 30, 100, 90, 120], ["学校名称", 120, 100, 190, 120], ["专业", 220, 100, 260, 120], ["学位", 290, 100, 330, 120]]]))
+  const result = matcher.matchWordNodesToPdf(nodes, pdf)
+  assert.equal(result.candidates.length, 1)
+  assert.equal(result.candidates[0].writeTarget, "repeat-row")
+  assert.ok(result.candidates[0].visual.width > 0.4)
+})
+
+test("maps a wrapped repeat-row column when Poppler interleaves the second line", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>起止年月</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>校（院）及系名称</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>专业</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>学位</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+  </w:tbl></w:body></w:document>`
+  const nodes = wordLayout.indexWordWritableNodes(pkg(sourceXml)).filter((node) => node.writeTarget === "repeat-row")
+  const pdf = pdfLayout.parsePdfBboxXml(bbox([[["校（院）", 120, 90, 190, 105], ["起止年月", 30, 100, 90, 120], ["专业", 220, 100, 260, 120], ["学位", 290, 100, 330, 120], ["及系名称", 120, 110, 190, 125]]]))
+  const result = matcher.matchWordNodesToPdf(nodes, pdf)
+  assert.equal(result.candidates.length, 1)
+  assert.ok(result.candidates[0].visual.width > 0.4)
 })
 
 test("uses nearby writable geometry to disambiguate a repeated inline label", () => {

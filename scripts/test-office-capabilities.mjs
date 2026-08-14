@@ -47,6 +47,12 @@ test("font capability matching uses internal family and PostScript aliases", asy
   assert.equal(bogus.Regular, undefined)
 })
 
+test("recognizes the explicit compatible family aliases used by common Chinese Word templates", () => {
+  assert.ok(capabilitiesModule.compatibleOfficeFontNames("仿宋").includes("方正仿宋_GBK"))
+  assert.ok(capabilitiesModule.compatibleOfficeFontNames("仿宋_GB2312").includes("FZFangSong-Z02"))
+  assert.deepEqual(capabilitiesModule.missingConvertedPdfFonts(["仿宋"], { 仿宋: ["FZFSK--GBK1-0"] }, ["ABCDEF+FZFSK--GBK1-0"]), [])
+})
+
 function fakeChild({ code = 0, delay = 0, stderr = "", onSpawn }) {
   const child = new EventEmitter()
   child.stdout = new PassThrough()

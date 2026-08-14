@@ -121,7 +121,8 @@ function scoredMatches(node: OAWordWritableNode, boxes: OAPdfTextBox[]): ScoredM
   for (let start = 0; start < boxes.length; start += 1) {
     const first = boxes[start]
     let joined = ""
-    for (let end = start; end < Math.min(boxes.length, start + 12); end += 1) {
+    const maximumBoxes = node.writeTarget === "repeat-row" ? 64 : 12
+    for (let end = start; end < Math.min(boxes.length, start + maximumBoxes); end += 1) {
       const current = boxes[end]
       if (current.page !== first.page) break
       joined += normalized(current.normalizedText)
@@ -138,6 +139,56 @@ function scoredMatches(node: OAWordWritableNode, boxes: OAPdfTextBox[]): ScoredM
   return matches.sort((left, right) => right.score - left.score || left.startOrder - right.startOrder)
 }
 
+function repeatRowScoredMatches(node: OAWordWritableNode, boxes: OAPdfTextBox[]) {
+  const columns = node.columns || []
+  if (columns.length < 2) return scoredMatches(node, boxes)
+  const spatialMatches = (label: string) => {
+    const target = normalized(label)
+    const results: ScoredMatch[] = []
+    for (const first of boxes) {
+      const nearby = boxes
+        .filter((box) => box.page === first.page
+          && box.y >= first.y - 0.02 && box.y <= first.y + 0.12
+          && Math.min(box.x + box.width, first.x + first.width) > Math.max(box.x, first.x))
+        .sort((left, right) => left.y - right.y || left.x - right.x || left.order - right.order)
+      let joined = ""
+      for (let index = 0; index < nearby.length; index += 1) {
+        joined += normalized(nearby[index].normalizedText)
+        if (joined === target || joined.includes(target)) {
+          const group = nearby.slice(0, index + 1)
+          results.push({ boxes: group, score: 0.96, startOrder: Math.min(...group.map((box) => box.order)) })
+          break
+        }
+        if (joined.length > target.length * 2 + 8) break
+      }
+    }
+    return [...new Map(results.map((match) => [match.startOrder, match])).values()]
+  }
+  const matchesByColumn = columns.map((column) => {
+    const linear = scoredMatches({ ...node, writeTarget: "table-cell", normalizedText: column.label }, boxes)
+    return linear.length ? linear : spatialMatches(column.label)
+  })
+  if (matchesByColumn.some((matches) => !matches.length)) return []
+  const results: ScoredMatch[] = []
+  for (const first of matchesByColumn[0]) {
+    const firstVisual = unionVisual(first.boxes)
+    const selected = [first]
+    let valid = true
+    for (const matches of matchesByColumn.slice(1)) {
+      const nearby = matches
+        .map((match) => ({ match, visual: unionVisual(match.boxes) }))
+        .filter(({ visual }) => visual.page === firstVisual.page && Math.abs((visual.y + visual.height / 2) - (firstVisual.y + firstVisual.height / 2)) <= 0.08)
+        .sort((left, right) => Math.abs(left.visual.y - firstVisual.y) - Math.abs(right.visual.y - firstVisual.y) || left.visual.x - right.visual.x)[0]
+      if (!nearby) { valid = false; break }
+      selected.push(nearby.match)
+    }
+    if (!valid) continue
+    const group = [...new Map(selected.flatMap((match) => match.boxes).map((box) => [box.order, box])).values()]
+    results.push({ boxes: group, score: 1, startOrder: Math.min(...group.map((box) => box.order)) })
+  }
+  return results.sort(geometryOrder)
+}
+
 export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayout): { candidates: OADocumentBindingCandidate[]; warnings: OADocumentTemplateWarning[] } {
   const candidates: OADocumentBindingCandidate[] = []
   const warnings: OADocumentTemplateWarning[] = []
@@ -147,7 +198,8 @@ export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayou
     const peers = orderedNodes.filter((candidate) => normalized(candidate.normalizedText || candidate.label) === normalized(node.normalizedText || node.label))
     const peerIndex = peers.findIndex((candidate) => candidate.id === node.id)
     const bestByStart = new Map<number, ScoredMatch>()
-    for (const rawMatch of scoredMatches(node, pdf.textBoxes)) {
+    const rawMatches = node.writeTarget === "repeat-row" ? repeatRowScoredMatches(node, pdf.textBoxes) : scoredMatches(node, pdf.textBoxes)
+    for (const rawMatch of rawMatches) {
       const match = expandChoiceMatch(node, rawMatch, pdf.textBoxes)
       if (!match) continue
       const existing = bestByStart.get(match.startOrder)
@@ -161,11 +213,11 @@ export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayou
     const tablePeers = node.table
       ? peers.filter((candidate) => candidate.table?.table === node.table?.table).sort((left, right) => (left.table!.row - right.table!.row) || (left.table!.cell - right.table!.cell) || left.order - right.order)
       : []
-    const expectedIndex = tablePeers.length > 1 ? tablePeers.findIndex((candidate) => candidate.id === node.id) : peerIndex
+    const expectedIndex = peerIndex
     const possible = geometryMatches
       .map((match, matchIndex) => {
-        const tableOrderScore = tablePeers.length > 1 && matchIndex === expectedIndex ? 0.24 : 0
-        const documentOrderScore = !node.table && peers.length > 1 && matchIndex === expectedIndex ? 0.18 : 0
+        const tableOrderScore = tablePeers.length > 1 && matchIndex === expectedIndex ? 0.08 : 0
+        const documentOrderScore = peers.length > 1 && matchIndex === peerIndex ? 0.24 : 0
         return { ...match, score: match.score + tableOrderScore + documentOrderScore + nearbyWritableScore(node, match) }
       })
       .filter((match) => !usedStarts.has(match.startOrder))
@@ -181,7 +233,7 @@ export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayou
       id: node.id, label: node.label, description: `${node.kind} · ${node.writeTarget}`,
       partName: node.partName, path: node.path, contextHash: node.contextHash,
       writeTarget: node.writeTarget, ...(node.styleSourcePath ? { styleSourcePath: node.styleSourcePath } : {}),
-      visual: node.writeTarget === "choice" ? unionVisual(best.boxes) : answerVisual(best.boxes, node),
+      visual: node.writeTarget === "choice" || node.writeTarget === "repeat-row" ? unionVisual(best.boxes) : answerVisual(best.boxes, node),
     })
   }
   return { candidates, warnings }

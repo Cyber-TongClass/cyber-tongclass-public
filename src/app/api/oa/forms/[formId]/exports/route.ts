@@ -69,7 +69,7 @@ export async function POST(request: Request, context: { params: Promise<{ formId
       }
       const versionIds = new Set(accesses.map((access) => String(access.version!._id)))
       const repeatAnchor = versionIds.size === 1
-        ? accesses[0].version!.manifest.anchors.find((anchor) => anchor.output.mode === "repeat_row")
+        ? accesses[0].version!.manifest.anchors.find((anchor) => anchor.output.mode === "repeat_row" && accesses[0].version!.manifest.fields.find((field) => field.fieldId === anchor.fieldId)?.answerType !== "table")
         : undefined
       if (format === "word" && repeatAnchor) {
         artifact = buildRepeatRowArtifact(await templateFor(accesses[0]), accesses, repeatAnchor.fieldId)

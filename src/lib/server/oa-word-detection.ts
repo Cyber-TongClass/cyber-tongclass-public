@@ -10,6 +10,7 @@ import {
 } from "@/lib/oa-document-templates"
 import { readOoxmlPackage, type OoxmlPackage } from "@/lib/server/ooxml-package"
 import { extractGroupedWordChoiceOptions } from "@/lib/server/oa-word-choice"
+import { genericNarrativeHeading, looksLikeNarrativeInstruction, narrativeLengthHint } from "@/lib/server/oa-word-narrative"
 import {
   childElements,
   descendantElements,
@@ -37,6 +38,7 @@ interface Candidate {
   required?: boolean
   maxLength?: number
   options?: string[]
+  columns?: Array<{ id: string; label: string; type: "text" | "number" | "date"; required?: boolean }>
 }
 
 const PARAGRAPH_AFTER_LABELS = ["基本概况", "主要做法", "应用成效", "创新点", "创新成效", "应用情况"]
@@ -197,8 +199,9 @@ function detectPart(partName: string, xml: string) {
         if (!headerCells.every((cell) => normalizedWordText(cell)) || !rowCells.every((cell) => isBlankRegionText(normalizedWordText(cell)))) continue
         const labels = headerCells.map((cell) => cleanLabel(normalizedWordText(cell)))
         pushCandidate(candidates, {
-          ...base(rows[index]), kind: "repeat_row", label: `明细表（${labels.join("、")}）`, inferredAnswerType: "textarea", confidence: "medium",
+          ...base(rows[index]), kind: "repeat_row", label: `明细表（${labels.join("、")}）`, inferredAnswerType: "table", confidence: "medium",
           evidence: ["表头下方存在完整空白原型行", "批量聚合前需管理员确认重复行"],
+          columns: labels.map((label, columnIndex) => ({ id: `column_${columnIndex + 1}`, label, type: /起止/.test(label) ? "text" : /(?:日期|年月|时间)/.test(label) ? "date" : /(?:数量|人数|金额|分数)/.test(label) ? "number" : "text" })),
         })
       }
     }
@@ -211,6 +214,17 @@ function detectPart(partName: string, xml: string) {
     const text = normalizedWordText(paragraph)
     const tableCell = closestAncestor(paragraph, "tc")
     if (tableCell && groupedChoiceCells.has(tableCell)) continue
+    const signatureContext = paragraphs.slice(Math.max(0, paragraphIndex - 8), paragraphIndex)
+      .some((candidate) => /(?:亲笔签名|提名人声明|签署)/.test(normalizedWordText(candidate)))
+    if (signatureContext) {
+      const dateRun = descendantElements(paragraph, "r").find((run) => /^年\s*月\s*日$/.test(normalized(normalizedWordText(run))))
+      if (dateRun) {
+        pushCandidate(candidates, {
+          ...base(dateRun), kind: "label_blank", label: "签署日期", inferredAnswerType: "date", confidence: "medium",
+          evidence: ["在签名或声明区域检测到年月日填写位置"],
+        })
+      }
+    }
     const checkboxMatches = [...text.matchAll(/[□☐]([^□☐○◯●■]+)/g)].map((match) => match[1].trim()).filter(Boolean)
     const radioMatches = [...text.matchAll(/[○◯]([^□☐○◯●■]+)/g)].map((match) => match[1].trim()).filter(Boolean)
     const matches = radioMatches.length >= 2 ? radioMatches : checkboxMatches
@@ -249,7 +263,23 @@ function detectPart(partName: string, xml: string) {
         evidence: ["段落以标签冒号结尾"], ...hints,
       })
     }
-    if (tableCell) continue
+    if (tableCell) {
+      const heading = genericNarrativeHeading(text)
+      if (heading) {
+        const table = closestAncestor(paragraph, "tbl")
+        const target = paragraphs.slice(paragraphIndex + 1).find((candidate) => closestAncestor(candidate, "tbl") === table)
+        const targetText = target ? normalizedWordText(target) : ""
+        if (target && (!normalized(targetText) || looksLikeNarrativeInstruction(targetText))) {
+          const instruction = normalizedWordText(target)
+          pushCandidate(candidates, {
+            ...base(target), kind: "label_blank", label: heading.label, inferredAnswerType: "textarea", confidence: "medium",
+            evidence: ["检测到表格内叙述类标题及其填写说明", "答案应写入说明文字之后"],
+            maxLength: heading.maxLength ?? narrativeLengthHint(instruction),
+          })
+        }
+      }
+      continue
+    }
     const directLabel = PARAGRAPH_AFTER_LABELS.find((label) => cleanLabel(text).startsWith(label))
     const boundedInstruction = /(?:(?:不超过|最多|限)\s*\d{1,6}\s*(?:个?字|字符)|\d{1,6}\s*(?:个?字|字符)\s*以内)/.test(text)
     if (directLabel && (boundedInstruction || /[：:]\s*$/.test(text))) {
@@ -339,6 +369,7 @@ export function detectWordFormRegions(
         ...(candidate.required !== undefined ? { required: candidate.required } : {}),
         ...(candidate.maxLength !== undefined ? { maxLength: candidate.maxLength } : {}),
         ...(candidate.options?.length ? { options: candidate.options } : {}),
+        ...(candidate.columns?.length ? { columns: candidate.columns } : {}),
       } satisfies OADocumentSuggestion
     })
 }

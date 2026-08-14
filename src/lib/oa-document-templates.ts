@@ -42,6 +42,14 @@ export type OADocumentAnswerType =
   | "single_choice"
   | "multiple_choice"
   | "file"
+  | "table"
+export type OADocumentTableColumnType = "text" | "number" | "date"
+export interface OADocumentTableColumn {
+  id: string
+  label: string
+  type: OADocumentTableColumnType
+  required?: boolean
+}
 export type OADocumentOutputMode = "replace" | "append" | "mark_choice" | "repeat_row"
 export type OADocumentWriteTarget = "table-cell" | "inline-run" | "paragraph-after" | "choice" | "repeat-row"
 export type OADocumentPageRotation = 0 | 90 | 180 | 270
@@ -92,6 +100,7 @@ export interface OADocumentSuggestion extends OADocumentStructuralLocator {
   maxLength?: number
   placeholder?: string
   options?: string[]
+  columns?: OADocumentTableColumn[]
   visual?: OADocumentVisualAnchor
   bindingCandidateIds?: string[]
 }
@@ -117,6 +126,7 @@ export interface OADocumentManifestField {
   maxLength?: number
   placeholder?: string
   options?: string[]
+  columns?: OADocumentTableColumn[]
 }
 
 export interface OADocumentTemplateManifest {
@@ -164,7 +174,7 @@ export interface OADocumentTemplateVersionSummary {
 }
 
 const ANSWER_TYPES = new Set<OADocumentAnswerType>([
-  "text", "textarea", "number", "date", "email", "phone", "single_choice", "multiple_choice", "file",
+  "text", "textarea", "number", "date", "email", "phone", "single_choice", "multiple_choice", "file", "table",
 ])
 const REGION_KINDS = new Set<OADocumentRegionKind>([
   "table_cell", "underline", "label_blank", "checkbox_group", "radio_group", "content_control", "bookmark", "legacy_placeholder", "repeat_row",
@@ -279,6 +289,22 @@ function assertPlaceholder(value: string | undefined, owner: string) {
   if (!value.trim() || value.length > 500 || value.includes("\0")) throw new Error(`${owner} 的 placeholder 提示文字无效`)
 }
 
+function assertTableColumns(field: OADocumentManifestField) {
+  if (field.answerType !== "table") {
+    if (field.columns !== undefined) throw new Error(`非表格字段 ${field.fieldId} 不能包含 columns`)
+    return
+  }
+  if (!field.columns?.length || field.columns.length > 50) throw new Error(`表格字段 ${field.fieldId} 缺少有效列`)
+  const ids = new Set<string>()
+  for (const column of field.columns) {
+    assertIdentifier(column.id, "表格列 ID")
+    if (ids.has(column.id)) throw new Error(`表格列 ID 重复：${column.id}`)
+    ids.add(column.id)
+    if (!column.label.trim() || column.label.length > 100) throw new Error(`表格字段 ${field.fieldId} 的列标签无效`)
+    if (!["text", "number", "date"].includes(column.type)) throw new Error(`表格字段 ${field.fieldId} 的列类型无效`)
+  }
+}
+
 export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
   if (!Number.isSafeInteger(manifest.syntaxVersion) || manifest.syntaxVersion < 1) throw new Error("syntaxVersion 无效")
   if (!manifest.compilerVersion?.trim() || manifest.compilerVersion.length > 100) throw new Error("compilerVersion 无效")
@@ -299,6 +325,7 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
     if ((field.answerType === "single_choice" || field.answerType === "multiple_choice") && (!field.options || field.options.length < 1)) {
       throw new Error(`选项字段 ${field.fieldId} 缺少选项`)
     }
+    assertTableColumns(field)
   }
   const anchorKeys = new Set<string>()
   const bindingCandidateIds = new Set<string>()

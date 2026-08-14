@@ -322,6 +322,7 @@ export function OADocumentWorkbench({
     ...(suggestion.maxLength !== undefined ? { maxLength: suggestion.maxLength } : {}),
     ...(suggestion.placeholder !== undefined ? { placeholder: suggestion.placeholder } : {}),
     ...(suggestion.options ? { options: suggestion.options } : {}),
+    ...(suggestion.columns ? { columns: suggestion.columns } : {}),
     ...(suggestion.visual ? { visual: suggestion.visual } : {}),
     ...(selectedCandidates[suggestion.id] ? { bindingCandidateId: selectedCandidates[suggestion.id] } : {}),
   }))

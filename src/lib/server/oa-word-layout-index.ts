@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import type { OADocumentRegionKind, OADocumentStructuralLocator, OADocumentWriteTarget } from "@/lib/oa-document-templates"
 import type { OoxmlPackage } from "@/lib/server/ooxml-package"
 import { extractGroupedWordChoiceOptions } from "@/lib/server/oa-word-choice"
+import { genericNarrativeHeading, looksLikeNarrativeInstruction } from "@/lib/server/oa-word-narrative"
 import { childElements, descendantElements, elementLocalName, inspectWordXmlPart, normalizedWordText, parseWordXml, structuralPath, wordAttribute, wordContextHash, type WordXmlElement } from "@/lib/server/oa-word-xml"
 
 export interface OAWordWritableNode extends OADocumentStructuralLocator {
@@ -12,6 +13,7 @@ export interface OAWordWritableNode extends OADocumentStructuralLocator {
   label: string
   normalizedText: string
   options?: string[]
+  columns?: Array<{ id: string; label: string; type: "text" | "number" | "date"; required?: boolean }>
   table?: { table: number; row: number; cell: number }
   styleSourcePath?: string
 }
@@ -130,7 +132,7 @@ export function indexWordWritableNodes(pkg: OoxmlPackage): OAWordWritableNode[] 
           const headers = childElements(rows[rowIndex - 1], "tc")
           if (headers.length >= 2 && headers.length === cells.length && headers.every((cell) => normalizedWordText(cell)) && cells.every((cell) => isBlank(normalized(normalizedWordText(cell))))) {
             const labels = headers.map((cell) => cleanLabel(normalizedWordText(cell)))
-            add(partName, row, { kind: "repeat_row", writeTarget: "repeat-row", label: `明细表（${labels.join("、")}）`, normalizedText: normalized(labels.join(" ")), table: { table: tableIndex + 1, row: rowIndex + 1, cell: 0 }, styleSourcePath: structuralPath(row) })
+            add(partName, row, { kind: "repeat_row", writeTarget: "repeat-row", label: `明细表（${labels.join("、")}）`, normalizedText: normalized(labels.join(" ")), columns: labels.map((label, index) => ({ id: `column_${index + 1}`, label, type: /起止/.test(label) ? "text" : /(?:日期|年月|时间)/.test(label) ? "date" : /(?:数量|人数|金额|分数)/.test(label) ? "number" : "text" })), table: { table: tableIndex + 1, row: rowIndex + 1, cell: 0 }, styleSourcePath: structuralPath(row) })
           }
         }
       })
@@ -143,6 +145,12 @@ export function indexWordWritableNodes(pkg: OoxmlPackage): OAWordWritableNode[] 
       const paragraphText = normalized(normalizedWordText(paragraph))
       const tableCell = closest(paragraph, "tc")
       if (tableCell && groupedChoiceCells.has(tableCell)) continue
+      const signatureContext = paragraphs.slice(Math.max(0, paragraphIndex - 8), paragraphIndex)
+        .some((candidate) => /(?:亲笔签名|提名人声明|签署)/.test(normalizedWordText(candidate)))
+      if (signatureContext) {
+        const dateRun = descendantElements(paragraph, "r").find((run) => /^年\s*月\s*日$/.test(normalized(normalizedWordText(run))))
+        if (dateRun) add(partName, dateRun, { kind: "label_blank", writeTarget: "inline-run", label: "签署日期", normalizedText: normalized(normalizedWordText(dateRun)), styleSourcePath: structuralPath(dateRun) })
+      }
       const choiceMarks = [...paragraphText.matchAll(/[□☐○◯]([^□☐○◯●■]+)/g)].map((match) => normalized(match[1]).replace(/[（(].*$/, "")).filter(Boolean)
       if (choiceMarks.length >= 2) {
         const label = cleanLabel(paragraphText.split(/[：:]/, 1)[0] || "选项")
@@ -158,7 +166,19 @@ export function indexWordWritableNodes(pkg: OoxmlPackage): OAWordWritableNode[] 
         const label = cleanLabel(preceding || "填写内容")
         add(partName, run, { kind: "underline", writeTarget: "inline-run", label, normalizedText: normalized(preceding), styleSourcePath: structuralPath(run) })
       }
-      if (tableCell) continue
+      if (tableCell) {
+        const heading = genericNarrativeHeading(paragraphText)
+        if (heading) {
+          const table = closest(paragraph, "tbl")
+          const target = paragraphs.slice(paragraphIndex + 1).find((candidate) => closest(candidate, "tbl") === table)
+          const targetText = target ? normalizedWordText(target) : ""
+          if (target && (!normalized(targetText) || looksLikeNarrativeInstruction(targetText))) {
+            const targetIsBlank = !normalized(targetText)
+            add(partName, target, { kind: "label_blank", writeTarget: targetIsBlank ? "inline-run" : "paragraph-after", label: heading.label, normalizedText: normalized(normalizedWordText(target)), styleSourcePath: structuralPath(target) })
+          }
+        }
+        continue
+      }
       const directLabel = NARRATIVE_LABELS.find((label) => cleanLabel(paragraphText).startsWith(label))
       const boundedInstruction = /(?:(?:不超过|最多|限)\s*\d{1,6}\s*(?:个?字|字符)|\d{1,6}\s*(?:个?字|字符)\s*以内)/.test(paragraphText)
       if (directLabel && (boundedInstruction || /[：:]\s*$/.test(paragraphText))) {

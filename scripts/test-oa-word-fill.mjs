@@ -142,6 +142,22 @@ test("clones complete repeat rows for 0, 1, 3, and 100 submissions", () => {
   }
 })
 
+test("fills one submission table answer by cloning the Word prototype row and preserving cell styles", () => {
+  const prototype = `<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:w="1800"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/><w:rPr><w:rFonts w:eastAsia="方正仿宋_GBK"/></w:rPr></w:pPr></w:p></w:tc><w:tc><w:p><w:r><w:rPr><w:rFonts w:eastAsia="方正仿宋_GBK"/></w:rPr><w:t> </w:t></w:r></w:p></w:tc></w:tr>`
+  const input = docx(`<w:tbl><w:tr><w:tc><w:p><w:r><w:t>起止年月</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>学校名称</w:t></w:r></w:p></w:tc></w:tr><w:sdt><w:sdtPr><w:tag w:val="oa-repeat:education"/></w:sdtPr><w:sdtContent>${prototype}</w:sdtContent></w:sdt></w:tbl>`)
+  const tableField = { fieldId: "education", label: "主要教育经历", answerType: "table", required: false, columns: [{ id: "column_1", label: "起止年月", type: "text" }, { id: "column_2", label: "学校名称", type: "text" }] }
+  const output = fill.fillWordTemplate(input, { fields: [tableField], answers: { education: [{ column_1: "2018-2022", column_2: "北京大学" }, { column_1: "2022-2026", column_2: "清华大学" }] } })
+  const xml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+  assert.equal((xml.match(/<w:cantSplit\/>/g) || []).length, 2)
+  assert.equal((xml.match(/<w:tcW w:w="1800"\/>/g) || []).length, 2)
+  assert.match(xml, /2018-2022/)
+  assert.match(xml, /北京大学/)
+  assert.match(xml, /2022-2026/)
+  assert.match(xml, /清华大学/)
+  assert.equal((xml.match(/方正仿宋_GBK/g) || []).length, 6)
+  assert.doesNotMatch(xml, /oa-repeat:education/)
+})
+
 test("routes mixed template versions without falling forward", () => {
   const grouped = exportData.routeSubmissionsByTemplateVersion([
     { id: "a", documentTemplateVersionId: "v1" }, { id: "b", documentTemplateVersionId: "v2" }, { id: "c", documentTemplateVersionId: "v1" },
