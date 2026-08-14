@@ -6,7 +6,9 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 const EXPECTED_PAGE_COUNT = 6
-const NARRATIVE_LABELS = ["基本概况", "主要做法"]
+const EXPECTED_FILLED_PAGE_COUNT = 7
+const EXPECTED_APPLICANT_FIELDS = 25
+const NARRATIVE_LABELS = ["基本概况", "主要做法", "应用成效", "创新点"]
 const root = path.resolve(import.meta.dirname, "..")
 const require = createRequire(import.meta.url)
 
@@ -107,9 +109,15 @@ function assertInstructionPrecedesSdt(pkg, label, anchor) {
 }
 
 function answerFor(field) {
+  if (field.answerType === "multiple_choice") return ["场景开放", "应用拓展 · 其他", "安全体系"]
+  if (field.answerType === "single_choice") return field.options?.[0] || ""
+  if (field.answerType === "file") return undefined
   let value = NARRATIVE_LABELS.includes(field.label)
-    ? `SMOKE：验证${field.label}答案写入说明段落之后。`
-    : "SMOKE_TABLE"
+    ? `测试${field.label}：答案位于说明段落之后，字体与段落样式保持一致。`
+    : field.label.includes("案例名称") ? "人工智能赋能测试案例"
+      : field.label === "申报单位" ? "测试申报单位"
+        : field.label === "案例简介" ? "本案例用于验证问题识别、原位填充和版式一致性。"
+          : `测试-${field.label.split(" · ").at(-1)}`
   if (field.maxLength) value = value.slice(0, field.maxLength)
   return value
 }
@@ -123,6 +131,10 @@ function assertPageGeometry(bboxPages, infoPages, label) {
     assert.ok(Math.abs(bboxPage.height - infoPage.height) <= 0.01, `${label} 第 ${index + 1} 页高度不一致`)
     assert.equal(bboxPage.rotation, infoPage.rotation, `${label} 第 ${index + 1} 页旋转角度不一致`)
   })
+}
+
+function pdfFontFamily(name) {
+  return name.replace(/^[A-Z]{6}\+/, "")
 }
 
 async function bundleModules(directory) {
@@ -262,24 +274,41 @@ async function main() {
     assert.equal(candidatesById.size, candidates.length, "绑定候选 ID 必须唯一")
     const detected = modules.detection.detectWordFormRegions(pkg, candidates)
 
-    const selected = []
-    for (const label of NARRATIVE_LABELS) {
-      const matches = detected.flatMap((suggestion) => {
-        if (suggestion.label !== label || suggestion.bindingCandidateIds?.length !== 1) return []
-        const candidate = candidatesById.get(suggestion.bindingCandidateIds[0])
-        return candidate?.writeTarget === "paragraph-after" && candidate.visual.page === 4 ? [{ suggestion, candidate }] : []
-      })
-      assert.equal(matches.length, 1, `${label} 在第 4 页必须且只能有一个 paragraph-after 绑定，实际 ${matches.length} 个`)
-      selected.push(matches[0])
-    }
-    const tableBindings = detected.flatMap((suggestion) => {
-      if (suggestion.bindingCandidateIds?.length !== 1) return []
+    assert.equal(detected.some((suggestion) => suggestion.placeholder !== undefined), false, "DOCX 分析不得自动生成网页提示文字")
+    const repeatSuggestions = detected.filter((suggestion) => suggestion.kind === "repeat_row")
+    assert.equal(repeatSuggestions.length, 1, "第 6 页汇总表必须识别为一个系统 repeat-row 结构")
+    const applicantSuggestions = detected.filter((suggestion) => suggestion.kind !== "repeat_row")
+    assert.equal(applicantSuggestions.length, EXPECTED_APPLICANT_FIELDS, `应识别 ${EXPECTED_APPLICANT_FIELDS} 个申请填写位置，实际 ${applicantSuggestions.length} 个`)
+    const selected = applicantSuggestions.map((suggestion) => {
+      assert.equal(suggestion.bindingCandidateIds?.length, 1, `字段“${suggestion.label}”必须且只能绑定一个 Word 写入位置`)
       const candidate = candidatesById.get(suggestion.bindingCandidateIds[0])
-      return candidate?.writeTarget === "table-cell" ? [{ suggestion, candidate }] : []
+      assert.ok(candidate, `字段“${suggestion.label}”引用的绑定候选不存在`)
+      return { suggestion, candidate }
     })
-    assert.ok(tableBindings.length > 0, "至少需要一个唯一 table-cell 绑定")
-    selected.push(tableBindings[0])
     assert.equal(new Set(selected.map(({ candidate }) => candidate.id)).size, selected.length, "选中的绑定候选必须唯一")
+    const pageCoverage = selected.reduce((counts, { candidate }) => counts.set(candidate.visual.page, (counts.get(candidate.visual.page) || 0) + 1), new Map())
+    assert.deepEqual(Object.fromEntries(pageCoverage), { 1: 2, 2: 2, 3: 16, 4: 4, 5: 1 }, `申请字段页码覆盖不完整：${JSON.stringify(selected.map(({ suggestion, candidate }) => ({ label: suggestion.label, page: candidate.visual.page, target: candidate.writeTarget })))}`)
+    const direction = selected.find(({ suggestion }) => suggestion.label === "方向")
+    assert.ok(direction)
+    assert.equal(direction.candidate.writeTarget, "choice")
+    assert.equal(direction.suggestion.options.length, 23)
+    assert.equal(new Set(direction.suggestion.options).size, 23, "方向选项必须有可提交的唯一值")
+    assert.ok(direction.suggestion.options.includes("政策创新 · 其他"))
+    assert.ok(direction.suggestion.options.includes("应用拓展 · 其他"))
+    assert.ok(direction.suggestion.options.includes("支撑能力 · 其他"))
+    const introduction = selected.find(({ suggestion }) => suggestion.label === "案例简介")
+    assert.equal(introduction.suggestion.maxLength, 500)
+    assert.equal(introduction.suggestion.placeholder, undefined)
+    for (const [label, maximum] of [["基本概况", 300], ["主要做法", 1800], ["应用成效", 600], ["创新点", 300]]) {
+      const item = selected.find(({ suggestion }) => suggestion.label === label)
+      assert.ok(item, `缺少叙述题：${label}`)
+      assert.equal(item.suggestion.maxLength, maximum)
+      assert.equal(item.candidate.writeTarget, "paragraph-after")
+      assert.equal(item.candidate.visual.page, 4)
+    }
+    const evidence = selected.find(({ suggestion }) => suggestion.label === "相关佐证材料")
+    assert.equal(evidence.suggestion.inferredAnswerType, "file")
+    assert.equal(evidence.candidate.visual.page, 5)
 
     const selectedBySuggestion = new Map(selected.map((item) => [item.suggestion.id, item]))
     const suggestions = detected.map((suggestion) => {
@@ -317,7 +346,12 @@ async function main() {
     for (const field of manifest.fields) {
       const anchor = manifest.anchors.find((item) => item.fieldId === field.fieldId)
       const xml = packageXml(compiledPkg, anchor.partName)
-      assert.match(xml, new RegExp(`oa-field:${field.fieldId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), `编译 DOCX 缺少字段 SDT：${field.fieldId}`)
+      const escapedFieldId = field.fieldId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      if (field.answerType === "multiple_choice" || field.answerType === "single_choice") {
+        assert.match(xml, new RegExp(`oa-choice:${escapedFieldId}:0`), `编译 DOCX 缺少选项 SDT：${field.fieldId}`)
+      } else {
+        assert.match(xml, new RegExp(`oa-field:${escapedFieldId}`), `编译 DOCX 缺少字段 SDT：${field.fieldId}`)
+      }
     }
     for (const label of NARRATIVE_LABELS) {
       const field = manifest.fields.find((item) => item.label === label)
@@ -327,23 +361,49 @@ async function main() {
     }
 
     const answers = Object.fromEntries(manifest.fields.map((field) => [field.fieldId, answerFor(field)]))
-    const filled = modules.filler.fillWordTemplate(compiled.bytes, { fields: manifest.fields, answers })
+    const fileDisplayNames = Object.fromEntries(manifest.fields.filter((field) => field.answerType === "file").map((field) => [field.fieldId, ["检测报告.pdf", "用户使用报告.pdf"]]))
+    const filled = modules.filler.fillWordTemplate(compiled.bytes, { fields: manifest.fields, answers, fileDisplayNames })
     const filledPkg = modules.ooxml.readOoxmlPackage(filled.bytes)
-    for (const [fieldId, answer] of Object.entries(answers)) {
+    for (const field of manifest.fields) {
+      const fieldId = field.fieldId
+      const answer = answers[fieldId]
       const anchor = manifest.anchors.find((item) => item.fieldId === fieldId)
       const xml = packageXml(filledPkg, anchor.partName)
-      assert.match(xml, new RegExp(`oa-field:${fieldId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), `填充 DOCX 丢失字段 SDT：${fieldId}`)
-      assert.ok(xml.includes(answer), `填充 DOCX 缺少字段答案：${fieldId}`)
+      const escapedFieldId = fieldId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      if (field.answerType === "multiple_choice" || field.answerType === "single_choice") {
+        assert.match(xml, new RegExp(`oa-choice:${escapedFieldId}:0`), `填充 DOCX 丢失选项 SDT：${fieldId}`)
+        continue
+      }
+      assert.match(xml, new RegExp(`oa-field:${escapedFieldId}`), `填充 DOCX 丢失字段 SDT：${fieldId}`)
+      if (field.answerType === "file") assert.ok(xml.includes("检测报告.pdf；用户使用报告.pdf"), `填充 DOCX 缺少授权附件名：${fieldId}`)
+      else assert.ok(xml.includes(answer), `填充 DOCX 缺少字段答案：${fieldId}`)
     }
+    const filledDocumentXml = packageXml(filledPkg, "word/document.xml")
+    assert.equal((filledDocumentXml.match(/oa-choice:[^"']+/g) || []).length, 23, "方向选择题应保留 23 个选项控件")
+    assert.equal((filledDocumentXml.match(/<w:t>√<\/w:t>/g) || []).length, 3, "方向选择题应导出 3 个 √")
+    assert.equal((filledDocumentXml.match(/<w:t>□<\/w:t>/g) || []).length, 20, "未选择方向应保持 20 个 □")
     const filledPdf = await modules.officeConversion.convertFilledDocxToPdf(filled.bytes, "filled-smoke.docx", { capabilities: office })
     const filledPages = await modules.previewTools.inspectPdf(filledPdf.bytes, preview)
-    assert.equal(filledPages.length, EXPECTED_PAGE_COUNT, `填充 PDF 应保持 ${EXPECTED_PAGE_COUNT} 页，实际为 ${filledPages.length} 页`)
+    assert.equal(filledPages.length, EXPECTED_FILLED_PAGE_COUNT, `代表性答案填充后应为 ${EXPECTED_FILLED_PAGE_COUNT} 页，实际为 ${filledPages.length} 页`)
     const filledLayout = modules.pdfLayout.parsePdfBboxXml(await modules.previewTools.extractPdfBboxXml(filledPdf.bytes, preview))
     assertPageGeometry(filledLayout.pages, filledPages, "填充 PDF")
+    assert.equal(filledLayout.textBoxes.filter((box) => box.text.includes("√")).length, 3, "填充 PDF 必须渲染 3 个可提取的 √")
+    const filledFonts = await modules.previewTools.inspectPdfFonts(filledPdf.bytes, preview)
+    const filledUnembeddedFonts = filledFonts.filter((font) => !font.embedded).map((font) => font.name)
+    assert.deepEqual(filledUnembeddedFonts, [], `填充 PDF 含未嵌入字体：${filledUnembeddedFonts.join("、")}`)
+    const filledSubstitutedFonts = modules.officeCapabilities.missingConvertedPdfFonts(
+      requiredFonts,
+      office.fontAliases,
+      filledFonts.map((font) => font.name),
+    )
+    assert.deepEqual(filledSubstitutedFonts, [], `填充 PDF 字体发生替代：${filledSubstitutedFonts.join("、")}`)
+    const cleanFontFamilies = new Set(fonts.map((font) => pdfFontFamily(font.name)))
+    const unexpectedFilledFonts = [...new Set(filledFonts.map((font) => pdfFontFamily(font.name)).filter((name) => !cleanFontFamilies.has(name)))]
+    assert.deepEqual(unexpectedFilledFonts, [], `填充 PDF 引入模板外字体：${unexpectedFilledFonts.join("、")}`)
     const cleanPngs = await modules.previewTools.renderPdfPages(cleanPdf.bytes, preview)
     const filledPngs = await modules.previewTools.renderPdfPages(filledPdf.bytes, preview)
     assert.equal(cleanPngs.length, EXPECTED_PAGE_COUNT)
-    assert.equal(filledPngs.length, EXPECTED_PAGE_COUNT)
+    assert.equal(filledPngs.length, EXPECTED_FILLED_PAGE_COUNT)
 
     await writeFile(path.join(outputDirectory, "clean.pdf"), cleanPdf.bytes)
     await writeFile(path.join(outputDirectory, "filled.docx"), filled.bytes)
@@ -360,11 +420,23 @@ async function main() {
         writeTarget: manifest.anchors.find((anchor) => anchor.fieldId === field.fieldId).structural.writeTarget,
         page: manifest.anchors.find((anchor) => anchor.fieldId === field.fieldId).visual.page,
       })),
+      coverage: {
+        applicantFields: manifest.fields.length,
+        repeatRowStructures: repeatSuggestions.length,
+        pageCounts: Object.fromEntries(pageCoverage),
+        choiceOptions: direction.suggestion.options.length,
+        selectedChoiceValues: answers[direction.suggestion.fieldId],
+        placeholdersAutoDetected: detected.filter((suggestion) => suggestion.placeholder !== undefined).length,
+      },
       requiredFonts,
       fontAliases: office.fontAliases,
       fonts: fonts.map((font) => ({ name: font.name, embedded: font.embedded, subset: font.subset })),
       unembeddedFonts,
       substitutedFonts,
+      filledFonts: filledFonts.map((font) => ({ name: font.name, embedded: font.embedded, subset: font.subset })),
+      filledUnembeddedFonts,
+      filledSubstitutedFonts,
+      unexpectedFilledFonts,
       mappingWarnings: cleanMatch.warnings,
       outputs: ["clean.pdf", "filled.docx", "filled.pdf", ...cleanPngs.map((_, index) => `clean-page-${String(index + 1).padStart(3, "0")}.png`), ...filledPngs.map((_, index) => `filled-page-${String(index + 1).padStart(3, "0")}.png`)],
     }

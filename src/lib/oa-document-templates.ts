@@ -90,6 +90,7 @@ export interface OADocumentSuggestion extends OADocumentStructuralLocator {
   fieldId?: string
   required?: boolean
   maxLength?: number
+  placeholder?: string
   options?: string[]
   visual?: OADocumentVisualAnchor
   bindingCandidateIds?: string[]
@@ -114,6 +115,7 @@ export interface OADocumentManifestField {
   answerType: OADocumentAnswerType
   required: boolean
   maxLength?: number
+  placeholder?: string
   options?: string[]
 }
 
@@ -272,6 +274,11 @@ function assertStructuralAnchor(anchor: OADocumentStructuralAnchor) {
   if (anchor.styleSourcePath !== undefined && !anchor.styleSourcePath.trim()) throw new Error("锚点样式来源路径无效")
 }
 
+function assertPlaceholder(value: string | undefined, owner: string) {
+  if (value === undefined) return
+  if (!value.trim() || value.length > 500 || value.includes("\0")) throw new Error(`${owner} 的 placeholder 提示文字无效`)
+}
+
 export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
   if (!Number.isSafeInteger(manifest.syntaxVersion) || manifest.syntaxVersion < 1) throw new Error("syntaxVersion 无效")
   if (!manifest.compilerVersion?.trim() || manifest.compilerVersion.length > 100) throw new Error("compilerVersion 无效")
@@ -288,6 +295,7 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
     if (field.maxLength !== undefined && (!Number.isSafeInteger(field.maxLength) || field.maxLength < 1 || field.maxLength > 100_000)) {
       throw new Error(`字段 ${field.fieldId} 的 maxLength 无效`)
     }
+    assertPlaceholder(field.placeholder, `字段 ${field.fieldId}`)
     if ((field.answerType === "single_choice" || field.answerType === "multiple_choice") && (!field.options || field.options.length < 1)) {
       throw new Error(`选项字段 ${field.fieldId} 缺少选项`)
     }
@@ -329,6 +337,7 @@ export function validateTemplateManifest(manifest: OADocumentTemplateManifest) {
     assertIdentifier(suggestion.id, "建议 ID")
     if (suggestionIds.has(suggestion.id)) throw new Error(`建议 ID 重复：${suggestion.id}`)
     suggestionIds.add(suggestion.id)
+    assertPlaceholder(suggestion.placeholder, `建议 ${suggestion.id}`)
     if (suggestion.visual) assertVisualAnchor(suggestion.visual)
     if (suggestion.bindingCandidateIds) {
       const suggestionCandidateIds = new Set<string>()

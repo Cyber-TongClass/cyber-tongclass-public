@@ -135,13 +135,33 @@ function versionTwoManifest() {
 }
 
 test("validates version-two visual and structural anchors while preserving version one", () => {
-  assert.doesNotThrow(() => domain.validateTemplateManifest(versionTwoManifest()))
+  const withManualPlaceholder = versionTwoManifest()
+  withManualPlaceholder.fields[0].placeholder = "请概述案例实施过程"
+  withManualPlaceholder.suggestions[0].placeholder = "请概述案例实施过程"
+  assert.doesNotThrow(() => domain.validateTemplateManifest(withManualPlaceholder))
 
   const legacy = versionTwoManifest()
   legacy.syntaxVersion = 1
   legacy.anchors = legacy.anchors.map(({ visual: _visual, bindingCandidateId: _candidate, structural: _structural, ...anchor }) => anchor)
   legacy.suggestions = []
   assert.doesNotThrow(() => domain.validateTemplateManifest(legacy))
+})
+
+test("bounds manual web placeholders without requiring or deriving them", () => {
+  const absent = versionTwoManifest()
+  assert.equal(absent.fields[0].placeholder, undefined)
+  assert.equal(absent.suggestions[0].placeholder, undefined)
+  assert.doesNotThrow(() => domain.validateTemplateManifest(absent))
+
+  for (const placeholder of ["", " ", "x".repeat(501), "不安全\0提示"]) {
+    const invalidField = versionTwoManifest()
+    invalidField.fields[0].placeholder = placeholder
+    assert.throws(() => domain.validateTemplateManifest(invalidField), /placeholder|提示文字/)
+
+    const invalidSuggestion = versionTwoManifest()
+    invalidSuggestion.suggestions[0].placeholder = placeholder
+    assert.throws(() => domain.validateTemplateManifest(invalidSuggestion), /placeholder|提示文字/)
+  }
 })
 
 test("rejects invalid version-two visual geometry", () => {

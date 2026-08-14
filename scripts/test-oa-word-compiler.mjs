@@ -61,14 +61,15 @@ test("rejects stale locators and unresolved manifests", () => {
 })
 
 test("paragraph-after retains the instruction and clones compatible paragraph and run styles into a sibling block SDT", () => {
-  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Narrative"/><w:spacing w:line="360"/><w:ind w:firstLine="420"/></w:pPr><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="24"/></w:rPr><w:t>主要做法（不超过500字）：</w:t></w:r></w:p><w:p><w:r><w:t>后续说明</w:t></w:r></w:p></w:body></w:document>`
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Narrative"/><w:spacing w:line="360"/><w:ind w:firstLine="420"/><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:pPr><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="24"/></w:rPr><w:t>主要做法（不超过500字）：</w:t></w:r></w:p><w:p><w:r><w:t>后续说明</w:t></w:r></w:p></w:body></w:document>`
   const field = { fieldId: "main_practice", label: "主要做法", answerType: "textarea", required: true }
   const anchor = versionTwoAnchor(sourceXml, field.fieldId, "paragraph-after")
   const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
   const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
 
   assert.match(resultXml, /主要做法（不超过500字）：/)
-  assert.match(resultXml, /<w:p><w:pPr><w:pStyle w:val="Narrative"\/><w:spacing w:line="360"\/><w:ind w:firstLine="420"\/><\/w:pPr><w:sdt>/)
+  assert.match(resultXml, /主要做法（不超过500字）：<\/w:t><\/w:r><\/w:p><w:p><w:pPr><w:pStyle w:val="Narrative"\/><w:spacing w:line="360"\/><w:ind w:firstLine="420"\/><w:sectPr>/)
+  assert.equal((resultXml.match(/<w:sectPr>/g) || []).length, 1, "答案段落不得复制分页 section properties")
   assert.match(resultXml, /oa-field:main_practice/)
   assert.match(resultXml, /<w:r><w:rPr><w:rFonts w:eastAsia="宋体"\/><w:sz w:val="24"\/><\/w:rPr><w:t xml:space="preserve"> <\/w:t><\/w:r>/)
   assert.ok(resultXml.indexOf("主要做法（不超过500字）：") < resultXml.indexOf("oa-field:main_practice"))
@@ -105,6 +106,30 @@ test("choice safely splits markers and option text that share one styled run", (
   assert.match(resultXml, /管理/)
   assert.equal((resultXml.match(/<w:rFonts w:eastAsia="楷体"\/>/g) || []).length, 7)
   assert.equal((resultXml.match(/<w:color w:val="13579B"\/>/g) || []).length, 7)
+})
+
+test("choice compiles a multi-paragraph table cell and disambiguates repeated visible options", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tr><w:tc>
+    <w:p><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="22"/></w:rPr><w:t>一、政策创新</w:t></w:r></w:p>
+    <w:p><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="22"/></w:rPr><w:t>□场景开放 □其他</w:t></w:r></w:p>
+    <w:p><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="22"/></w:rPr><w:t>二、应用拓展</w:t></w:r></w:p>
+    <w:p><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="22"/></w:rPr><w:t>□科学技术 □其他</w:t></w:r></w:p>
+  </w:tc></w:tr></w:tbl></w:body></w:document>`
+  const field = { fieldId: "direction", label: "方向", answerType: "multiple_choice", required: true, options: ["场景开放", "政策创新 · 其他", "科学技术", "应用拓展 · 其他"] }
+  const locator = compiler.inspectWordXmlPart(sourceXml).find((node) => node.localName === "tc")
+  const structural = { partName: "word/document.xml", path: locator.path, contextHash: locator.contextHash, writeTarget: "choice" }
+  const anchor = {
+    fieldId: field.fieldId, kind: "checkbox_group", ...structural, output: { mode: "mark_choice" },
+    visual: { page: 1, x: 0.1, y: 0.1, width: 0.8, height: 0.3, pageWidth: 595, pageHeight: 842, rotation: 0, coordinateSpace: "normalized-pdf" },
+    bindingCandidateId: "candidate_direction", structural,
+  }
+  const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+  const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+  assert.equal((resultXml.match(/oa-choice:direction:/g) || []).length, 4)
+  assert.match(resultXml, /一、政策创新/)
+  assert.match(resultXml, /二、应用拓展/)
+  assert.equal((resultXml.match(/<w:rFonts w:eastAsia="宋体"\/>/g) || []).length, 10)
+  assert.equal((resultXml.match(/<w:sz w:val="22"\/>/g) || []).length, 10)
 })
 
 test("compiles detector-normalized choices whose visible labels include parenthetical notes", () => {
@@ -159,7 +184,7 @@ test("choice rejects reordered, renamed, or non-unique visible options across ru
   const emptyField = { fieldId: "category", label: "类型", answerType: "single_choice", required: true, options: [""] }
   assert.throws(
     () => compiler.compileWordTemplate(docx(emptyXml), { syntaxVersion: 2, compilerVersion: "test", fields: [emptyField], suggestions: [], anchors: [emptyAnchor] }),
-    /无法安全匹配选项文本/,
+    /无法安全匹配选项(?:文本|标记)/,
   )
 })
 
@@ -179,6 +204,27 @@ test("inline-run replaces the confirmed run while retaining its run style", () =
   assert.match(resultXml, /oa-field:name/)
   assert.match(resultXml, /<w:rPr><w:u w:val="single"\/><w:rFonts w:eastAsia="楷体"\/><\/w:rPr>/)
   assert.doesNotMatch(resultXml, /____/)
+})
+
+test("table-cell replacement preserves prototype paragraph and run formatting", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tr><w:tc><w:tcPr><w:tcW w:w="2400"/></w:tcPr><w:p><w:pPr><w:spacing w:line="360"/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:eastAsia="宋体"/><w:sz w:val="22"/></w:rPr><w:t>请填写说明</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`
+  const field = { fieldId: "introduction", label: "案例简介", answerType: "textarea", required: true }
+  const anchor = versionTwoAnchor(sourceXml, field.fieldId, "table-cell", "table_cell")
+  const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+  const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+  assert.match(resultXml, /<w:tcPr><w:tcW w:w="2400"\/><\/w:tcPr>/)
+  assert.match(resultXml, /<w:pPr><w:spacing w:line="360"\/><w:jc w:val="left"\/><\/w:pPr>/)
+  assert.match(resultXml, /<w:rPr><w:rFonts w:eastAsia="宋体"\/><w:sz w:val="22"\/><\/w:rPr>/)
+  assert.doesNotMatch(resultXml, /请填写说明/)
+})
+
+test("empty table cells inherit run defaults stored in paragraph properties", () => {
+  const sourceXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tr><w:tc><w:p><w:pPr><w:jc w:val="center"/><w:rPr><w:rFonts w:ascii="Times New Roman" w:eastAsia="方正仿宋_GBK"/><w:sz w:val="24"/></w:rPr></w:pPr></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`
+  const field = { fieldId: "unit", label: "单位名称", answerType: "text", required: true }
+  const anchor = versionTwoAnchor(sourceXml, field.fieldId, "table-cell", "table_cell")
+  const output = compiler.compileWordTemplate(docx(sourceXml), { syntaxVersion: 2, compilerVersion: "test", fields: [field], suggestions: [], anchors: [anchor] })
+  const resultXml = pkgModule.readOoxmlPackage(output.bytes).readText("word/document.xml")
+  assert.match(resultXml, /<w:rPr><w:rFonts w:ascii="Times New Roman" w:eastAsia="方正仿宋_GBK"\/><w:sz w:val="24"\/><\/w:rPr><w:t/)
 })
 
 test("uses all five explicit V2 write targets and preserves legacy V1 mappings", () => {

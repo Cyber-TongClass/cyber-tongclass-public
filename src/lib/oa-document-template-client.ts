@@ -28,6 +28,7 @@ function manifestField(suggestion: OADocumentSuggestion, fieldId: string): OADoc
     answerType: suggestion.inferredAnswerType,
     required: Boolean(suggestion.required),
     ...(suggestion.maxLength ? { maxLength: suggestion.maxLength } : {}),
+    ...(suggestion.placeholder ? { placeholder: suggestion.placeholder.trim() } : {}),
     ...(suggestion.options?.length ? { options: suggestion.options.map((option) => option.trim()).filter(Boolean) } : {}),
   }
 }
@@ -122,6 +123,7 @@ export function documentManifestToOAFormFields(manifest: OADocumentTemplateManif
       label: field.label,
       required: field.required,
       ...(field.maxLength ? { maxLength: field.maxLength } : {}),
+      ...(field.placeholder ? { placeholder: field.placeholder } : {}),
       ...(field.options?.length
         ? { options: field.options.map((option) => ({ label: option, value: option })) }
         : {}),

@@ -53,6 +53,10 @@ export function OADocumentFieldEditor({
           <input type="number" min={1} value={suggestion.maxLength ?? ""} onChange={(event) => update({ maxLength: event.target.value ? Number(event.target.value) : undefined })} className="aia-focus mt-2 w-full border-b aia-border-rule bg-transparent py-2 text-sm" />
         </label>
         <label className="block lg:col-span-2">
+          <span className="aia-mono text-[10px] uppercase tracking-[0.12em] aia-text-muted">提示文字</span>
+          <input value={suggestion.placeholder ?? ""} maxLength={500} placeholder="输入框为空时灰色显示；不会从 Word 自动识别" onChange={(event) => update({ placeholder: event.target.value })} className="aia-focus mt-2 w-full border-b aia-border-rule bg-transparent py-2 text-sm" />
+        </label>
+        <label className="block lg:col-span-2">
           <span className="aia-mono text-[10px] uppercase tracking-[0.12em] aia-text-muted">Word 写入绑定</span>
           <select value={selectedCandidateId || ""} onChange={(event) => onCandidateChange(event.target.value)} className="aia-focus mt-2 w-full border aia-border-rule bg-transparent px-2 py-2 text-sm">
             <option value="" disabled>选择与框选区域重叠的 Word 可写位置</option>

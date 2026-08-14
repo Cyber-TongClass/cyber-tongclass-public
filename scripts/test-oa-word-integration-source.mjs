@@ -98,7 +98,7 @@ test("reviewed manifest conversion blocks unresolved work and preserves existing
         id: "region_name", kind: "table_cell", label: "姓名", inferredAnswerType: "text",
         confidence: "high", reviewState: "confirmed", evidence: [], conflictIds: [], fieldId: "name",
         partName: "word/document.xml", path: "/document/body[1]/tbl[1]/tr[1]/tc[2]", contextHash: "abc",
-        required: true, maxLength: 40,
+        required: true, maxLength: 40, placeholder: "请输入证件上的姓名",
       },
       {
         id: "region_pending", kind: "underline", label: "单位", inferredAnswerType: "text",
@@ -119,10 +119,22 @@ test("reviewed manifest conversion blocks unresolved work and preserves existing
   assert.deepEqual(client.mergeDocumentManifestFields(existing, reviewed), [
     existing[0],
     {
-      ...existing[1], label: "姓名", required: true, maxLength: 40,
+      ...existing[1], label: "姓名", required: true, maxLength: 40, placeholder: "请输入证件上的姓名",
       documentOutput: { mode: "replace", multiline: false },
     },
   ])
+})
+
+test("document field hints are manual web metadata wired through the inspector and review request", async () => {
+  const [editor, workbench] = await Promise.all([
+    source("src/components/oa-documents/oa-document-field-editor.tsx"),
+    source("src/components/oa-documents/oa-document-workbench.tsx"),
+  ])
+  assert.match(editor, /提示文字/)
+  assert.match(editor, /suggestion\.placeholder/)
+  assert.match(editor, /placeholder:\s*event\.target\.value/)
+  assert.match(workbench, /suggestion\.placeholder/)
+  assert.match(workbench, /placeholder:\s*suggestion\.placeholder/)
 })
 
 test("version-two reviewed manifests require canonical visual and structural bindings", () => {

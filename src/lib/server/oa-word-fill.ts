@@ -70,7 +70,7 @@ function normalizeAnswer(field: OADocumentManifestField, value: unknown, authori
       if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) throw new Error(`字段“${field.label}”的多选答案无效`)
       const selected = new Set(value as string[])
       if ([...selected].some((item) => !field.options?.includes(item))) throw new Error(`字段“${field.label}”的多选答案无效`)
-      output = (field.options || []).map((option) => `${selected.has(option) ? "☒" : "☐"} ${option}`).join("  ")
+      output = (field.options || []).map((option) => `${selected.has(option) ? "√" : "□"} ${option}`).join("  ")
       break
     }
     case "file": {
@@ -170,7 +170,7 @@ function fillDocument(document: WordXmlDocument, submission: FillWordSubmission,
       else if (field.answerType === "multiple_choice") selected = Array.isArray(value) && value.includes(option)
       else throw new Error(`字段“${field.label}”不是选项字段`)
     }
-    fillSdtElement(sdt, selected ? "☒" : "☐")
+    fillSdtElement(sdt, selected ? "√" : "□")
     filled += 1
   }
   return filled

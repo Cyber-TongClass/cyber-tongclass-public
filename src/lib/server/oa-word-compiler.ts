@@ -6,6 +6,7 @@ import {
   type OADocumentTemplateManifest,
 } from "@/lib/oa-document-templates"
 import { readOoxmlPackage } from "@/lib/server/ooxml-package"
+import { extractVisibleWordChoiceOptions, normalizeWordChoiceOption, visibleWordChoiceOption } from "@/lib/server/oa-word-choice"
 import {
   childElements,
   cloneElementDeep,
@@ -37,7 +38,7 @@ function stableNumericId(fieldId: string, partName: string, path: string) {
   return String(createHash("sha256").update(`${fieldId}|${partName}|${path}`).digest().readUInt32BE(0) & 0x7fffffff)
 }
 
-function createPlaceholderContent(document: WordXmlDocument, block: boolean, runProperties?: WordXmlElement) {
+function createPlaceholderContent(document: WordXmlDocument, block: boolean, runProperties?: WordXmlElement, paragraphProperties?: WordXmlElement) {
   const run = createWordElement(document, "r")
   if (runProperties) run.appendChild(cloneElementDeep(runProperties))
   const text = createWordElement(document, "t")
@@ -46,6 +47,7 @@ function createPlaceholderContent(document: WordXmlDocument, block: boolean, run
   run.appendChild(text)
   if (!block) return run
   const paragraph = createWordElement(document, "p")
+  if (paragraphProperties) paragraph.appendChild(cloneElementDeep(paragraphProperties))
   paragraph.appendChild(run)
   return paragraph
 }
@@ -59,6 +61,7 @@ function createSdt(
   tagValue = `${repeat ? "oa-repeat" : "oa-field"}:${field.fieldId}`,
   runProperties?: WordXmlElement,
   idDiscriminator = "",
+  paragraphProperties?: WordXmlElement,
 ) {
   const sdt = createWordElement(document, "sdt")
   const properties = createWordElement(document, "sdtPr")
@@ -72,7 +75,7 @@ function createSdt(
   properties.appendChild(tag)
   properties.appendChild(id)
   const content = createWordElement(document, "sdtContent")
-  content.appendChild(createPlaceholderContent(document, block, runProperties))
+  content.appendChild(createPlaceholderContent(document, block, runProperties, paragraphProperties))
   sdt.appendChild(properties)
   sdt.appendChild(content)
   return { sdt, content }
@@ -90,7 +93,19 @@ function explicitWriteTarget(anchor: OADocumentAnchor) {
 function firstRunProperties(element: WordXmlElement) {
   const localName = element.localName || element.nodeName.split(":").at(-1)
   const firstRun = localName === "r" ? element : descendantElements(element, "r")[0]
-  return firstRun ? childElements(firstRun, "rPr")[0] : undefined
+  if (firstRun) return childElements(firstRun, "rPr")[0]
+  const firstParagraph = localName === "p" ? element : descendantElements(element, "p")[0]
+  const paragraphProperties = firstParagraph ? childElements(firstParagraph, "pPr")[0] : undefined
+  return paragraphProperties ? childElements(paragraphProperties, "rPr")[0] : undefined
+}
+
+function cloneAnswerParagraphProperties(properties: WordXmlElement) {
+  const clone = cloneElementDeep(properties)
+  for (const child of childElements(clone)) {
+    const localName = child.localName || child.nodeName.split(":").at(-1)
+    if (localName === "sectPr") clone.removeChild(child)
+  }
+  return clone
 }
 
 function insertParagraphAfter(document: WordXmlDocument, target: WordXmlElement, anchor: OADocumentAnchor, field: OADocumentManifestField) {
@@ -103,7 +118,15 @@ function insertParagraphAfter(document: WordXmlDocument, target: WordXmlElement,
   }
   const paragraph = createWordElement(document, "p")
   const paragraphProperties = childElements(styleSource, "pPr")[0]
-  if (paragraphProperties) paragraph.appendChild(cloneElementDeep(paragraphProperties))
+  if (paragraphProperties) {
+    const answerProperties = cloneAnswerParagraphProperties(paragraphProperties)
+    const sectionProperties = styleSource === target ? childElements(paragraphProperties, "sectPr")[0] : undefined
+    if (sectionProperties) {
+      paragraphProperties.removeChild(sectionProperties)
+      answerProperties.appendChild(sectionProperties)
+    }
+    paragraph.appendChild(answerProperties)
+  }
   const { sdt } = createSdt(document, field, anchor, false, false, `oa-field:${field.fieldId}`, firstRunProperties(styleSource))
   paragraph.appendChild(sdt)
   parent.insertBefore(paragraph, target.nextSibling)
@@ -117,18 +140,10 @@ function choiceMarkerMatches(value: string) {
   return [...value.matchAll(/[□☐○◯☒☑●■]/g)]
 }
 
-function normalizeChoiceOptionText(value: string) {
-  return value.normalize("NFKC").replace(/[（(].*$/, "").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
-}
-
-function visibleChoiceOptions(runs: WordXmlElement[]) {
-  const value = runs.map(runText).join("")
-  const markers = choiceMarkerMatches(value)
-  return markers.map((marker, index) => {
-    const start = (marker.index ?? 0) + marker[0].length
-    const end = markers[index + 1]?.index ?? value.length
-    return normalizeChoiceOptionText(value.slice(start, end))
-  })
+function visibleChoiceOptions(target: WordXmlElement) {
+  const localName = target.localName || target.nodeName.split(":").at(-1)
+  const paragraphs = localName === "p" ? [target] : descendantElements(target, "p")
+  return extractVisibleWordChoiceOptions(paragraphs.map((paragraph) => descendantElements(paragraph, "r").map(runText).join("")))
 }
 
 function createStyledTextRun(document: WordXmlDocument, prototype: WordXmlElement, value: string) {
@@ -143,16 +158,16 @@ function createStyledTextRun(document: WordXmlDocument, prototype: WordXmlElemen
 }
 
 function compileChoice(document: WordXmlDocument, target: WordXmlElement, anchor: OADocumentAnchor, field: OADocumentManifestField) {
-  const options = (field.options || []).map(normalizeChoiceOptionText)
+  const options = (field.options || []).map((option) => option.normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim())
   const runs = descendantElements(target, "r")
-  const visibleOptions = visibleChoiceOptions(runs)
+  const visibleOptions = visibleChoiceOptions(target)
   if (!options.length || visibleOptions.length !== options.length) {
     throw new Error(`选项字段“${field.label}”无法安全匹配选项标记`)
   }
-  if (new Set(options).size !== options.length || new Set(visibleOptions).size !== visibleOptions.length) {
+  if (new Set(options).size !== options.length) {
     throw new Error(`选项字段“${field.label}”的选项文本必须唯一`)
   }
-  if (options.some((option) => !option) || visibleOptions.some((option, index) => !option || option !== options[index])) {
+  if (options.some((option) => !normalizeWordChoiceOption(option)) || visibleOptions.some((option, index) => !option || option !== visibleWordChoiceOption(options[index]))) {
     throw new Error(`选项字段“${field.label}”无法安全匹配选项文本`)
   }
   let optionIndex = 0
@@ -245,7 +260,9 @@ function wrapTarget(document: WordXmlDocument, target: WordXmlElement, anchor: O
   if (writeTarget === "table-cell") {
     const localName = target.localName || target.nodeName.split(":").at(-1)
     if (localName !== "tc") throw new Error(`表格单元格锚点类型无效：${anchor.path}`)
-    const { sdt } = createSdt(document, field, anchor, true)
+    const prototypeParagraph = childElements(target, "p")[0]
+    const paragraphProperties = prototypeParagraph ? childElements(prototypeParagraph, "pPr")[0] : undefined
+    const { sdt } = createSdt(document, field, anchor, true, false, `oa-field:${field.fieldId}`, firstRunProperties(target), "", paragraphProperties)
     const properties = childElements(target, "tcPr")[0]
     for (const child of [...childElements(target)]) if (child !== properties) target.removeChild(child)
     target.appendChild(sdt)

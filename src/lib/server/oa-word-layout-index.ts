@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto"
 import type { OADocumentRegionKind, OADocumentStructuralLocator, OADocumentWriteTarget } from "@/lib/oa-document-templates"
 import type { OoxmlPackage } from "@/lib/server/ooxml-package"
-import { childElements, descendantElements, elementLocalName, normalizedWordText, parseWordXml, structuralPath, wordAttribute, wordContextHash, type WordXmlElement } from "@/lib/server/oa-word-xml"
+import { extractGroupedWordChoiceOptions } from "@/lib/server/oa-word-choice"
+import { childElements, descendantElements, elementLocalName, inspectWordXmlPart, normalizedWordText, parseWordXml, structuralPath, wordAttribute, wordContextHash, type WordXmlElement } from "@/lib/server/oa-word-xml"
 
 export interface OAWordWritableNode extends OADocumentStructuralLocator {
   id: string
@@ -10,11 +11,13 @@ export interface OAWordWritableNode extends OADocumentStructuralLocator {
   writeTarget: OADocumentWriteTarget
   label: string
   normalizedText: string
+  options?: string[]
   table?: { table: number; row: number; cell: number }
   styleSourcePath?: string
 }
 
-const NARRATIVE_LABELS = ["基本概况", "主要做法", "创新成效", "应用情况", "推广价值"]
+const NARRATIVE_LABELS = ["基本概况", "主要做法", "应用成效", "创新点", "创新成效", "应用情况"]
+const EVIDENCE_LABELS = ["相关佐证材料", "佐证材料", "证明材料"]
 
 function normalized(value: string) {
   return value.normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
@@ -28,6 +31,27 @@ function isBlank(value: string) {
   return !value || /^(?:_{3,}|＿{3,}|\.{4,}|…{2,})$/.test(value)
 }
 
+function choiceOptions(element: WordXmlElement) {
+  return extractGroupedWordChoiceOptions(descendantElements(element, "p").map((paragraph) => normalizedWordText(paragraph)))
+}
+
+function looksInstructionalAnswer(value: string) {
+  return value.length <= 500 && /(?:不超过|以内|最多|限\s*\d|简述|请(?:填写|说明|概述)|阐述|总结)/.test(value)
+}
+
+function contextualTableLabel(section: string, cells: WordXmlElement[], labelIndex: number) {
+  const raw = cleanLabel(normalizedWordText(cells[labelIndex]))
+  const role = /^(?:职务|联系方式)$/.test(raw)
+    ? cells.slice(0, labelIndex).reverse().map((cell) => cleanLabel(normalizedWordText(cell))).find((value) => /^(?:负责人|联系人)$/.test(value))
+    : undefined
+  return [section, role, raw].filter(Boolean).join(" · ") || raw
+}
+
+function exactHeadingLabel(value: string, labels: string[]) {
+  const heading = cleanLabel(normalized(value).replace(/^[一二三四五六七八九十0-9]+[、.．]\s*/, ""))
+  return labels.find((label) => heading === label)
+}
+
 function closest(element: WordXmlElement, name: string) {
   let current: WordXmlElement | null = element
   while (current) {
@@ -38,15 +62,16 @@ function closest(element: WordXmlElement, name: string) {
 }
 
 function previousText(element: WordXmlElement) {
+  const values: string[] = []
   let current = element.previousSibling
   while (current) {
     if (current.nodeType === 1) {
       const text = normalizedWordText(current)
-      if (text) return text
+      if (text) values.unshift(text)
     }
     current = current.previousSibling
   }
-  return ""
+  return values.join("")
 }
 
 function stableId(locator: OADocumentStructuralLocator, writeTarget: OADocumentWriteTarget, label: string) {
@@ -59,24 +84,46 @@ function packageParts(pkg: OoxmlPackage) {
 
 export function indexWordWritableNodes(pkg: OoxmlPackage): OAWordWritableNode[] {
   const result: OAWordWritableNode[] = []
-  let order = 0
+  const orderByLocator = new Map<string, number>()
+  let fallbackOrder = 1_000_000_000
   const add = (partName: string, element: WordXmlElement, input: Omit<OAWordWritableNode, keyof OADocumentStructuralLocator | "id" | "order">) => {
     const locator = { partName, path: structuralPath(element), contextHash: wordContextHash(element) }
-    result.push({ ...locator, id: stableId(locator, input.writeTarget, input.label), order: order++, ...input })
+    result.push({ ...locator, id: stableId(locator, input.writeTarget, input.label), order: orderByLocator.get(`${partName}|${locator.path}`) ?? fallbackOrder++, ...input })
   }
+  let partOffset = 0
   for (const partName of packageParts(pkg)) {
-    const document = parseWordXml(pkg.readText(partName))
+    const xml = pkg.readText(partName)
+    const inspected = inspectWordXmlPart(xml)
+    for (const item of inspected) orderByLocator.set(`${partName}|${item.path}`, partOffset + item.order)
+    partOffset += inspected.length + 1
+    const document = parseWordXml(xml)
     const tables = descendantElements(document, "tbl")
+    const groupedChoiceCells = new Set<WordXmlElement>()
     tables.forEach((table, tableIndex) => {
       const rows = childElements(table, "tr")
+      let section = ""
       rows.forEach((row, rowIndex) => {
         const cells = childElements(row, "tc")
+        if (cells.length === 1) {
+          const heading = cleanLabel(normalizedWordText(cells[0]))
+          const gridSpan = descendantElements(cells[0], "gridSpan")[0]
+          if (heading && (gridSpan || /(?:基本信息|单位信息)/.test(heading))) section = heading
+        }
         cells.forEach((cell, cellIndex) => {
           const value = normalized(normalizedWordText(cell))
-          if (!isBlank(value)) return
           const labelCell = cells.slice(0, cellIndex).reverse().find((candidate) => normalizedWordText(candidate))
           if (!labelCell) return
-          const label = cleanLabel(normalizedWordText(labelCell))
+          const labelIndex = cells.indexOf(labelCell)
+          const rawLabel = cleanLabel(normalizedWordText(labelCell))
+          const options = choiceOptions(cell)
+          if (options.length >= 2) {
+            const radio = /[○◯]/.test(value) && !/[□☐]/.test(value)
+            add(partName, cell, { kind: radio ? "radio_group" : "checkbox_group", writeTarget: "choice", label: rawLabel, normalizedText: normalized(normalizedWordText(labelCell)), options, table: { table: tableIndex + 1, row: rowIndex + 1, cell: cellIndex + 1 }, styleSourcePath: structuralPath(cell) })
+            groupedChoiceCells.add(cell)
+            return
+          }
+          if (!isBlank(value) && !looksInstructionalAnswer(value)) return
+          const label = contextualTableLabel(section, cells, labelIndex)
           add(partName, cell, { kind: "table_cell", writeTarget: "table-cell", label, normalizedText: normalized(normalizedWordText(labelCell)), table: { table: tableIndex + 1, row: rowIndex + 1, cell: cellIndex + 1 }, styleSourcePath: structuralPath(cell) })
         })
         if (rowIndex > 0) {
@@ -89,14 +136,18 @@ export function indexWordWritableNodes(pkg: OoxmlPackage): OAWordWritableNode[] 
       })
     })
 
-    for (const paragraph of descendantElements(document, "p")) {
+    const paragraphs = descendantElements(document, "p")
+    for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex += 1) {
+      const paragraph = paragraphs[paragraphIndex]
       if (closest(paragraph, "sdt")) continue
       const paragraphText = normalized(normalizedWordText(paragraph))
+      const tableCell = closest(paragraph, "tc")
+      if (tableCell && groupedChoiceCells.has(tableCell)) continue
       const choiceMarks = [...paragraphText.matchAll(/[□☐○◯]([^□☐○◯●■]+)/g)].map((match) => normalized(match[1]).replace(/[（(].*$/, "")).filter(Boolean)
       if (choiceMarks.length >= 2) {
         const label = cleanLabel(paragraphText.split(/[：:]/, 1)[0] || "选项")
         const radio = /[○◯]/.test(paragraphText)
-        add(partName, paragraph, { kind: radio ? "radio_group" : "checkbox_group", writeTarget: "choice", label, normalizedText: paragraphText, styleSourcePath: structuralPath(paragraph) })
+        add(partName, paragraph, { kind: radio ? "radio_group" : "checkbox_group", writeTarget: "choice", label, normalizedText: normalized(label), options: choiceMarks, styleSourcePath: structuralPath(paragraph) })
       }
       for (const run of descendantElements(paragraph, "r")) {
         if (closest(run, "sdt")) continue
@@ -107,11 +158,22 @@ export function indexWordWritableNodes(pkg: OoxmlPackage): OAWordWritableNode[] 
         const label = cleanLabel(preceding || "填写内容")
         add(partName, run, { kind: "underline", writeTarget: "inline-run", label, normalizedText: normalized(preceding), styleSourcePath: structuralPath(run) })
       }
-      const boundedInstruction = /(?:不超过|最多|限)\s*\d{1,6}\s*(?:个?字|字符)/.test(paragraphText)
-      const narrativeLabel = NARRATIVE_LABELS.find((label) => paragraphText.includes(label))
-      if (narrativeLabel || boundedInstruction) {
-        const label = cleanLabel(narrativeLabel || paragraphText)
-        add(partName, paragraph, { kind: "label_blank", writeTarget: "paragraph-after", label, normalizedText: paragraphText, styleSourcePath: structuralPath(paragraph) })
+      if (tableCell) continue
+      const directLabel = NARRATIVE_LABELS.find((label) => cleanLabel(paragraphText).startsWith(label))
+      const boundedInstruction = /(?:(?:不超过|最多|限)\s*\d{1,6}\s*(?:个?字|字符)|\d{1,6}\s*(?:个?字|字符)\s*以内)/.test(paragraphText)
+      if (directLabel && (boundedInstruction || /[：:]\s*$/.test(paragraphText))) {
+        add(partName, paragraph, { kind: "label_blank", writeTarget: "paragraph-after", label: directLabel, normalizedText: paragraphText, styleSourcePath: structuralPath(paragraph) })
+        continue
+      }
+      const headingLabel = exactHeadingLabel(paragraphText, NARRATIVE_LABELS)
+      const evidenceLabel = exactHeadingLabel(paragraphText, EVIDENCE_LABELS)
+      if (headingLabel || evidenceLabel) {
+        const target = paragraphs.slice(paragraphIndex + 1).find((candidate) => !closest(candidate, "tc") && normalized(normalizedWordText(candidate)))
+        if (target) {
+          const label = headingLabel || evidenceLabel!
+          add(partName, target, { kind: "label_blank", writeTarget: "paragraph-after", label, normalizedText: normalized(normalizedWordText(target)), styleSourcePath: structuralPath(target) })
+        }
+        continue
       }
     }
   }

@@ -320,6 +320,7 @@ export function OADocumentWorkbench({
     inferredAnswerType: suggestion.inferredAnswerType,
     ...(suggestion.required !== undefined ? { required: suggestion.required } : {}),
     ...(suggestion.maxLength !== undefined ? { maxLength: suggestion.maxLength } : {}),
+    ...(suggestion.placeholder !== undefined ? { placeholder: suggestion.placeholder } : {}),
     ...(suggestion.options ? { options: suggestion.options } : {}),
     ...(suggestion.visual ? { visual: suggestion.visual } : {}),
     ...(selectedCandidates[suggestion.id] ? { bindingCandidateId: selectedCandidates[suggestion.id] } : {}),

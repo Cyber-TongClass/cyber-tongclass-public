@@ -101,3 +101,41 @@ test("emits and attaches paragraph-after narratives without requiring a trailing
   assert.deepEqual(attached.bindingCandidateIds, ["binding_narrative"])
   assert.deepEqual(attached.visual, visual)
 })
+
+test("detects complete structured questions without turning Word instructions into placeholders", () => {
+  const completeXml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+    <w:tbl>
+      <w:tr><w:tc><w:p><w:r><w:t>方向</w:t></w:r></w:p></w:tc><w:tc>
+        <w:p><w:r><w:t>一、政策创新</w:t></w:r></w:p><w:p><w:r><w:t>□场景开放 □要素联动 □其他</w:t></w:r></w:p>
+        <w:p><w:r><w:t>二、应用拓展</w:t></w:r></w:p><w:p><w:r><w:t>□科学技术 □其他</w:t></w:r></w:p>
+      </w:tc></w:tr>
+      <w:tr><w:tc><w:p><w:r><w:t>案例简介</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>简述基本概况和创新点，不超过500字</w:t></w:r></w:p></w:tc></w:tr>
+      <w:tr><w:tc><w:tcPr><w:gridSpan w:val="6"/></w:tcPr><w:p><w:r><w:t>联合实施单位信息（不超过3家）</w:t></w:r></w:p></w:tc></w:tr>
+      <w:tr><w:tc><w:p><w:r><w:t>联系人</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc><w:tc><w:p><w:r><w:t>职务</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc><w:tc><w:p><w:r><w:t>联系方式</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>一、基本概况</w:t></w:r></w:p><w:p><w:r><w:t>阐述案例痛点。（300字以内）</w:t></w:r></w:p>
+    <w:p><w:r><w:t>二、主要做法</w:t></w:r></w:p><w:p><w:r><w:t>阐述技术路线。（1800字以内）</w:t></w:r></w:p>
+    <w:p><w:r><w:t>三、应用成效</w:t></w:r></w:p><w:p><w:r><w:t>阐述应用实效。（600字以内）</w:t></w:r></w:p>
+    <w:p><w:r><w:t>四、创新点</w:t></w:r></w:p><w:p><w:r><w:t>总结创新亮点。（300字以内）</w:t></w:r></w:p>
+    <w:p><w:r><w:t>相关佐证材料</w:t></w:r></w:p><w:p><w:r><w:t>包括检测报告、用户报告等材料。</w:t></w:r></w:p>
+  </w:body></w:document>`
+  const items = detection.detectWordFormRegions(docx(completeXml))
+  const direction = items.filter((item) => item.label === "方向")
+  assert.equal(direction.length, 1)
+  assert.equal(direction[0].inferredAnswerType, "multiple_choice")
+  assert.deepEqual(direction[0].options, ["场景开放", "要素联动", "政策创新 · 其他", "科学技术", "应用拓展 · 其他"])
+  const introduction = items.find((item) => item.label === "案例简介")
+  assert.equal(introduction.inferredAnswerType, "textarea")
+  assert.equal(introduction.maxLength, 500)
+  assert.equal(introduction.placeholder, undefined)
+  for (const [label, maxLength] of [["基本概况", 300], ["主要做法", 1800], ["应用成效", 600], ["创新点", 300]]) {
+    const item = items.find((candidate) => candidate.label === label)
+    assert.ok(item, label)
+    assert.equal(item.maxLength, maxLength)
+    assert.equal(item.placeholder, undefined)
+  }
+  assert.equal(items.find((item) => item.label === "相关佐证材料").inferredAnswerType, "file")
+  assert.ok(items.some((item) => item.label === "联合实施单位信息 · 联系人 · 职务"))
+  assert.ok(items.some((item) => item.label === "联合实施单位信息 · 联系人 · 联系方式"))
+  assert.equal(items.some((item) => item.label === "基本概况" && item.path.includes("tbl")), false)
+})

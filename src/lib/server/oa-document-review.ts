@@ -19,6 +19,7 @@ export interface ReviewEdit {
   inferredAnswerType: OADocumentAnswerType
   required?: boolean
   maxLength?: number
+  placeholder?: string
   options?: string[]
   visual?: OADocumentVisualAnchor
   bindingCandidateId?: string
@@ -35,7 +36,7 @@ const ANSWER_TYPES = new Set<OADocumentAnswerType>([
   "text", "textarea", "number", "date", "email", "phone", "single_choice", "multiple_choice", "file",
 ])
 const REVIEW_STATES = new Set<OADocumentSuggestionReviewState>(["confirmed", "unresolved", "ignored", "deleted", "conflict"])
-const EDIT_KEYS = new Set(["suggestionId", "reviewState", "label", "inferredAnswerType", "required", "maxLength", "options", "visual", "bindingCandidateId"])
+const EDIT_KEYS = new Set(["suggestionId", "reviewState", "label", "inferredAnswerType", "required", "maxLength", "placeholder", "options", "visual", "bindingCandidateId"])
 const VISUAL_KEYS = new Set(["page", "x", "y", "width", "height", "pageWidth", "pageHeight", "rotation", "coordinateSpace"])
 
 function objectRecord(value: unknown, message: string): Record<string, unknown> {
@@ -46,6 +47,13 @@ function objectRecord(value: unknown, message: string): Record<string, unknown> 
 function stringValue(value: unknown, label: string, maximum: number) {
   if (typeof value !== "string" || !value.trim() || value.length > maximum || value.includes("\0")) {
     throw new OADocumentReviewError("INVALID_REVIEW", `${label}无效`, 422)
+  }
+  return value.trim()
+}
+
+function placeholderValue(value: unknown) {
+  if (typeof value !== "string" || value.length > 500 || value.includes("\0")) {
+    throw new OADocumentReviewError("INVALID_REVIEW", "提示文字无效", 422)
   }
   return value.trim()
 }
@@ -84,6 +92,7 @@ export function parseReviewEdits(input: unknown): ReviewEdit[] {
     const label = stringValue(value.label, "字段标签", 200)
     if (value.required !== undefined && typeof value.required !== "boolean") throw new OADocumentReviewError("INVALID_REVIEW", "required 无效", 422)
     if (value.maxLength !== undefined && (!Number.isSafeInteger(value.maxLength) || (value.maxLength as number) < 1 || (value.maxLength as number) > 100_000)) throw new OADocumentReviewError("INVALID_REVIEW", "maxLength 无效", 422)
+    if (value.placeholder !== undefined && typeof value.placeholder !== "string") throw new OADocumentReviewError("INVALID_REVIEW", "提示文字无效", 422)
     if (value.options !== undefined && (!Array.isArray(value.options) || value.options.length < 1 || value.options.length > 100 || value.options.some((option) => typeof option !== "string" || !option.trim() || option.length > 500))) throw new OADocumentReviewError("INVALID_REVIEW", "options 无效", 422)
     if ((inferredAnswerType === "single_choice" || inferredAnswerType === "multiple_choice") && !value.options) throw new OADocumentReviewError("INVALID_REVIEW", "选项字段缺少 options", 422)
     return {
@@ -93,6 +102,7 @@ export function parseReviewEdits(input: unknown): ReviewEdit[] {
       inferredAnswerType,
       ...(value.required !== undefined ? { required: value.required as boolean } : {}),
       ...(value.maxLength !== undefined ? { maxLength: value.maxLength as number } : {}),
+      ...(value.placeholder !== undefined ? { placeholder: placeholderValue(value.placeholder) } : {}),
       ...(value.options !== undefined ? { options: (value.options as string[]).map((option) => option.trim()) } : {}),
       ...(value.visual !== undefined ? { visual: parseVisual(value.visual) } : {}),
       ...(value.bindingCandidateId !== undefined ? { bindingCandidateId: stringValue(value.bindingCandidateId, "候选 ID", 128) } : {}),
@@ -196,6 +206,7 @@ export function buildReviewedManifest(stored: OADocumentTemplateManifest, layout
       conflictIds: edit.reviewState === "conflict" ? suggestion.conflictIds : [],
       ...(edit.required !== undefined ? { required: edit.required } : { required: undefined }),
       ...(edit.maxLength !== undefined ? { maxLength: edit.maxLength } : { maxLength: undefined }),
+      ...(edit.placeholder ? { placeholder: edit.placeholder } : { placeholder: undefined }),
       ...(edit.options !== undefined ? { options: edit.options } : { options: undefined }),
       ...(visual ? { visual } : { visual: undefined }),
       ...(bindingCandidateIds.length ? { bindingCandidateIds } : { bindingCandidateIds: undefined }),
@@ -213,6 +224,7 @@ export function buildReviewedManifest(stored: OADocumentTemplateManifest, layout
       answerType: suggestion.inferredAnswerType,
       required: suggestion.required === true,
       ...(suggestion.maxLength !== undefined ? { maxLength: suggestion.maxLength } : {}),
+      ...(suggestion.placeholder ? { placeholder: suggestion.placeholder } : {}),
       ...(suggestion.options?.length ? { options: suggestion.options } : {}),
     })
     const structural = {

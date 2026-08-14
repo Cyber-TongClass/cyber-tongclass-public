@@ -9,6 +9,7 @@ import {
   type OADocumentSuggestionConfidence,
 } from "@/lib/oa-document-templates"
 import { readOoxmlPackage, type OoxmlPackage } from "@/lib/server/ooxml-package"
+import { extractGroupedWordChoiceOptions } from "@/lib/server/oa-word-choice"
 import {
   childElements,
   descendantElements,
@@ -38,14 +39,15 @@ interface Candidate {
   options?: string[]
 }
 
-const PARAGRAPH_AFTER_LABELS = ["基本概况", "主要做法", "创新成效", "应用情况", "推广价值"]
+const PARAGRAPH_AFTER_LABELS = ["基本概况", "主要做法", "应用成效", "创新点", "创新成效", "应用情况"]
+const EVIDENCE_LABELS = ["相关佐证材料", "佐证材料", "证明材料"]
 
 function stableId(candidate: Candidate) {
   return `region_${createHash("sha256").update(`${candidate.partName}|${candidate.path}|${candidate.kind}|${candidate.label.normalize("NFKC")}`).digest("hex").slice(0, 16)}`
 }
 
 function cleanLabel(value: string) {
-  return value.replace(/[：:]\s*$/, "").replace(/[（(][^）)]*(?:字|选)[^）)]*[）)]/g, "").replace(/[_＿.·…\s]+$/g, "").trim().slice(0, 200) || "未命名字段"
+  return value.replace(/[：:]\s*$/, "").replace(/[（(][^）)]*(?:(?:不超过|以内|最多|限)|字|选)[^）)]*[）)]/g, "").replace(/[_＿.·…\s]+$/g, "").trim().slice(0, 200) || "未命名字段"
 }
 
 function inferAnswerType(label: string): OADocumentAnswerType {
@@ -54,24 +56,56 @@ function inferAnswerType(label: string): OADocumentAnswerType {
   if (/(邮箱|电子邮件|email)/i.test(label)) return "email"
   if (/(电话|手机|联系方式)/.test(label)) return "phone"
   if (/(说明|简介|事迹|理由|意见|内容|摘要)/.test(label)) return "textarea"
-  if (/(附件|证明材料|文件)/.test(label)) return "file"
+  if (/(附件|证明材料|佐证材料|文件)/.test(label)) return "file"
   return "text"
 }
 
 function instructionHints(text: string) {
-  const length = /(?:不超过|最多|限)\s*(\d{1,6})\s*(?:个?字|字符)/.exec(text)
+  const length = /(?:(?:不超过|最多|限)\s*(\d{1,6})\s*(?:个?字|字符)|(\d{1,6})\s*(?:个?字|字符)\s*以内)/.exec(text)
   const required = /(?:必填|必须|请务必)/.test(text) ? true : undefined
-  return { maxLength: length ? Number(length[1]) : undefined, required }
+  return { maxLength: length ? Number(length[1] || length[2]) : undefined, required }
 }
 
 function isBlankRegionText(value: string) {
   return !value || /^(?:_{3,}|＿{3,}|\.{4,}|…{2,})$/.test(value.trim())
 }
 
-function previousElementSibling(element: WordXmlElement) {
+function normalized(value: string) {
+  return value.normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
+}
+
+function extractChoiceOptions(element: WordXmlElement) {
+  return extractGroupedWordChoiceOptions(descendantElements(element, "p").map((paragraph) => normalizedWordText(paragraph)))
+}
+
+function looksInstructionalAnswer(value: string) {
+  return value.length <= 500 && /(?:不超过|以内|最多|限\s*\d|简述|请(?:填写|说明|概述)|阐述|总结)/.test(value)
+}
+
+function contextualTableLabel(section: string, cells: WordXmlElement[], labelIndex: number) {
+  const raw = cleanLabel(normalizedWordText(cells[labelIndex]))
+  const role = /^(?:职务|联系方式)$/.test(raw)
+    ? cells.slice(0, labelIndex).reverse().map((cell) => cleanLabel(normalizedWordText(cell))).find((value) => /^(?:负责人|联系人)$/.test(value))
+    : undefined
+  return [section, role, raw].filter(Boolean).join(" · ") || raw
+}
+
+function exactHeadingLabel(value: string, labels: string[]) {
+  const heading = cleanLabel(normalized(value).replace(/^[一二三四五六七八九十0-9]+[、.．]\s*/, ""))
+  return labels.find((label) => heading === label)
+}
+
+function precedingElementText(element: WordXmlElement) {
+  const values: string[] = []
   let node = element.previousSibling
-  while (node && node.nodeType !== 1) node = node.previousSibling
-  return node as WordXmlElement | null
+  while (node) {
+    if (node.nodeType === 1) {
+      const text = normalizedWordText(node)
+      if (text) values.unshift(text)
+    }
+    node = node.previousSibling
+  }
+  return values.join("")
 }
 
 function closestAncestor(element: WordXmlElement, localName: string) {
@@ -93,6 +127,7 @@ function detectPart(partName: string, xml: string) {
   const inspected = inspectWordXmlPart(xml)
   const orderByPath = new Map(inspected.map((item) => [item.path, item.order]))
   const candidates: Candidate[] = []
+  const groupedChoiceCells = new Set<WordXmlElement>()
   const base = (element: WordXmlElement) => ({
     partName,
     path: structuralPath(element),
@@ -120,18 +155,37 @@ function detectPart(partName: string, xml: string) {
 
   for (const table of descendantElements(document, "tbl")) {
     const rows = childElements(table, "tr")
+    let section = ""
     for (const row of rows) {
       const cells = childElements(row, "tc")
+      if (cells.length === 1) {
+        const heading = cleanLabel(normalizedWordText(cells[0]))
+        const gridSpan = descendantElements(cells[0], "gridSpan")[0]
+        if (heading && (gridSpan || /(?:基本信息|单位信息)/.test(heading))) section = heading
+      }
       cells.forEach((cell, index) => {
-        const text = normalizedWordText(cell)
-        if (!isBlankRegionText(text)) return
+        const text = normalized(normalizedWordText(cell))
         const labelCell = cells.slice(0, index).reverse().find((candidate) => normalizedWordText(candidate))
         if (!labelCell) return
-        const rawLabel = normalizedWordText(labelCell)
-        const hints = instructionHints(rawLabel)
+        const labelIndex = cells.indexOf(labelCell)
+        const rawLabel = cleanLabel(normalizedWordText(labelCell))
+        const options = extractChoiceOptions(cell)
+        if (options.length >= 2) {
+          const radio = /[○◯]/.test(text) && !/[□☐]/.test(text)
+          pushCandidate(candidates, {
+            ...base(cell), kind: radio ? "radio_group" : "checkbox_group", label: rawLabel,
+            inferredAnswerType: radio ? "single_choice" : "multiple_choice", confidence: "high",
+            evidence: ["同一表格填写区域包含多个选择标记"], options,
+          })
+          groupedChoiceCells.add(cell)
+          return
+        }
+        if (!isBlankRegionText(text) && !looksInstructionalAnswer(text)) return
+        const label = contextualTableLabel(section, cells, labelIndex)
+        const hints = instructionHints(`${rawLabel} ${text}`)
         pushCandidate(candidates, {
-          ...base(cell), kind: "table_cell", label: cleanLabel(rawLabel), inferredAnswerType: inferAnswerType(rawLabel), confidence: "high",
-          evidence: ["空白表格单元格位于标签右侧"], ...hints,
+          ...base(cell), kind: "table_cell", label, inferredAnswerType: inferAnswerType(rawLabel), confidence: isBlankRegionText(text) ? "high" : "medium",
+          evidence: [isBlankRegionText(text) ? "空白表格单元格位于标签右侧" : "说明文字所在单元格可由答案替换"], ...hints,
         })
       })
     }
@@ -150,9 +204,13 @@ function detectPart(partName: string, xml: string) {
     }
   }
 
-  for (const paragraph of descendantElements(document, "p")) {
+  const paragraphs = descendantElements(document, "p")
+  for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex += 1) {
+    const paragraph = paragraphs[paragraphIndex]
     if (closestAncestor(paragraph, "sdt")) continue
     const text = normalizedWordText(paragraph)
+    const tableCell = closestAncestor(paragraph, "tc")
+    if (tableCell && groupedChoiceCells.has(tableCell)) continue
     const checkboxMatches = [...text.matchAll(/[□☐]([^□☐○◯●■]+)/g)].map((match) => match[1].trim()).filter(Boolean)
     const radioMatches = [...text.matchAll(/[○◯]([^□☐○◯●■]+)/g)].map((match) => match[1].trim()).filter(Boolean)
     const matches = radioMatches.length >= 2 ? radioMatches : checkboxMatches
@@ -166,14 +224,15 @@ function detectPart(partName: string, xml: string) {
       })
     }
 
+    let hasInlineBlank = false
     for (const run of descendantElements(paragraph, "r")) {
       if (closestAncestor(run, "sdt")) continue
       const runText = normalizedWordText(run)
       const underlined = descendantElements(run, "u").some((underline) => (wordAttribute(underline, "val") || "single") !== "none")
       const leader = /(?:_{3,}|＿{3,}|\.{4,}|…{2,})/.test(runText)
       if (!underlined && !leader) continue
-      const previous = previousElementSibling(run)
-      const precedingText = previous ? normalizedWordText(previous) : text.replace(runText, "")
+      hasInlineBlank = true
+      const precedingText = precedingElementText(run) || text.replace(runText, "")
       const rawLabel = cleanLabel(precedingText || "填写内容")
       const hints = instructionHints(`${precedingText} ${text}`)
       pushCandidate(candidates, {
@@ -182,24 +241,39 @@ function detectPart(partName: string, xml: string) {
       })
     }
 
-    if (/[：:]\s*$/.test(text) && !/[□☐○◯]/.test(text)) {
+    if (!hasInlineBlank && /[：:]\s*$/.test(text) && !/[□☐○◯]/.test(text)) {
       const label = cleanLabel(text)
       const hints = instructionHints(text)
       pushCandidate(candidates, {
         ...base(paragraph), kind: "label_blank", label, inferredAnswerType: inferAnswerType(label), confidence: "medium",
         evidence: ["段落以标签冒号结尾"], ...hints,
       })
-    } else {
-      const paragraphAfterLabel = PARAGRAPH_AFTER_LABELS.find((label) => text.includes(label))
-      const boundedInstruction = /(?:不超过|最多|限)\s*\d{1,6}\s*(?:个?字|字符)/.test(text)
-      if (paragraphAfterLabel || boundedInstruction) {
-        const label = cleanLabel(paragraphAfterLabel || text)
-        const hints = instructionHints(text)
+    }
+    if (tableCell) continue
+    const directLabel = PARAGRAPH_AFTER_LABELS.find((label) => cleanLabel(text).startsWith(label))
+    const boundedInstruction = /(?:(?:不超过|最多|限)\s*\d{1,6}\s*(?:个?字|字符)|\d{1,6}\s*(?:个?字|字符)\s*以内)/.test(text)
+    if (directLabel && (boundedInstruction || /[：:]\s*$/.test(text))) {
+      const hints = instructionHints(text)
+      pushCandidate(candidates, {
+        ...base(paragraph), kind: "label_blank", label: directLabel, inferredAnswerType: "textarea", confidence: "medium",
+        evidence: ["检测到叙述类填写说明段落", "答案应写入说明文字之后"], ...hints,
+      })
+      continue
+    }
+    const headingLabel = exactHeadingLabel(text, PARAGRAPH_AFTER_LABELS)
+    const evidenceLabel = exactHeadingLabel(text, EVIDENCE_LABELS)
+    if (headingLabel || evidenceLabel) {
+      const target = paragraphs.slice(paragraphIndex + 1).find((candidate) => !closestAncestor(candidate, "tc") && normalized(normalizedWordText(candidate)))
+      if (target) {
+        const label = headingLabel || evidenceLabel!
+        const instruction = normalizedWordText(target)
+        const hints = instructionHints(instruction)
         pushCandidate(candidates, {
-          ...base(paragraph), kind: "label_blank", label, inferredAnswerType: "textarea", confidence: "medium",
-          evidence: [paragraphAfterLabel ? "检测到叙述类填写说明段落" : "检测到带长度限制的填写说明段落", "答案应写入下一段而非说明文字"], ...hints,
+          ...base(target), kind: "label_blank", label, inferredAnswerType: evidenceLabel ? "file" : "textarea", confidence: "medium",
+          evidence: [evidenceLabel ? "检测到佐证材料填写说明" : "检测到叙述类标题及其填写说明", "答案应写入说明文字之后"], ...hints,
         })
       }
+      continue
     }
   }
 

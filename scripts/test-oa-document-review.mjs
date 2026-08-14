@@ -33,14 +33,35 @@ const layout = { syntaxVersion: 1, sourceSha256: "a".repeat(64), analyzerVersion
 test("rebuilds a confirmed field and dual anchor only from the canonical bundle candidate", () => {
   const rebuilt = review.buildReviewedManifest(manifest, layout, [{
     suggestionId: suggestion.id, reviewState: "confirmed", label: "申请人姓名", inferredAnswerType: "text",
-    required: true, visual: { ...visual, x: 0.15 }, bindingCandidateId: candidate.id,
+    required: true, placeholder: "请输入证件上的姓名", visual: { ...visual, x: 0.15 }, bindingCandidateId: candidate.id,
   }])
-  assert.deepEqual(rebuilt.fields, [{ fieldId: suggestion.fieldId, label: "申请人姓名", answerType: "text", required: true }])
+  assert.deepEqual(rebuilt.fields, [{ fieldId: suggestion.fieldId, label: "申请人姓名", answerType: "text", required: true, placeholder: "请输入证件上的姓名" }])
+  assert.equal(rebuilt.suggestions[0].placeholder, "请输入证件上的姓名")
   assert.equal(rebuilt.anchors[0].partName, candidate.partName)
   assert.equal(rebuilt.anchors[0].path, candidate.path)
   assert.equal(rebuilt.anchors[0].structural.contextHash, candidate.contextHash)
   assert.equal(rebuilt.anchors[0].bindingCandidateId, candidate.id)
   assert.equal(rebuilt.suggestions[0].bindingCandidateIds[0], candidate.id)
+})
+
+test("accepts a bounded manual placeholder and clears it without deriving Word text", () => {
+  const parsed = review.parseReviewEdits({ edits: [{
+    suggestionId: suggestion.id, reviewState: "confirmed", label: "姓名", inferredAnswerType: "text",
+    placeholder: "  请输入姓名  ", visual, bindingCandidateId: candidate.id,
+  }] })
+  assert.equal(parsed[0].placeholder, "请输入姓名")
+
+  const confirmed = review.buildReviewedManifest(manifest, layout, parsed)
+  const cleared = review.buildReviewedManifest(confirmed, layout, [{
+    suggestionId: suggestion.id, reviewState: "confirmed", label: "姓名", inferredAnswerType: "text",
+    placeholder: "", visual, bindingCandidateId: candidate.id,
+  }])
+  assert.equal(cleared.suggestions[0].placeholder, undefined)
+  assert.equal(cleared.fields[0].placeholder, undefined)
+  assert.throws(() => review.parseReviewEdits({ edits: [{
+    suggestionId: suggestion.id, reviewState: "confirmed", label: "姓名", inferredAnswerType: "text",
+    placeholder: "x".repeat(501), visual, bindingCandidateId: candidate.id,
+  }] }), /提示文字/)
 })
 
 test("requires positive same-page overlap for every confirmed candidate", () => {
