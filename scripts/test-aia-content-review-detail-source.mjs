@@ -6,6 +6,7 @@ const backend = await readFile("convex/contentReview.ts", "utf8")
 const api = await readFile("src/lib/api.ts", "utf8")
 const detailComponent = await readFile("src/components/class-work/content-submission-detail.tsx", "utf8")
 const reviewDesk = await readFile("src/components/class-work/content-review-desk.tsx", "utf8")
+const decisionPanel = await readFile("src/components/class-work/content-review-decision-panel.tsx", "utf8").catch(() => "")
 const accessGuard = await readFile("src/components/class-work/class-work-access-guard.tsx", "utf8")
 
 function detailQuerySource() {
@@ -24,16 +25,17 @@ test("content detail accepts an exact submission and category instead of downloa
   assert.match(detail, /submission\.category\s*!==\s*args\.category/)
 })
 
-test("creator, stored-task reviewer, and super admin are the only detail viewers", () => {
+test("creator, stored-task reviewer, current manager, and super admin can open exact details", () => {
   const detail = detailQuerySource()
   assert.match(detail, /getUserBySession\(ctx,\s*args\.sessionToken\)/)
   assert.match(detail, /\.query\("contentReviewTasks"\)/)
   assert.match(detail, /\.withIndex\("by_submission_user"/)
   assert.match(detail, /submission\.createdBy/)
   assert.match(detail, /viewer\.role\s*===\s*"super_admin"/)
+  assert.match(detail, /const permission = await getPermission\(ctx,\s*args\.category,\s*viewer\._id\)/)
+  assert.match(detail, /permission\?\.canManage\s*===\s*true/)
   assert.match(detail, /if\s*\(!canView\)\s*return null/)
   assert.doesNotMatch(detail, /requireRights/)
-  assert.doesNotMatch(detail, /getPermission/)
 })
 
 test("missing, deleted, mismatched, and unauthorized submissions share the same safe result", () => {
@@ -45,7 +47,8 @@ test("missing, deleted, mismatched, and unauthorized submissions share the same 
 
 test("detail projection returns review progress without internal authorization records", () => {
   const detail = detailQuerySource()
-  assert.match(detail, /projectSubmissionWithTasks\(ctx,\s*submission,\s*viewer\._id\)/)
+  assert.match(detail, /const canDecide = permission\?\.canManage === true[\s\S]*?submission\.status === "pending"[\s\S]*?workflowStage[\s\S]*?"publication_approval"/)
+  assert.match(detail, /projectSubmissionWithTasks\(ctx,\s*submission,\s*viewer\._id,\s*canDecide\)/)
   assert.match(backend, /tasks:\s*projectedTasks/)
   assert.match(backend, /myTaskId:/)
   assert.match(backend, /idempotencyKey:\s*_idempotencyKey/)
@@ -61,6 +64,18 @@ test("the canonical client hook fetches one exact detail and the page does not d
   assert.match(detailComponent, /useContentSubmissionDetail\(category,\s*id\)/)
   assert.doesNotMatch(detailComponent, /useContentReviewQueue/)
   assert.doesNotMatch(detailComponent, /useMyContentSubmissions/)
+})
+
+test("detail and review desk share one decision panel", () => {
+  assert.match(decisionPanel, /export function ContentReviewDecisionPanel/)
+  assert.match(decisionPanel, /useReviewContentSubmission\(\)/)
+  assert.match(decisionPanel, /submission\.myTaskId/)
+  assert.match(decisionPanel, /decision:\s*"approved"\s*\|\s*"rejected"/)
+  assert.match(decisionPanel, /未通过时必须填写审核意见/)
+  assert.match(detailComponent, /ContentReviewDecisionPanel/)
+  assert.match(detailComponent, />我的抉择</)
+  assert.match(reviewDesk, /ContentReviewDecisionPanel/)
+  assert.doesNotMatch(reviewDesk, /useReviewContentSubmission/)
 })
 
 test("review desk enables any currently authorized manager, including one without a legacy stored task", () => {
