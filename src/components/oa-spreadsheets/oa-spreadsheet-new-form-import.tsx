@@ -6,6 +6,7 @@ import { useState } from "react"
 
 import { getTongClassStoredSessionToken, useManageUpsertOAForm } from "@/lib/api"
 import {
+  createFixedSpreadsheetImportDraftPayload,
   createSpreadsheetImportDraftPayload,
   OA_SPREADSHEET_LIMITS,
   XLSX_MIME,
@@ -29,7 +30,7 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
   const upsertForm = useManageUpsertOAForm()
   const [analysis, setAnalysis] = useState<SpreadsheetAnalysis | null>(null)
   const [sheetIndex, setSheetIndex] = useState(0)
-  const [busy, setBusy] = useState<"analyze" | OASpreadsheetImportMode | null>(null)
+  const [busy, setBusy] = useState<"analyze" | OASpreadsheetImportMode | "fixed" | null>(null)
   const [error, setError] = useState("")
   const sheet = analysis?.sheets[sheetIndex]
 
@@ -100,6 +101,21 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
     }
   }
 
+  const createFixedDraft = async () => {
+    if (!analysis || !sheet) return
+    setBusy("fixed")
+    setError("")
+    try {
+      const nonce = `${Date.now().toString(36)}-${crypto.randomUUID()}`
+      const draft = createFixedSpreadsheetImportDraftPayload(analysis.fileName, creatorId, nonce, sheet)
+      const formId = String(await upsertForm(draft))
+      router.push(`/forms/manage/${formId}`)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "复杂 Excel 表单草稿创建失败")
+      setBusy(null)
+    }
+  }
+
   return (
     <div className="border aia-border-rule bg-[hsl(var(--aia-paper))] p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -136,7 +152,9 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
             <div>
               <p className="aia-mono text-[10px] uppercase tracking-[0.16em] aia-text-muted">{analysis.fileName}</p>
               <p className="mt-1 text-sm text-[hsl(var(--aia-ink))]">
-                识别到 {analysis.sheets.length} 个有效工作表，当前表头位于第 {sheet.headerRow} 行，共 {sheet.columns.length} 列。
+                {sheet.layout === "fixed_form"
+                  ? `识别到固定版式表单：${sheet.fields?.length || 0} 个独立问题，${sheet.tables?.length || 0} 个可重复表格。`
+                  : `识别到 ${analysis.sheets.length} 个有效工作表，当前表头位于第 ${sheet.headerRow} 行，共 ${sheet.columns.length} 列。`}
               </p>
             </div>
             {analysis.sheets.length > 1 ? (
@@ -153,7 +171,24 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
             ) : null}
           </div>
 
-          <div className="mt-4 overflow-x-auto border aia-border-rule">
+          {sheet.layout === "fixed_form" ? (
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="border aia-border-rule p-4">
+                <p className="aia-mono text-[10px] uppercase tracking-[0.14em] aia-text-muted">独立问题</p>
+                <ol className="mt-3 space-y-2 text-sm text-[hsl(var(--aia-ink))]">
+                  {(sheet.fields || []).map((field) => <li key={field.id}>{field.label}<span className="aia-text-muted"> · 第 {field.row} 行</span></li>)}
+                </ol>
+              </div>
+              <div className="border aia-border-rule p-4">
+                <p className="aia-mono text-[10px] uppercase tracking-[0.14em] aia-text-muted">可重复表格</p>
+                <ol className="mt-3 space-y-3 text-sm text-[hsl(var(--aia-ink))]">
+                  {(sheet.tables || []).map((table) => (
+                    <li key={table.id}><strong>{table.label}</strong><span className="aia-text-muted block text-xs">{table.columns.map((column) => column.label).join("、")}</span></li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          ) : <div className="mt-4 overflow-x-auto border aia-border-rule">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-[hsl(var(--aia-paper-strong))]">
@@ -172,9 +207,19 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
                 ))}
               </tbody>
             </table>
-          </div>
+          </div>}
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {sheet.layout === "fixed_form" ? (
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void createFixedDraft()}
+              className="aia-focus mt-5 w-full border border-[hsl(var(--aia-red))] bg-[hsl(var(--aia-red))] px-4 py-3 text-left text-sm font-semibold text-white transition-opacity disabled:cursor-wait disabled:opacity-60"
+            >
+              按原版式结构生成表单
+              <span className="mt-1 block text-xs font-normal text-white/80">独立填写区生成问题，费用和行程明细生成可增删行表格；创建后可继续校对。</span>
+            </button>
+          ) : <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               disabled={busy !== null}
@@ -193,7 +238,7 @@ export function OASpreadsheetNewFormImport({ creatorId }: { creatorId: string })
               每个表头生成一个问题
               <span className="aia-text-muted mt-1 block text-xs font-normal">适合每位填写人只提交一行数据的场景。</span>
             </button>
-          </div>
+          </div>}
         </div>
       ) : null}
     </div>

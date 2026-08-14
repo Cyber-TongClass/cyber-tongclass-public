@@ -28,6 +28,15 @@ test("XLSX importer creates creator-only drafts in both approved modes", async (
   assert.match(code, /router\.push\(`\/forms\/manage\/\$\{formId\}`\)/)
 })
 
+test("XLSX importer previews fixed-layout questions and repeatable tables", async () => {
+  const code = await source("src/components/oa-spreadsheets/oa-spreadsheet-new-form-import.tsx")
+  assert.match(code, /fixed_form/)
+  assert.match(code, /createFixedSpreadsheetImportDraftPayload/)
+  assert.match(code, /按原版式结构生成表单/)
+  assert.match(code, /独立问题/)
+  assert.match(code, /可重复表格/)
+})
+
 test("new form editor offers Word, XLSX, and manual creation paths", async () => {
   const code = await source("src/app/forms/manage/form-editor.tsx")
   assert.match(code, /OADocumentNewFormImport/)

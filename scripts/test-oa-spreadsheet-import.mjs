@@ -157,6 +157,27 @@ function manySheetPackage(sheetCount) {
   ])
 }
 
+function fixedLayoutPackage() {
+  const rootRels = `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="root1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`
+  const workbook = `<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="报销单" sheetId="1" r:id="rId1"/></sheets></workbook>`
+  const relationships = `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`
+  const contentTypes = `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="${spreadsheetContentType}"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="${worksheetContentType}"/></Types>`
+  const cell = (reference, value) => `<c r="${reference}" t="inlineStr"><is><t>${value}</t></is></c>`
+  const worksheet = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>
+    <row r="1">${cell("B1", "差旅报销单")}</row>
+    <row r="3">${cell("B3", "申请人姓名")}${cell("F3", "职工号/学号")}${cell("J3", "核销邮箱")}</row>
+    <row r="6">${cell("B6", "项目")}${cell("C6", "单据")}${cell("E6", "金额")}${cell("H6", "备注")}</row>
+    <row r="20">${cell("B20", "其他费用")}${cell("C20", "改签费")}</row>
+  </sheetData></worksheet>`
+  return buildSimpleZip([
+    { name: "[Content_Types].xml", data: contentTypes },
+    { name: "_rels/.rels", data: rootRels },
+    { name: "xl/workbook.xml", data: workbook },
+    { name: "xl/_rels/workbook.xml.rels", data: relationships },
+    { name: "xl/worksheets/sheet1.xml", data: worksheet },
+  ])
+}
+
 test("reads ordered shared-string headers and omits empty worksheets", () => {
   const analyzed = reader.analyzeXlsxHeaders(workbookPackage({ headers: ["序号", "拟创办期刊名称", "主编"], headerRow: 3 }))
   assert.equal(analyzed.sheets.length, 1)
@@ -183,4 +204,17 @@ test("fails closed for unsafe relationships, macros, duplicate headers, and exce
 test("requires at least one visible worksheet with a usable header row", () => {
   assert.throws(() => reader.analyzeXlsxHeaders(workbookPackage({ headers: ["只有一列"] })), /表头|工作表/)
   assert.throws(() => reader.analyzeXlsxHeaders(manySheetPackage(51)), /50/)
+})
+
+test("recognizes fixed-layout forms as scalar questions plus repeatable tables", () => {
+  const analyzed = reader.analyzeXlsxHeaders(fixedLayoutPackage())
+  const sheet = analyzed.sheets[0]
+  assert.equal(sheet.layout, "fixed_form")
+  assert.deepEqual(sheet.fields.map((field) => field.label), ["申请人姓名", "职工号/学号", "核销邮箱"])
+  assert.equal(sheet.tables.length, 1)
+  assert.deepEqual(sheet.tables[0].columns.map((column) => column.label), ["项目", "单据", "金额", "备注"])
+  const draft = importer.createFixedSpreadsheetImportDraftPayload("差旅报销单.xlsx", "creator_1", "fixed_1", sheet)
+  assert.equal(draft.fields.length, 4)
+  assert.equal(draft.fields.at(-1).type, "table")
+  assert.deepEqual(draft.targetScope, { userIds: ["creator_1"] })
 })

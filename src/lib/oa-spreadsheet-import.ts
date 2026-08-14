@@ -20,10 +20,28 @@ export type OASpreadsheetColumn = {
   type: OASpreadsheetColumnType
 }
 
+export type OASpreadsheetDetectedField = {
+  id: string
+  row: number
+  column: number
+  label: string
+  type: OASpreadsheetColumnType
+}
+
+export type OASpreadsheetDetectedTable = {
+  id: string
+  label: string
+  headerRow: number
+  columns: OASpreadsheetColumn[]
+}
+
 export type OASpreadsheetSheet = {
   name: string
   headerRow: number
   columns: OASpreadsheetColumn[]
+  layout?: "tabular" | "fixed_form"
+  fields?: OASpreadsheetDetectedField[]
+  tables?: OASpreadsheetDetectedTable[]
 }
 
 function normalizedHeader(value: string) {
@@ -117,6 +135,45 @@ export function createSpreadsheetImportDraftPayload(
     status: "draft",
     allowMultipleSubmissions: true,
     fields,
+    resultFields: [],
+    targetScope: { userIds: [creatorId] },
+  }
+}
+
+export function createFixedSpreadsheetImportDraftPayload(
+  fileName: string,
+  creatorId: string,
+  nonce: string,
+  sheet: OASpreadsheetSheet,
+): OAFormUpsertPayload {
+  const title = titleFromFileName(fileName)
+  if (!creatorId.trim()) throw new Error("Excel 表单创建者无效")
+  if (sheet.layout !== "fixed_form") throw new Error("当前工作表不是固定版式表单")
+  const scalarFields = (sheet.fields || []).map((field) => ({
+    id: field.id,
+    type: field.type,
+    label: field.label,
+    required: false,
+  }))
+  const tableFields = (sheet.tables || []).map((table) => ({
+    id: table.id,
+    type: "table" as const,
+    label: table.label,
+    required: false,
+    helpText: `来自 Excel 第 ${table.headerRow} 行；可按行添加或删除。`,
+    columns: table.columns.map(({ id, label, type }) => ({ id, label, type, required: false })),
+  }))
+  if (scalarFields.length === 0 && tableFields.length === 0) throw new Error("固定版式 Excel 没有识别到可填写区域")
+  return {
+    title,
+    slug: `xlsx-import-${normalizeFormSlug(nonce)}-${normalizeFormSlug(title)}`,
+    description: `由固定版式 Excel 工作表“${normalizedHeader(sheet.name)}”自动生成。请在发布前逐项检查字段和表格。`,
+    category: "教学服务",
+    kind: "form",
+    visibility: "members",
+    status: "draft",
+    allowMultipleSubmissions: true,
+    fields: [...scalarFields, ...tableFields],
     resultFields: [],
     targetScope: { userIds: [creatorId] },
   }

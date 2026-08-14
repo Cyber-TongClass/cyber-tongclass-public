@@ -1,7 +1,14 @@
 import path from "node:path"
 import { DOMParser, type Document as XmlDocument, type Element as XmlElement, type Node as XmlNode } from "@xmldom/xmldom"
 
-import { normalizeSpreadsheetHeaders, OA_SPREADSHEET_LIMITS, type OASpreadsheetSheet } from "@/lib/oa-spreadsheet-import"
+import {
+  inferSpreadsheetColumnType,
+  normalizeSpreadsheetHeaders,
+  OA_SPREADSHEET_LIMITS,
+  type OASpreadsheetDetectedField,
+  type OASpreadsheetDetectedTable,
+  type OASpreadsheetSheet,
+} from "@/lib/oa-spreadsheet-import"
 import { readOoxmlPackage, type OoxmlPackage } from "@/lib/server/ooxml-package"
 
 const SPREADSHEET_MAIN = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"
@@ -110,7 +117,10 @@ function cellValue(cell: XmlElement, strings: string[]) {
   return value
 }
 
-function analyzeWorksheet(document: XmlDocument, strings: string[]) {
+type WorksheetCell = { row: number; column: number; value: string }
+
+function worksheetRows(document: XmlDocument, strings: string[]) {
+  const rows: Array<{ row: number; cells: WorksheetCell[] }> = []
   for (const rowElement of elements(document, "row")) {
     const declaredRow = Number(attribute(rowElement, "r") || 0)
     if (!Number.isSafeInteger(declaredRow) || declaredRow < 1) throw new Error("XLSX 行号无效")
@@ -123,15 +133,95 @@ function analyzeWorksheet(document: XmlDocument, strings: string[]) {
       const value = cellValue(cell, strings).normalize("NFKC").replace(/[\u00a0\u3000]/g, " ").replace(/\s+/g, " ").trim()
       if (value) values.set(reference.column, value)
     }
+    if (values.size > 0) rows.push({
+      row: declaredRow,
+      cells: [...values.entries()].sort(([left], [right]) => left - right).map(([column, value]) => ({ row: declaredRow, column, value })),
+    })
+  }
+  return rows
+}
+
+function tabularHeader(rows: ReturnType<typeof worksheetRows>) {
+  for (const row of rows) {
+    const values = new Map(row.cells.map((cell) => [cell.column, cell.value]))
     if (values.size < 2) continue
     const indices = [...values.keys()].sort((left, right) => left - right)
     const first = indices[0]
     const last = indices.at(-1)!
     if (last - first + 1 > OA_SPREADSHEET_LIMITS.maxColumns) throw new Error(`Excel 表头不能超过 ${OA_SPREADSHEET_LIMITS.maxColumns} 列`)
+    if (last - first + 1 !== values.size) continue
     const labels = Array.from({ length: last - first + 1 }, (_, index) => values.get(first + index) || "")
-    return { headerRow: declaredRow, columns: normalizeSpreadsheetHeaders(labels) }
+    return {
+      headerRow: row.row,
+      columns: normalizeSpreadsheetHeaders(labels).map((column, index) => ({ ...column, columnIndex: first + index })),
+    }
   }
   return null
+}
+
+const TABLE_HEADER = /^(?:项目|单据|张数|备注|币种|金额|机票行程|出访行程|日期|时间|数量|单价|起点|终点|国家|城市)$/
+const FIELD_PROMPT = /(?:姓名|学号|工号|邮箱|编码|编号|类型|类别|电话|借款|金额|项目号|职称|职务|收款人|银行卡号|开户行|负责人|是否同意)$/
+const NON_FIELD = /(?:提示|请及时|如有任何|本表格|签字|盖章|默认\s*100%)/
+
+function safeCoordinateId(prefix: string, row: number, column: number) {
+  return `xlsx_${prefix}_r${row}_c${column}`
+}
+
+function fixedFormLayout(rows: ReturnType<typeof worksheetRows>) {
+  const fields: OASpreadsheetDetectedField[] = []
+  const seenLabels = new Set<string>()
+  for (const row of rows) {
+    for (const cell of row.cells) {
+      const label = cell.value.replace(/[：:]$/, "").trim()
+      if (!label || label.length > 60 || TABLE_HEADER.test(label) || NON_FIELD.test(label) || !FIELD_PROMPT.test(label)) continue
+      const key = label.toLocaleLowerCase("en-US")
+      if (seenLabels.has(key)) continue
+      seenLabels.add(key)
+      fields.push({
+        id: safeCoordinateId("field", cell.row, cell.column),
+        row: cell.row,
+        column: cell.column,
+        label,
+        type: inferSpreadsheetColumnType(label),
+      })
+    }
+  }
+
+  const tables: OASpreadsheetDetectedTable[] = []
+  for (const row of rows) {
+    const headerCells = row.cells.filter((cell) => cell.value.length <= 30)
+    const headerMatches = headerCells.filter((cell) => TABLE_HEADER.test(cell.value.replace(/[：:]$/, "").trim()))
+    if (headerCells.length < 3 || headerMatches.length < 2) continue
+    const labels = headerCells.map((cell) => cell.value.replace(/[：:]$/, "").trim()).filter(Boolean)
+    if (new Set(labels).size !== labels.length) continue
+    const normalized = normalizeSpreadsheetHeaders(labels)
+    const label = labels.includes("币种") || labels.includes("金额") ? "费用明细" : "材料与行程明细"
+    tables.push({
+      id: safeCoordinateId("table", row.row, headerCells[0].column),
+      label,
+      headerRow: row.row,
+      columns: normalized.map((column, index) => ({ ...column, columnIndex: headerCells[index].column })),
+    })
+  }
+  return { fields, tables }
+}
+
+function analyzeWorksheet(document: XmlDocument, strings: string[]): Omit<OASpreadsheetSheet, "name"> | null {
+  const rows = worksheetRows(document, strings)
+  const tabular = tabularHeader(rows)
+  const precedingContentRows = tabular ? rows.filter((row) => row.row < tabular.headerRow).length : 0
+  const fixed = fixedFormLayout(rows)
+  const isClearlyFixed = fixed.fields.length >= 2 && fixed.tables.length >= 1
+  if (tabular && precedingContentRows <= 5 && !isClearlyFixed) return { ...tabular, layout: "tabular" }
+  if (fixed.fields.length === 0 && fixed.tables.length === 0) {
+    return tabular ? { ...tabular, layout: "tabular" } : null
+  }
+  return {
+    headerRow: fixed.tables[0]?.headerRow || fixed.fields[0]?.row || 1,
+    columns: fixed.tables[0]?.columns || [],
+    layout: "fixed_form",
+    ...fixed,
+  }
 }
 
 export function analyzeXlsxHeaders(input: Uint8Array | Buffer): { sheets: OASpreadsheetSheet[] } {
