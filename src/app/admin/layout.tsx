@@ -26,7 +26,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { useCC2026List, useTechDayActorArgs, useTechDayCurrentPrincipal } from "@/lib/api"
+import { useCC2026List, useMyContentPermissions, useTechDayActorArgs, useTechDayCurrentPrincipal } from "@/lib/api"
 import { canManageCreativeChallenge } from "@/lib/creative-challenge-2026"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { cn } from "@/lib/utils"
@@ -167,6 +167,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { currentUser, isAuthenticated, isAdmin, isSuperAdmin, isLoading } = useAuth()
+  const contentPermissions = useMyContentPermissions()
   const cc2026Organizers = useCC2026List("organizers")
   const cc2026OrganizerUserIds = (cc2026Organizers || [])
     .filter((entry: any) => entry.key === "_")
@@ -176,8 +177,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const actorArgs = useTechDayActorArgs()
   const techDayPrincipal = useTechDayCurrentPrincipal(actorArgs)
 
-  const adminAllowedPrefixes = ["/admin/news", "/admin/events", "/admin/reviews", "/admin/treehole", "/admin/feedback", "/admin/techday"]
-  const isAdminAllowed = isSuperAdmin || adminAllowedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  const adminAllowedPrefixes = [
+    "/admin/reviews",
+    "/admin/treehole",
+    "/admin/feedback",
+    "/admin/techday",
+    ...(contentPermissions?.news.canManage ? ["/admin/news"] : []),
+    ...(contentPermissions?.events.canManage ? ["/admin/events"] : []),
+  ]
+  const canManageNews = contentPermissions?.news.canManage === true
+  const canManageEvents = contentPermissions?.events.canManage === true
+  const isNewsAdminRoute = pathname === "/admin/news" || pathname.startsWith("/admin/news/")
+  const isEventsAdminRoute = pathname === "/admin/events" || pathname.startsWith("/admin/events/")
+  const isCapabilityGatedRoute = isNewsAdminRoute || isEventsAdminRoute
+  const hasCapabilityGatedRouteAccess =
+    (!isNewsAdminRoute || canManageNews) && (!isEventsAdminRoute || canManageEvents)
+  const isAdminAllowed =
+    (isSuperAdmin && hasCapabilityGatedRouteAccess) ||
+    adminAllowedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   const isTechDayAdminRoute = pathname === "/admin/techday" || pathname.startsWith("/admin/techday/")
   const isCreativeChallengeAdminRoute = pathname === "/admin/creative-challenge-2026" || pathname.startsWith("/admin/creative-challenge-2026/")
   const isTechDayAdmin = Boolean(
@@ -199,7 +216,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [isLoading, isAuthenticated, isAdmin, router, pathname, isTechDayAdminRoute, hasTechDayAdminAccess, hasCreativeChallengeOrganizerAccess, techDayPrincipal])
 
-  if (isLoading || (isTechDayAdminRoute && techDayPrincipal === undefined)) {
+  if (isLoading || (isAuthenticated && contentPermissions === undefined) || (isTechDayAdminRoute && techDayPrincipal === undefined)) {
     return (
       <div className="aia-scope flex min-h-[100dvh] items-center justify-center px-4">
         <div className="w-full max-w-sm" role="status" aria-label="正在加载 AIA 管理后台">
@@ -218,16 +235,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <AdminNotice title="无权限访问后台" description="当前账号没有管理权限。如需处理后台事务，请联系超级管理员。" href="/" action="返回 AIA 首页" />
   }
   if (!isAdminAllowed && !hasTechDayAdminAccess && !hasCreativeChallengeOrganizerAccess) {
-    return <AdminNotice title="管理权限受限" description="你可以管理课程测评、新闻、活动和内网内容；成员与平台管理需要超级管理员权限。" href="/admin/reviews" action="进入可用模块" />
+    return (
+      <AdminNotice
+        title="管理权限受限"
+        description={isCapabilityGatedRoute
+          ? "当前账号未获授权管理此内容模块；请联系权限管理员开通相应能力。"
+          : "当前账号仅显示已获授权的管理模块；成员与平台管理需要超级管理员权限。"}
+        href={isCapabilityGatedRoute ? "/admin" : "/admin/reviews"}
+        action={isCapabilityGatedRoute ? "返回运营概览" : "进入可用模块"}
+      />
+    )
   }
 
+  const contentManagerNavItems = navItems.filter((item) => {
+    if (item.href === "/admin/news") return canManageNews
+    if (item.href === "/admin/events") return canManageEvents
+    return true
+  })
   const visibleNavItems = hasTechDayAdminAccess && !isAdmin
     ? navItems.filter((item) => item.href.startsWith("/admin/techday"))
     : hasCreativeChallengeOrganizerAccess && !isAdmin
       ? navItems.filter((item) => item.href === "/admin/creative-challenge-2026")
       : isSuperAdmin
-        ? navItems
-        : navItems.filter((item) => {
+        ? contentManagerNavItems
+        : contentManagerNavItems.filter((item) => {
             if (hasCreativeChallengeOrganizerAccess && isAdmin && item.href === "/admin/creative-challenge-2026") return true
             return adminAllowedPrefixes.some((prefix) => item.href === prefix || item.href.startsWith(`${prefix}/`))
           })

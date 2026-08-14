@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye, MapPin, Clock } from "lucide-react"
-import { useAdminEvents, useDeleteEvent } from "@/lib/api"
+import { useAdminEvents, useDeleteEvent, useMyContentPermissions } from "@/lib/api"
 import type { Event } from "@/types"
 
 const colorToType: Record<string, string> = {
@@ -52,7 +52,8 @@ const statusColors: Record<string, string> = {
 export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
-  const eventsData = useAdminEvents()
+  const permissions = useMyContentPermissions()
+  const eventsData = useAdminEvents({ disabled: permissions?.events.canManage !== true })
   const deleteEventMutation = useDeleteEvent()
   const events: Event[] = useMemo(() => eventsData || [], [eventsData])
   const { confirm, ConfirmDialog } = useConfirmDialog()
@@ -80,6 +81,22 @@ export default function EventsPage() {
         await deleteEventMutation(id as any)
       },
     })
+  }
+
+  if (permissions === undefined) {
+    return <p role="status" className="text-sm text-gray-500">正在确认活动管理权限…</p>
+  }
+
+  if (!permissions.events.canManage) {
+    return (
+      <Card>
+        <CardContent className="space-y-4 py-8">
+          <h1 className="text-xl font-semibold text-gray-900">没有活动管理权限</h1>
+          <p className="text-sm text-gray-500">当前账号未获授权管理研究院活动。</p>
+          <Button asChild variant="outline"><Link href="/portal/list">返回内网</Link></Button>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (

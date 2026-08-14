@@ -92,8 +92,12 @@ export default function AdminDashboard() {
 
   const quickActions = useMemo(() => [
     { href: "/admin/users", label: "用户管理", description: "账户、身份与研究院绑定", icon: Users },
-    { href: "/admin/news", label: "新闻管理", description: "审核与发布研究院动态", icon: FileText },
-    { href: "/admin/events", label: "活动管理", description: "维护活动和公开日程", icon: Calendar },
+    ...(permissions?.news.canManage
+      ? [{ href: "/admin/news", label: "新闻管理", description: "审核与发布研究院动态", icon: FileText }]
+      : []),
+    ...(permissions?.events.canManage
+      ? [{ href: "/admin/events", label: "活动管理", description: "维护活动和公开日程", icon: Calendar }]
+      : []),
     { href: "/admin/reviews", label: "课程测评", description: "审核课程评价与课程库", icon: Star },
     { href: "/admin/reimbursements", label: "报销管理", description: "处理申请与导出材料", icon: TableProperties },
     { href: "/forms/manage", label: "表单管理", description: "创建表单与配置审批", icon: ClipboardList },
@@ -101,7 +105,7 @@ export default function AdminDashboard() {
     { href: "/admin/treehole", label: "树洞管理", description: "处理内容与社区秩序", icon: MessageSquare },
     { href: "/admin/feedback", label: "反馈管理", description: "归集成员意见与建议", icon: FileText },
     { href: "/admin/creative-challenge-2026", label: "挑战赛", description: "管理专项赛事与报名", icon: Trophy },
-  ], [])
+  ], [permissions])
 
   const summary = [
     { label: "平台账户", value: stats.users, hint: "已录入" },
