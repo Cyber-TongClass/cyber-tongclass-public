@@ -12,6 +12,7 @@ export interface OAWordWritableNode extends OADocumentStructuralLocator {
   writeTarget: OADocumentWriteTarget
   label: string
   normalizedText: string
+  existingText?: string
   options?: string[]
   columns?: Array<{ id: string; label: string; type: "text" | "number" | "date"; required?: boolean }>
   table?: { table: number; row: number; cell: number }
@@ -126,7 +127,13 @@ export function indexWordWritableNodes(pkg: OoxmlPackage): OAWordWritableNode[] 
           }
           if (!isBlank(value) && !looksInstructionalAnswer(value)) return
           const label = contextualTableLabel(section, cells, labelIndex)
-          add(partName, cell, { kind: "table_cell", writeTarget: "table-cell", label, normalizedText: normalized(normalizedWordText(labelCell)), table: { table: tableIndex + 1, row: rowIndex + 1, cell: cellIndex + 1 }, styleSourcePath: structuralPath(cell) })
+          add(partName, cell, {
+            kind: "table_cell", writeTarget: "table-cell", label,
+            normalizedText: normalized(normalizedWordText(labelCell)),
+            ...(value ? { existingText: value } : {}),
+            table: { table: tableIndex + 1, row: rowIndex + 1, cell: cellIndex + 1 },
+            styleSourcePath: structuralPath(cell),
+          })
         })
         if (rowIndex > 0) {
           const headers = childElements(rows[rowIndex - 1], "tc")

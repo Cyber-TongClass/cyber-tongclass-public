@@ -139,6 +139,18 @@ function scoredMatches(node: OAWordWritableNode, boxes: OAPdfTextBox[]): ScoredM
   return matches.sort((left, right) => right.score - left.score || left.startOrder - right.startOrder)
 }
 
+function existingTableAnswerVisual(node: OAWordWritableNode, labelMatch: ScoredMatch, boxes: OAPdfTextBox[]) {
+  if (node.writeTarget !== "table-cell" || !node.existingText) return null
+  const label = unionVisual(labelMatch.boxes)
+  const matches = scoredMatches({ ...node, normalizedText: node.existingText }, boxes)
+    .map((match) => ({ match, visual: unionVisual(match.boxes) }))
+    .filter(({ visual }) => visual.page === label.page && Math.abs(visual.y - label.y) <= 0.08)
+    .sort((left, right) => Math.abs(left.visual.y - label.y) - Math.abs(right.visual.y - label.y)
+      || Math.abs(left.visual.x - (label.x + label.width)) - Math.abs(right.visual.x - (label.x + label.width))
+      || right.match.score - left.match.score)
+  return matches[0]?.visual || null
+}
+
 function repeatRowScoredMatches(node: OAWordWritableNode, boxes: OAPdfTextBox[]) {
   const columns = node.columns || []
   if (columns.length < 2) return scoredMatches(node, boxes)
@@ -233,10 +245,42 @@ export function matchWordNodesToPdf(nodes: OAWordWritableNode[], pdf: OAPdfLayou
       id: node.id, label: node.label, description: `${node.kind} · ${node.writeTarget}`,
       partName: node.partName, path: node.path, contextHash: node.contextHash,
       writeTarget: node.writeTarget, ...(node.styleSourcePath ? { styleSourcePath: node.styleSourcePath } : {}),
-      visual: node.writeTarget === "choice" || node.writeTarget === "repeat-row" ? unionVisual(best.boxes) : answerVisual(best.boxes, node),
+      visual: node.writeTarget === "choice" || node.writeTarget === "repeat-row"
+        ? unionVisual(best.boxes)
+        : existingTableAnswerVisual(node, best, pdf.textBoxes) || answerVisual(best.boxes, node),
     })
   }
   return { candidates, warnings }
+}
+
+function candidateLocatorKey(candidate: OADocumentBindingCandidate) {
+  return `${candidate.partName}|${candidate.path}|${candidate.contextHash}`
+}
+
+/**
+ * The clean PDF keeps the user-visible document intact, but matching its label
+ * text can only estimate the answer position. A temporary marker PDF reveals
+ * the actual Word write target. Prefer that geometry when both candidates refer
+ * to the same canonical OOXML locator and retain clean-only choices/repeat rows.
+ */
+export function preferExactMarkerCandidates(
+  clean: OADocumentBindingCandidate[],
+  exact: OADocumentBindingCandidate[],
+) {
+  const exactByLocator = new Map(exact.map((candidate) => [candidateLocatorKey(candidate), candidate]))
+  const consumed = new Set<string>()
+  const merged = clean.map((candidate) => {
+    const key = candidateLocatorKey(candidate)
+    const replacement = exactByLocator.get(key)
+    if (!replacement) return candidate
+    consumed.add(key)
+    return replacement
+  })
+  for (const candidate of exact) {
+    const key = candidateLocatorKey(candidate)
+    if (!consumed.has(key)) merged.push(candidate)
+  }
+  return merged
 }
 
 export function createMarkerPlan(nodes: OAWordWritableNode[]): OAMarkerPlanEntry[] {

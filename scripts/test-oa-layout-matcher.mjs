@@ -204,6 +204,20 @@ test("choice mapping includes options that Poppler orders before a vertical tabl
   assert.ok(Math.abs(result.candidates[0].visual.y + result.candidates[0].visual.height - 320 / 800) < 1e-12)
 })
 
+test("instructional table cells highlight the complete replaceable instruction text", () => {
+  const nodes = wordLayout.indexWordWritableNodes(pkg(completeFormXml)).filter((node) => node.label === "案例简介")
+  assert.equal(nodes[0].existingText, "简述基本概况、解决问题和创新点,不超过500字")
+  const pdf = pdfLayout.parsePdfBboxXml(bbox([[
+    ["案例简介", 80, 200, 150, 220],
+    ["简述基本概况、解决问题和创新点，不超过500字", 200, 200, 500, 220],
+  ]]))
+  const result = matcher.matchWordNodesToPdf(nodes, pdf)
+  assert.equal(result.candidates.length, 1)
+  assert.equal(result.candidates[0].visual.x, 200 / 600)
+  assert.ok(Math.abs(result.candidates[0].visual.width - 300 / 600) < 1e-12)
+  assert.equal(result.candidates[0].visual.y, 200 / 800)
+})
+
 test("maps unique Word nodes deterministically and uses document order for repeated cross-page labels", () => {
   const nodes = wordLayout.indexWordWritableNodes(pkg(xml))
   const pdf = pdfLayout.parsePdfBboxXml(bbox([
@@ -323,4 +337,25 @@ test("builds stable marker plans and validates unique marker geometry without mu
   const duplicate = pdfLayout.parsePdfBboxXml(bbox([[[planA[0].marker, 120, 80, 200, 100], [planA[0].marker, 220, 80, 300, 100]], [[planA[1].marker, 120, 80, 200, 100]]]))
   assert.equal(matcher.validateMarkerLayout(planA, clean.pages, duplicate).unresolved[0].reason, "marker_not_unique")
   assert.throws(() => matcher.validateMarkerLayout(planA, clean.pages, pdfLayout.parsePdfBboxXml(bbox([[[planA[0].marker, 1, 1, 2, 2]]]))), /页面几何/)
+})
+
+test("prefers exact marker geometry while preserving clean-only candidates", () => {
+  const anchor = (page, x) => ({
+    page, x, y: 0.2, width: 0.1, height: 0.03,
+    pageWidth: 600, pageHeight: 800, rotation: 0, coordinateSpace: "normalized-pdf",
+  })
+  const clean = [
+    {
+      id: "binding_table", label: "姓名", partName: "word/document.xml",
+      path: "/body[1]/tbl[1]/tr[1]/tc[2]", contextHash: "0123456789abcdef",
+      writeTarget: "table-cell", visual: anchor(1, 0.2),
+    },
+    {
+      id: "binding_choice", label: "类型", partName: "word/document.xml",
+      path: "/body[1]/p[1]", contextHash: "fedcba9876543210",
+      writeTarget: "choice", visual: anchor(1, 0.5),
+    },
+  ]
+  const exact = [{ ...clean[0], description: "table_cell · table-cell · 标记定位", visual: anchor(2, 0.7) }]
+  assert.deepEqual(matcher.preferExactMarkerCandidates(clean, exact), [exact[0], clean[1]])
 })

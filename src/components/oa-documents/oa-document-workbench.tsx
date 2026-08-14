@@ -44,6 +44,11 @@ interface ReviewPayload {
   candidates?: PreviewCandidate[]
 }
 
+interface RenderedPreviewPage {
+  page: number
+  url: string
+}
+
 function newSuggestion(index: number, visual: OADocumentVisualAnchor): OADocumentSuggestion {
   const id = `drawn_${Date.now()}_${index}`
   return {
@@ -121,14 +126,18 @@ export function OADocumentWorkbench({
   const [mode, setMode] = useState<"select" | "draw">("select")
   const [page, setPage] = useState(1)
   const [pageCount, setPageCount] = useState(0)
-  const [previewPageUrl, setPreviewPageUrl] = useState("")
+  const [renderedPage, setRenderedPage] = useState<RenderedPreviewPage | null>(null)
   const [candidates, setCandidates] = useState<PreviewCandidate[]>([])
   const [selectedCandidates, setSelectedCandidates] = useState<Record<string, string>>(() => selectedCandidatesFromManifest(initialManifest))
-  const [previewLoading, setPreviewLoading] = useState(true)
+  const [metadataLoading, setMetadataLoading] = useState(true)
+  const [pageLoading, setPageLoading] = useState(false)
   const [previewError, setPreviewError] = useState("")
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
   const revisionRef = useRef(0)
+  const previewPageCacheRef = useRef(new Map<number, string>())
+  const previewPageRequestsRef = useRef(new Map<number, Promise<string>>())
+  const previewPageAbortRef = useRef<AbortController | null>(null)
   const counts = useMemo(() => reviewCounts(manifest.suggestions), [manifest.suggestions])
   const resolvedCandidateBindings = useMemo(
     () => resolveDocumentCandidateBindings(manifest.suggestions, candidates),
@@ -142,6 +151,36 @@ export function OADocumentWorkbench({
     setManifest(next)
     onChange?.(next)
   }, [onChange])
+
+  const fetchPreviewPage = useCallback((targetPage: number) => {
+    const cached = previewPageCacheRef.current.get(targetPage)
+    if (cached) return Promise.resolve(cached)
+    const pending = previewPageRequestsRef.current.get(targetPage)
+    if (pending) return pending
+    const request = (async () => {
+      const sessionToken = getTongClassStoredSessionToken()
+      if (!sessionToken) throw new Error("请先登录")
+      const response = await fetch(`/api/oa/document-templates/${versionId}/preview/pages/${targetPage}`, {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+        cache: "no-store",
+        signal: previewPageAbortRef.current?.signal,
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { message?: string }
+        throw new Error(payload.message || "文档预览加载失败")
+      }
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      if (previewPageAbortRef.current?.signal.aborted) {
+        URL.revokeObjectURL(objectUrl)
+        throw new DOMException("预览加载已取消", "AbortError")
+      }
+      previewPageCacheRef.current.set(targetPage, objectUrl)
+      return objectUrl
+    })().finally(() => previewPageRequestsRef.current.delete(targetPage))
+    previewPageRequestsRef.current.set(targetPage, request)
+    return request
+  }, [versionId])
 
   const activate = useCallback((id: string) => {
     setActiveRegionId(id)
@@ -162,10 +201,28 @@ export function OADocumentWorkbench({
   }, [])
 
   useEffect(() => {
+    previewPageAbortRef.current?.abort()
+    const controller = new AbortController()
+    const requests = previewPageRequestsRef.current
+    const cache = previewPageCacheRef.current
+    previewPageAbortRef.current = controller
+    requests.clear()
+    for (const objectUrl of cache.values()) URL.revokeObjectURL(objectUrl)
+    cache.clear()
+    setRenderedPage(null)
+    return () => {
+      controller.abort()
+      requests.clear()
+      for (const objectUrl of cache.values()) URL.revokeObjectURL(objectUrl)
+      cache.clear()
+    }
+  }, [versionId])
+
+  useEffect(() => {
     const controller = new AbortController()
     const metadataRevision = revisionRef.current
     const loadMetadata = async () => {
-      setPreviewLoading(true)
+      setMetadataLoading(true)
       setPreviewError("")
       try {
         const sessionToken = getTongClassStoredSessionToken()
@@ -202,7 +259,7 @@ export function OADocumentWorkbench({
       } catch (error) {
         if (!controller.signal.aborted) setPreviewError(error instanceof Error ? error.message : "文档预览加载失败")
       } finally {
-        if (!controller.signal.aborted) setPreviewLoading(false)
+        if (!controller.signal.aborted) setMetadataLoading(false)
       }
     }
     void loadMetadata()
@@ -214,42 +271,52 @@ export function OADocumentWorkbench({
     setSelectedCandidates(resolvedCandidateBindings)
   }, [candidates.length, resolvedCandidateBindings])
 
+  const prefetchPreviewPages = useMemo(() => {
+    const fieldPages = manifest.suggestions.flatMap((suggestion) => suggestion.visual?.page ? [suggestion.visual.page] : [])
+    const remainingPages = Array.from({ length: pageCount }, (_, index) => index + 1)
+    return [...new Set([...fieldPages, ...remainingPages])].filter((candidatePage) => candidatePage >= 1 && candidatePage <= pageCount)
+  }, [manifest.suggestions, pageCount])
+
   useEffect(() => {
     if (!pageCount) return
-    const controller = new AbortController()
-    let objectUrl = ""
+    let cancelled = false
     const loadPage = async () => {
-      setPreviewLoading(true)
+      setPageLoading(true)
       setPreviewError("")
-      setPreviewPageUrl("")
       try {
-        const sessionToken = getTongClassStoredSessionToken()
-        if (!sessionToken) throw new Error("请先登录")
         const boundedPage = Math.min(pageCount, Math.max(1, page))
-        const response = await fetch(`/api/oa/document-templates/${versionId}/preview/pages/${boundedPage}`, {
-          headers: { Authorization: `Bearer ${sessionToken}` },
-          cache: "no-store",
-          signal: controller.signal,
-        })
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({})) as { message?: string }
-          throw new Error(payload.message || "文档预览加载失败")
-        }
-        const blob = await response.blob()
-        objectUrl = URL.createObjectURL(blob)
-        if (!controller.signal.aborted) setPreviewPageUrl(objectUrl)
+        const objectUrl = await fetchPreviewPage(boundedPage)
+        if (!cancelled) setRenderedPage({ page: boundedPage, url: objectUrl })
       } catch (error) {
-        if (!controller.signal.aborted) setPreviewError(error instanceof Error ? error.message : "文档预览加载失败")
+        if (!cancelled && !(error instanceof DOMException && error.name === "AbortError")) {
+          setPreviewError(error instanceof Error ? error.message : "文档预览加载失败")
+        }
       } finally {
-        if (!controller.signal.aborted) setPreviewLoading(false)
+        if (!cancelled) setPageLoading(false)
       }
     }
     void loadPage()
-    return () => {
-      controller.abort()
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    return () => { cancelled = true }
+  }, [fetchPreviewPage, page, pageCount])
+
+  useEffect(() => {
+    if (!pageCount || !renderedPage || !prefetchPreviewPages.length) return
+    let cancelled = false
+    const queue = prefetchPreviewPages.filter((candidatePage) => candidatePage !== page)
+    const worker = async () => {
+      while (!cancelled) {
+        const targetPage = queue.shift()
+        if (!targetPage) return
+        try {
+          await fetchPreviewPage(targetPage)
+        } catch (error) {
+          if (!(error instanceof DOMException && error.name === "AbortError")) return
+        }
+      }
     }
-  }, [page, pageCount, versionId])
+    void Promise.all([worker(), worker()])
+    return () => { cancelled = true }
+  }, [fetchPreviewPage, page, pageCount, prefetchPreviewPages, renderedPage])
 
   const candidateIdsForVisual = useCallback((visual: OADocumentVisualAnchor) => candidates
     .filter((candidate) => positiveOverlap(candidate.visual, visual))
@@ -421,6 +488,7 @@ export function OADocumentWorkbench({
     ? candidateIdsForSuggestion(active, candidates).filter((candidateId) => !claimedByOtherSuggestions.has(candidateId))
     : []
   const activeCandidates = candidates.filter((candidate) => activeCandidateIds.includes(candidate.id))
+  const previewPageUrl = renderedPage?.url || ""
 
   return (
     <div className="border-y aia-border-rule bg-[hsl(var(--aia-paper))]">
@@ -436,7 +504,7 @@ export function OADocumentWorkbench({
         <div className="aia-mono flex flex-wrap gap-3 text-[10px] aia-text-muted" aria-live="polite">
           <span className="text-emerald-700">{counts.confirmed} 已确认</span><span className="text-amber-700">{counts.unresolved} 待确认</span><span className="text-[hsl(var(--aia-red))]">{counts.conflicts} 冲突</span>
         </div>
-        <button type="button" onClick={() => void save()} disabled={saving || previewLoading} className="aia-focus inline-flex items-center gap-2 border border-[hsl(var(--aia-ink))] px-3 py-2 text-sm disabled:opacity-50">
+        <button type="button" onClick={() => void save()} disabled={saving || metadataLoading} className="aia-focus inline-flex items-center gap-2 border border-[hsl(var(--aia-ink))] px-3 py-2 text-sm disabled:opacity-50">
           <Save className="h-4 w-4" aria-hidden="true" />{saving ? "保存中…" : "保存批注"}
         </button>
         {onCompile ? (
@@ -452,12 +520,13 @@ export function OADocumentWorkbench({
           <p className="aia-mono py-3 text-center text-xs">{String(page).padStart(2, "0")} / {String(pageCount || 1).padStart(2, "0")}</p>
           <button type="button" disabled={!pageCount || page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, Math.max(1, current + 1)))} className="aia-focus w-full p-2 disabled:opacity-30" aria-label="下一页"><ChevronRight className="mx-auto h-4 w-4" /></button>
         </nav>
-        <div className="min-w-0">
-          {previewLoading && !previewPageUrl ? <p role="status" className="min-h-[42rem] bg-neutral-200/70 p-8 text-sm aia-text-muted">正在加载文档预览…</p> : null}
-          {previewError ? <p role="alert" className="min-h-[42rem] bg-neutral-200/70 p-8 text-sm text-[hsl(var(--aia-red))]">文档预览加载失败：{previewError}</p> : null}
-          {previewPageUrl && !previewError ? (
-            <OADocumentCanvas page={page} pageCount={pageCount} previewPageUrl={previewPageUrl} suggestions={manifest.suggestions} activeRegionId={activeRegionId} mode={mode} onActivate={activate} onDraw={handleDraw} onChange={handleVisualChange} onDelete={deleteSuggestion} onEdit={activate} />
+        <div className="relative min-w-0">
+          {(metadataLoading || pageLoading) && !renderedPage ? <p role="status" className="min-h-[42rem] bg-neutral-200/70 p-8 text-sm aia-text-muted">正在加载文档预览…</p> : null}
+          {previewError && !renderedPage ? <p role="alert" className="min-h-[42rem] bg-neutral-200/70 p-8 text-sm text-[hsl(var(--aia-red))]">文档预览加载失败：{previewError}</p> : null}
+          {previewPageUrl && renderedPage ? (
+            <OADocumentCanvas page={renderedPage.page} pageCount={pageCount} previewPageUrl={previewPageUrl} suggestions={manifest.suggestions} activeRegionId={activeRegionId} mode={mode} onActivate={activate} onDraw={handleDraw} onChange={handleVisualChange} onDelete={deleteSuggestion} onEdit={activate} />
           ) : null}
+          {pageLoading && renderedPage ? <p role="status" className="pointer-events-none absolute right-3 top-3 z-40 bg-[hsl(var(--aia-paper))]/95 px-2 py-1 text-xs aia-text-muted shadow-sm">正在切换到第 {page} 页…</p> : null}
         </div>
         <OADocumentAnnotationPanel suggestions={manifest.suggestions} activeRegionId={activeRegionId} onActivate={activate} onAdd={() => setMode("draw")} onDecision={decide} canConfirm={(id) => Boolean(selectedCandidates[id])} />
       </div>

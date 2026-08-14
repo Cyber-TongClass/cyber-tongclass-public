@@ -25,6 +25,8 @@ test("analysis authorizes before fetching and verifies immutable source bytes", 
     /buildOAPreviewBundle/,
     /syntaxVersion:\s*2/,
   ]) assert.match(code, contract)
+  assert.match(code, /resolveHardBlanksWithMarkers\(\{[^}]*nodes:\s*nodes/s)
+  assert.match(code, /preferExactMarkerCandidates\(cleanMatch\.candidates, markerCandidates\)/)
   assert.match(code, /application\/zip/)
   assert.doesNotMatch(code, /preview\.json/)
   assert.match(code, /createDerivedTarget/)

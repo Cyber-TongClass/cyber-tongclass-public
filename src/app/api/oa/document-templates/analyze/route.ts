@@ -19,7 +19,7 @@ import {
   uploadDerivedBytes,
   verifyAuthorizedSource,
 } from "@/lib/server/oa-document-access"
-import { createMarkerPlan, matchWordNodesToPdf, validateMarkerLayout } from "@/lib/server/oa-layout-matcher"
+import { createMarkerPlan, matchWordNodesToPdf, preferExactMarkerCandidates, validateMarkerLayout } from "@/lib/server/oa-layout-matcher"
 import { parsePdfBboxXml, reconcilePdfPageGeometry } from "@/lib/server/oa-pdf-layout"
 import { buildOAPreviewBundle, OA_PREVIEW_ANALYZER_VERSION } from "@/lib/server/oa-preview-bundle"
 import {
@@ -102,7 +102,7 @@ async function resolveHardBlanksWithMarkers(args: {
   officeCapabilities: Awaited<ReturnType<typeof detectOfficeCapabilities>>
   previewTools: Awaited<ReturnType<typeof detectPreviewToolCapabilities>>
 }) {
-  const eligible = args.nodes.filter((node) => node.writeTarget === "table-cell" || node.writeTarget === "inline-run" || node.writeTarget === "paragraph-after")
+  const eligible = args.nodes.filter((node) => (node.writeTarget === "table-cell" && !node.existingText) || node.writeTarget === "inline-run" || node.writeTarget === "paragraph-after")
   const plan = createMarkerPlan(eligible)
   if (!plan.length) return []
   const markers = new Map(plan.map((item) => [item.nodeId, item.marker]))
@@ -195,11 +195,10 @@ export async function POST(request: Request) {
 
     const nodes = indexWordWritableNodes(pkg)
     const cleanMatch = matchWordNodesToPdf(nodes, layout)
-    warnings.push(...cleanMatch.warnings)
-    const mappedKeys = new Set(cleanMatch.candidates.map((candidate) => `${candidate.partName}|${candidate.path}|${candidate.contextHash}`))
-    const unresolvedNodes = nodes.filter((node) => !mappedKeys.has(`${node.partName}|${node.path}|${node.contextHash}`))
-    const markerCandidates = await resolveHardBlanksWithMarkers({ workingBytes, workingFileName, nodes: unresolvedNodes, cleanPages: pages, officeCapabilities, previewTools })
-    const allCandidates = [...cleanMatch.candidates, ...markerCandidates]
+    const markerCandidates = await resolveHardBlanksWithMarkers({ workingBytes, workingFileName, nodes: nodes, cleanPages: pages, officeCapabilities, previewTools })
+    const allCandidates = preferExactMarkerCandidates(cleanMatch.candidates, markerCandidates)
+    const resolvedMarkerIds = new Set(markerCandidates.map((candidate) => candidate.id))
+    warnings.push(...cleanMatch.warnings.filter((warning) => !warning.regionId || !resolvedMarkerIds.has(warning.regionId)))
     const suggestions = detectWordFormRegions(pkg, allCandidates).map((suggestion) => suggestion.reviewState === "confirmed" ? { ...suggestion, reviewState: "unresolved" as const } : suggestion)
     if (!suggestions.length) warnings.push({ code: "no-regions-detected", message: "未自动识别到填写区域，可在工作台中框选并绑定 Word 可写位置", severity: "warning" })
 
