@@ -73,7 +73,7 @@ export default function AdminDashboard() {
       key: `news-${item._id}`,
       action: item.isPublished ? "发布新闻" : "保存新闻草稿",
       user: "管理员",
-      timestamp: item.updatedAt,
+      timestamp: item.publishedAt,
     }))
     events.slice(0, 8).forEach((item: any) => nextActivities.push({
       key: `event-${item._id}`,
@@ -87,13 +87,6 @@ export default function AdminDashboard() {
       user: review.isAnonymous ? "匿名用户" : review.authorId || "用户",
       timestamp: review.createdAt,
     }))
-    courses.slice(-8).forEach((course: any) => nextActivities.push({
-      key: `course-${course.name}`,
-      action: "创建或更新课程",
-      user: "管理员",
-      timestamp: course.updatedAt || Date.now(),
-    }))
-
     setActivities(nextActivities.sort((a, b) => b.timestamp - a.timestamp).slice(0, 8))
   }, [usersData, newsData, eventsData, coursesData, pendingReviewsData])
 
