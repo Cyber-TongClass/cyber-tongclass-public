@@ -1,14 +1,15 @@
 "use client"
 
 import { FormEvent, useMemo, useState } from "react"
-import { Plus, Trash2, Upload } from "lucide-react"
+import { Plus, Sparkles, Trash2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { useGenerateOAFormUploadUrl } from "@/lib/api"
+import { useCurrentUser, useGenerateOAFormUploadUrl, useStudentFormProfile } from "@/lib/api"
 import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import { validateOAFormAnswers } from "@/lib/oa-forms"
+import { buildOAProfileAutofill, getEffectiveOAProfileBinding } from "@/lib/oa-profile-autofill"
 import { cn } from "@/lib/utils"
 import type { OAFileAnswer, OAForm, OAFormField, OATableColumn } from "@/types"
 
@@ -68,14 +69,43 @@ function getFieldContainerClassName(field: OAFormField) {
 
 export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "提交", heading }: OAFormRendererProps) {
   const generateUploadUrl = useGenerateOAFormUploadUrl()
+  const currentUser = useCurrentUser()
+  const studentProfile = useStudentFormProfile()
   const [answers, setAnswers] = useState<Answers>(() => initialAnswers || {})
   const [message, setMessage] = useState("")
+  const [autofillMessage, setAutofillMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [touchedFieldIds, setTouchedFieldIds] = useState<Set<string>>(() => new Set())
 
   const errors = useMemo(() => validateOAFormAnswers(form, answers), [answers, form])
+  const hasProfileFields = useMemo(
+    () => form.fields.some((field) => getEffectiveOAProfileBinding(field) !== null),
+    [form.fields],
+  )
+
+  const autofillFromProfile = () => {
+    const result = buildOAProfileAutofill(form.fields, {
+      name: currentUser?.chineseName || currentUser?.englishName || currentUser?.username,
+      chineseName: currentUser?.chineseName,
+      englishName: currentUser?.englishName,
+      email: currentUser?.email,
+      personalEmail: currentUser?.personalEmail || currentUser?.personalEmails?.[0],
+      username: currentUser?.username,
+      studentId: currentUser?.studentId,
+      organization: currentUser?.organization,
+      cohort: currentUser?.cohort,
+      identityType: currentUser?.identityType,
+      gender: studentProfile?.gender,
+      phone: studentProfile?.phone,
+    }, answers)
+    setAnswers(result.answers)
+    setTouchedFieldIds((current) => new Set([...current, ...result.filledFieldIds]))
+    setAutofillMessage(result.filledFieldIds.length > 0
+      ? `已从个人资料填写 ${result.filledFieldIds.length} 个空白项。`
+      : "没有可填写的空白项；你已输入的内容不会被覆盖。")
+  }
 
   const updateAnswer = (fieldId: string, value: unknown) => {
     setTouchedFieldIds((current) => new Set(current).add(fieldId))
@@ -301,8 +331,22 @@ export function OAFormRenderer({ form, initialAnswers, onSubmit, submitLabel = "
     <form className="space-y-6" onSubmit={submit}>
       <section aria-labelledby="oa-form-renderer-title" className="border-y aia-border-rule py-7">
         <header className="mb-6 border-b aia-border-rule pb-5">
-          <h2 id="oa-form-renderer-title" className="aia-serif text-2xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">{heading || form.title}</h2>
-          {form.description ? <p className="mt-2 max-w-3xl text-sm leading-7 aia-text-muted">{form.description}</p> : null}
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 id="oa-form-renderer-title" className="aia-serif text-2xl font-semibold tracking-tight text-[hsl(var(--aia-ink))]">{heading || form.title}</h2>
+              {form.description ? <p className="mt-2 max-w-3xl text-sm leading-7 aia-text-muted">{form.description}</p> : null}
+            </div>
+            {hasProfileFields ? (
+              <div className="shrink-0 text-right">
+                <Button type="button" variant="outline" className="min-h-11 rounded-none border aia-border-rule bg-transparent" onClick={autofillFromProfile}>
+                  <Sparkles className="mr-2 h-4 w-4 text-[hsl(var(--aia-red))]" aria-hidden="true" />
+                  从个人资料填写空白项
+                </Button>
+                <p className="aia-text-muted mt-1 text-xs">不会覆盖已填写内容</p>
+              </div>
+            ) : null}
+          </div>
+          {autofillMessage ? <p role="status" className="mt-3 text-sm text-[hsl(var(--aia-ink))]">{autofillMessage}</p> : null}
         </header>
         <div className="grid gap-5 md:grid-cols-2">
           {form.fields.map((field) => {

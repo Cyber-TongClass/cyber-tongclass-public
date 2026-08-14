@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { createDefaultOAFormDraft, createFieldFromPalette, fieldTypeLabels, normalizeFormSlug, toOAFormUpsertPayload, validateOAFormDraftForSave } from "@/lib/oa-forms"
+import { getOAProfileBindingMode, oaProfileBindingOptions, setOAProfileBinding, type OAProfileBinding } from "@/lib/oa-profile-autofill"
 import { cn } from "@/lib/utils"
 import type { OAFieldType, OAForm, OAFormField, OAFormOption, OAFormStatus, OAResultField, OAResultFieldType, OATableColumn } from "@/types"
 
@@ -110,6 +111,20 @@ function FieldDetailEditor({ field, index, updateField }: FieldDetailEditorProps
         <Label htmlFor={`${prefix}-help`}>帮助说明</Label>
         <Input id={`${prefix}-help`} className={textControlClass} value={field.helpText || ""} onChange={(event) => updateField(index, { helpText: event.target.value })} />
       </div>
+      {!["file", "table", "checkbox", "date"].includes(field.type) ? (
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor={`${prefix}-profile-binding`}>关联个人资料</Label>
+          <select
+            id={`${prefix}-profile-binding`}
+            className={controlClass}
+            value={getOAProfileBindingMode(field)}
+            onChange={(event) => updateField(index, setOAProfileBinding(field, event.target.value as OAProfileBinding | "auto" | "none"))}
+          >
+            {oaProfileBindingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <p className="aia-text-muted text-xs leading-5">申请人可一键把个人资料填入空白项；已输入内容不会被覆盖。</p>
+        </div>
+      ) : null}
       <div className="space-y-2 md:col-span-2">
         <Label htmlFor={`${prefix}-id`}>字段 ID（高级）</Label>
         <Input id={`${prefix}-id`} className={textControlClass} value={field.id} aria-describedby={`${prefix}-id-help`} onChange={(event) => updateField(index, { id: event.target.value.replace(/[^a-zA-Z0-9_]/g, "_") })} />
@@ -187,6 +202,12 @@ export function OAFormBuilder({ form, onSave }: OAFormBuilderProps) {
 
   const addField = (type: OAFieldType) => {
     setDraft((current) => ({ ...current, fields: [...(current.fields || []), createFieldFromPalette(type)] }))
+    setExpandedIndex((draft.fields || []).length)
+  }
+
+  const addProfileField = (binding: OAProfileBinding, label: string) => {
+    const field = setOAProfileBinding(createFieldFromPalette("text", label), binding)
+    setDraft((current) => ({ ...current, fields: [...(current.fields || []), field] }))
     setExpandedIndex((draft.fields || []).length)
   }
 
@@ -298,6 +319,13 @@ export function OAFormBuilder({ form, onSave }: OAFormBuilderProps) {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="mb-5 flex flex-wrap items-center gap-x-1 border-b aia-border-rule pb-3" aria-label="添加个人资料字段">
+          <span className="aia-mono mr-2 text-[10px] uppercase tracking-[0.12em] aia-text-muted">个人资料字段</span>
+          <button type="button" className={actionClass} onClick={() => addProfileField("display_name", "姓名")}><Plus className="h-3.5 w-3.5" aria-hidden="true" />姓名</button>
+          <button type="button" className={actionClass} onClick={() => addProfileField("email", "邮箱")}><Plus className="h-3.5 w-3.5" aria-hidden="true" />邮箱</button>
+          <button type="button" className={actionClass} onClick={() => addProfileField("student_id", "学号 / 工号")}><Plus className="h-3.5 w-3.5" aria-hidden="true" />学号</button>
         </div>
 
         <div className="border-y aia-border-rule">
