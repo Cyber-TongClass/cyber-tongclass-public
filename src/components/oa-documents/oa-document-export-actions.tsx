@@ -55,8 +55,8 @@ export function OADocumentSingleExportActions({ submissionId }: { submissionId: 
     }
   }
   return (
-    <div className="mt-4 border-t aia-border-rule pt-4" aria-label="原格式材料导出">
-      <p className="aia-mono mb-2 text-[10px] uppercase tracking-[0.12em] aia-text-muted">原格式材料</p>
+    <div className="mt-4 border-t aia-border-rule pt-4" aria-label="申请材料导出">
+      <p className="aia-mono mb-2 text-[10px] uppercase tracking-[0.12em] aia-text-muted">申请材料</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={actionClass} disabled={busy !== null} onClick={() => void run("docx")}>
           <Download className="h-3.5 w-3.5" aria-hidden="true" />{busy === "docx" ? "生成中…" : "下载 Word"}
@@ -81,9 +81,11 @@ const batchFormats: Array<[BatchFormat, string, string]> = [
 export function OADocumentBatchExportActions({
   formId,
   submissionIds,
+  fieldIds,
 }: {
   formId: string
   submissionIds: string[]
+  fieldIds?: string[]
 }) {
   const [busy, setBusy] = useState<BatchFormat | null>(null)
   const [message, setMessage] = useState("")
@@ -93,7 +95,7 @@ export function OADocumentBatchExportActions({
     try {
       await downloadArtifact(
         `/api/oa/forms/${encodeURIComponent(formId)}/exports`,
-        { submissionIds, format },
+        { submissionIds, fieldIds, format },
         fallbackName,
       )
     } catch (error) {

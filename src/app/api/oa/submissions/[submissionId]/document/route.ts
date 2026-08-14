@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 
 import { bearerSessionToken, exportAccess, fetchAuthorizedBytes, noStoreHeaders, rfc5987Attachment } from "@/lib/server/oa-document-access"
-import { buildSingleDocumentArtifact, assertCompiledTemplate, type AuthorizedExportAccess } from "@/lib/server/oa-form-export"
+import { buildGenericDocxArtifact, buildSingleDocumentArtifact, assertCompiledTemplate, type AuthorizedExportAccess, type ExportArtifact } from "@/lib/server/oa-form-export"
 import { detectOfficeCapabilities } from "@/lib/server/office-capabilities"
+import { convertFilledDocxToLegacyDoc, convertFilledDocxToPdf } from "@/lib/server/office-conversion"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -22,12 +23,24 @@ export async function POST(request: Request, context: { params: Promise<{ submis
     const { submissionId } = await context.params
     // Convex verifies submitter ownership or manager privilege before exposing any submission data or URL.
     const access = await exportAccess(sessionToken, submissionId, false) as AuthorizedExportAccess
-    const version = assertCompiledTemplate(access)
-    const templateBytes = await fetchAuthorizedBytes(access.compiledUrl || null)
     const capabilities = await detectOfficeCapabilities()
     if (format === "pdf" && !capabilities.canExportPdf) return NextResponse.json({ ok: false, code: "OFFICE_UNAVAILABLE", message: capabilities.unavailableReasons[0] }, { status: 409, headers: noStoreHeaders() })
     if (format === "doc" && !capabilities.canExportLegacyDoc) return NextResponse.json({ ok: false, code: "OFFICE_UNAVAILABLE", message: capabilities.unavailableReasons[0] }, { status: 409, headers: noStoreHeaders() })
-    const artifact = await buildSingleDocumentArtifact({ access: { ...access, version }, templateBytes, format, capabilities })
+    let artifact: ExportArtifact
+    if (access.version?.compiledStorageId && access.compiledUrl) {
+      const version = assertCompiledTemplate(access)
+      const templateBytes = await fetchAuthorizedBytes(access.compiledUrl)
+      artifact = await buildSingleDocumentArtifact({ access: { ...access, version }, templateBytes, format, capabilities })
+    } else {
+      const docx = buildGenericDocxArtifact(access)
+      if (format === "pdf") {
+        const converted = await convertFilledDocxToPdf(docx.bytes, docx.fileName, { capabilities })
+        artifact = { bytes: converted.bytes, fileName: docx.fileName.replace(/\.docx$/i, ".pdf"), contentType: "application/pdf" }
+      } else if (format === "doc") {
+        const converted = await convertFilledDocxToLegacyDoc(docx.bytes, docx.fileName, { capabilities })
+        artifact = { bytes: converted.bytes, fileName: docx.fileName.replace(/\.docx$/i, ".doc"), contentType: "application/msword" }
+      } else artifact = docx
+    }
     return new NextResponse(responseBody(artifact.bytes), { headers: noStoreHeaders({
       "content-type": artifact.contentType,
       "content-disposition": rfc5987Attachment(artifact.fileName),

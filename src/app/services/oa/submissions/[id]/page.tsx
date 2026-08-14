@@ -490,7 +490,7 @@ export default function AiaOASubmissionDetailPage() {
                 {submission.formTitle || form.title}的第 {ordinal} 次提交
               </h1>
               <p className="aia-text-muted mt-2 text-sm">提交于 {formatAiaOATime(submission.submittedAt)}</p>
-              {submission.documentTemplateVersionId ? <OADocumentSingleExportActions submissionId={submission._id} /> : null}
+              <OADocumentSingleExportActions submissionId={submission._id} />
             </div>
             <AiaOAReviewStatusBadge status={submission.reviewStatus} />
           </header>
