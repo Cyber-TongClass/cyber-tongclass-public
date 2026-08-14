@@ -4,6 +4,7 @@ import Link from "next/link"
 import { CalendarDays, ExternalLink, MapPin } from "lucide-react"
 
 import { ContentReviewStatus } from "@/components/class-work/content-review-status"
+import { ContentReviewDecisionPanel } from "@/components/class-work/content-review-decision-panel"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import {
   useContentSubmissionDetail,
@@ -92,6 +93,19 @@ function SubmissionResult({ submission, category, canManage }: {
     )
   }
 
+  const workflowStage = submission.workflowStage ?? "publication_approval"
+  const myTask = submission.myTaskId
+    ? submission.tasks?.find((task) => task._id === submission.myTaskId)
+    : undefined
+  const decisionSubmission: ContentSubmission = {
+    ...submission,
+    workflowStage,
+    canReview: canManage
+      && submission.status === "pending"
+      && workflowStage === "publication_approval"
+      && (!myTask || myTask.status === "pending"),
+  }
+
   return (
     <article>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -107,6 +121,10 @@ function SubmissionResult({ submission, category, canManage }: {
         <aside className="border-t aia-border-rule pt-5 lg:sticky lg:top-24 lg:self-start">
           <h2 className="aia-serif text-xl font-semibold text-[hsl(var(--aia-ink))]">审核流程</h2>
           <div className="mt-4"><ContentReviewStatus submission={submission} /></div>
+          <section className="mt-7 border-t aia-border-rule pt-5" aria-labelledby="content-decision-title">
+            <h2 id="content-decision-title" className="aia-serif text-xl font-semibold text-[hsl(var(--aia-ink))]">我的抉择</h2>
+            <ContentReviewDecisionPanel submission={decisionSubmission} />
+          </section>
           <div className="mt-7 border-t aia-border-rule pt-5">
             <p className="aia-mono text-xs font-semibold uppercase tracking-[0.12em] aia-text-muted">发布后可见范围</p>
             <div className="mt-2"><ScopeSummary scope={submission.targetScope} /></div>

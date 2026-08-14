@@ -2578,6 +2578,7 @@ export type ContentSubmission = {
   createdBy: string
   creatorName: string
   status: ContentReviewStatus
+  workflowStage?: "source_review" | "publication_approval" | "complete"
   reviewedBy?: string
   reviewerName?: string
   reviewComment?: string

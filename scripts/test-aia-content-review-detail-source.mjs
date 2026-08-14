@@ -25,17 +25,16 @@ test("content detail accepts an exact submission and category instead of downloa
   assert.match(detail, /submission\.category\s*!==\s*args\.category/)
 })
 
-test("creator, stored-task reviewer, current manager, and super admin can open exact details", () => {
+test("creator, stored-task reviewer, and super admin are the only exact detail viewers", () => {
   const detail = detailQuerySource()
   assert.match(detail, /getUserBySession\(ctx,\s*args\.sessionToken\)/)
   assert.match(detail, /\.query\("contentReviewTasks"\)/)
   assert.match(detail, /\.withIndex\("by_submission_user"/)
   assert.match(detail, /submission\.createdBy/)
   assert.match(detail, /viewer\.role\s*===\s*"super_admin"/)
-  assert.match(detail, /const permission = await getPermission\(ctx,\s*args\.category,\s*viewer\._id\)/)
-  assert.match(detail, /permission\?\.canManage\s*===\s*true/)
   assert.match(detail, /if\s*\(!canView\)\s*return null/)
   assert.doesNotMatch(detail, /requireRights/)
+  assert.doesNotMatch(detail, /getPermission/)
 })
 
 test("missing, deleted, mismatched, and unauthorized submissions share the same safe result", () => {
@@ -47,8 +46,7 @@ test("missing, deleted, mismatched, and unauthorized submissions share the same 
 
 test("detail projection returns review progress without internal authorization records", () => {
   const detail = detailQuerySource()
-  assert.match(detail, /const canDecide = permission\?\.canManage === true[\s\S]*?submission\.status === "pending"[\s\S]*?workflowStage[\s\S]*?"publication_approval"/)
-  assert.match(detail, /projectSubmissionWithTasks\(ctx,\s*submission,\s*viewer\._id,\s*canDecide\)/)
+  assert.match(detail, /projectSubmissionWithTasks\(ctx,\s*submission,\s*viewer\._id\)/)
   assert.match(backend, /tasks:\s*projectedTasks/)
   assert.match(backend, /myTaskId:/)
   assert.match(backend, /idempotencyKey:\s*_idempotencyKey/)
@@ -74,6 +72,9 @@ test("detail and review desk share one decision panel", () => {
   assert.match(decisionPanel, /未通过时必须填写审核意见/)
   assert.match(detailComponent, /ContentReviewDecisionPanel/)
   assert.match(detailComponent, />我的抉择</)
+  assert.match(detailComponent, /permissions\[category\]\?\.canManage === true/)
+  assert.match(detailComponent, /submission\.status === "pending"/)
+  assert.match(detailComponent, /workflowStage[\s\S]*?publication_approval/)
   assert.match(reviewDesk, /ContentReviewDecisionPanel/)
   assert.doesNotMatch(reviewDesk, /useReviewContentSubmission/)
 })

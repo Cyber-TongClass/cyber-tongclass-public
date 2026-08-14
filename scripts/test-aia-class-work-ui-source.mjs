@@ -21,15 +21,17 @@ assert.match(editor, /正在提交/)
 assert.match(editor, /role=["']alert["']/)
 
 const desk = read("src/components/class-work/content-review-desk.tsx")
+const decisionPanel = read("src/components/class-work/content-review-decision-panel.tsx")
 assert.match(desk, /useContentReviewQueue/)
-assert.match(desk, /useReviewContentSubmission/)
+assert.match(desk, /ContentReviewDecisionPanel/)
+assert.match(decisionPanel, /useReviewContentSubmission/)
 assert.match(desk, /submission\.myTaskId/)
-assert.match(desk, /taskId:/)
+assert.match(decisionPanel, /taskId:/)
 assert.match(desk, /const canReview = isPending\s*&&/)
-assert.match(desk, /该审核已由其他有权限人员处理，无需重复操作/)
-assert.match(desk, /你当前没有处理这份提交的审核资格/)
-assert.match(desk, /审核意见/)
-assert.match(desk, /未通过时必须填写审核意见/)
+assert.match(decisionPanel, /该提交已完成审核/)
+assert.match(decisionPanel, /你当前没有处理这份提交的审核资格/)
+assert.match(decisionPanel, /审核意见/)
+assert.match(decisionPanel, /未通过时必须填写审核意见/)
 assert.match(desk, /当前没有/)
 assert.match(desk, /正在加载/)
 assert.match(desk, /divide-y/)
@@ -50,11 +52,12 @@ assert.match(status, /reviewTasks/)
 assert.match(status, /reviewComment/)
 assert.match(status, /aia-mono/)
 assert.match(status, /aia-serif/)
-assert.doesNotMatch(`${editor}\n${desk}\n${detail}\n${status}`, /font-family|@font-face|font-\[['"]/)
+assert.doesNotMatch(`${editor}\n${desk}\n${detail}\n${status}\n${decisionPanel}`, /font-family|@font-face|font-\[['"]/)
 
 for (const file of [
   "src/components/class-work/content-submission-editor.tsx",
   "src/components/class-work/content-review-desk.tsx",
+  "src/components/class-work/content-review-decision-panel.tsx",
   "src/components/class-work/content-submission-detail.tsx",
   "src/components/class-work/content-review-status.tsx",
 ]) {

@@ -2,16 +2,14 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { ArrowRight, Check, X } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 
+import { ContentReviewDecisionPanel } from "@/components/class-work/content-review-decision-panel"
 import { ContentReviewStatus } from "@/components/class-work/content-review-status"
 import { PublishedContentManager } from "@/components/class-work/published-content-manager"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import {
   useContentReviewQueue,
   useMyContentPermissions,
-  useReviewContentSubmission,
   type ContentReviewCategory,
   type ContentReviewStatus as ReviewStatus,
   type ContentSubmission,
@@ -44,40 +42,8 @@ export function ContentReviewDesk({ category }: { category: ContentReviewCategor
   const [filter, setFilter] = useState<DeskFilter>("pending")
   const submissions = useContentReviewQueue(category, filter === "all" ? undefined : filter) as QueueSubmission[] | undefined
   const permissions = useMyContentPermissions()
-  const review = useReviewContentSubmission()
-  const [comments, setComments] = useState<Record<string, string>>({})
-  const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const copy = labels[category]
-
-  async function decide(submission: QueueSubmission, decision: "approved" | "rejected") {
-    if (busyId) return
-    const id = submission._id
-    const comment = comments[id]?.trim()
-    if (decision === "rejected" && !comment) {
-      setError("未通过时必须填写审核意见。")
-      return
-    }
-    setBusyId(id)
-    setError(null)
-    setMessage(null)
-    try {
-      const request: Parameters<typeof review>[0] & { taskId?: string } = {
-        id,
-        ...(submission.myTaskId ? { taskId: submission.myTaskId } : {}),
-        decision,
-        ...(comment ? { comment } : {}),
-      }
-      await review(request)
-      setComments((current) => ({ ...current, [id]: "" }))
-      setMessage(decision === "approved" ? "审核已通过，内容已自动发布。" : "已退回给创建者。")
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "审核失败，请稍后重试。")
-    } finally {
-      setBusyId(null)
-    }
-  }
 
   return (
     <div className="mt-8">
@@ -109,7 +75,6 @@ export function ContentReviewDesk({ category }: { category: ContentReviewCategor
       </div>
 
       {message ? <p role="status" className="mt-4 border-y aia-border-rule py-3 text-sm text-[hsl(var(--aia-ink))]">{message}</p> : null}
-      {error ? <p role="alert" className="mt-4 border-y aia-border-rule py-3 text-sm text-[hsl(var(--aia-red))]">{error}</p> : null}
 
       {submissions === undefined ? (
         <p role="status" className="aia-text-muted py-12 text-sm">正在加载{copy.queue}…</p>
@@ -158,41 +123,12 @@ export function ContentReviewDesk({ category }: { category: ContentReviewCategor
                     </Link>
                   </div>
 
-                  {canReview ? (
-                    <div className="mt-5 grid gap-3 border-t aia-border-rule pt-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                      <div>
-                        <label htmlFor={`review-comment-${submission._id}`} className="aia-mono text-xs font-semibold uppercase tracking-[0.12em] aia-text-muted">
-                          审核意见
-                        </label>
-                        <Textarea
-                          id={`review-comment-${submission._id}`}
-                          value={comments[submission._id] || ""}
-                          onChange={(event) => setComments((current) => ({ ...current, [submission._id]: event.target.value }))}
-                          placeholder="通过时可选；未通过时必填"
-                          className="mt-2 min-h-20 rounded-none border-x-0 border-t-0 bg-transparent px-0"
-                          disabled={busyId === submission._id}
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="outline" className="rounded-none" disabled={busyId !== null} onClick={() => void decide(submission, "rejected")}>
-                          <X className="mr-2 h-4 w-4" aria-hidden="true" />不通过
-                        </Button>
-                        <Button type="button" className="rounded-none bg-[hsl(var(--aia-red))] hover:bg-[hsl(var(--aia-red-deep))]" disabled={busyId !== null} onClick={() => void decide(submission, "approved")}>
-                          <Check className="mr-2 h-4 w-4" aria-hidden="true" />{busyId === submission._id ? "正在提交…" : "同意"}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : isPending && myTask ? (
-                    <p role="status" className="mt-4 border-y aia-border-rule bg-[hsl(var(--aia-tag))] py-3 text-sm leading-6 text-[hsl(var(--aia-ink))]">
-                      该审核已由其他有权限人员处理，无需重复操作。
-                    </p>
-                  ) : isPending ? (
-                    <p role="status" className="aia-text-muted mt-4 border-y aia-border-rule py-3 text-sm leading-6">
-                      你当前没有处理这份提交的审核资格，仅可查看进度。
-                    </p>
-                  ) : submission.reviewComment ? (
-                    <p className="aia-text-muted mt-4 border-y aia-border-rule py-3 text-sm leading-6">审核意见：{submission.reviewComment}</p>
-                  ) : null}
+                  <div className="mt-5 border-t aia-border-rule pt-4">
+                    <ContentReviewDecisionPanel
+                      submission={{ ...submission, canReview }}
+                      onComplete={(decision) => setMessage(decision === "approved" ? "审核已通过，内容已自动发布。" : "已退回给创建者。")}
+                    />
+                  </div>
                 </div>
               </article>
             )
