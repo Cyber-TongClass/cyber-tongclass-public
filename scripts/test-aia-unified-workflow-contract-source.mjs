@@ -31,6 +31,22 @@ test("the V2 contract accepts all five workflow node discriminators", () => {
   )
 })
 
+test("fill-form completion mode is explicit while legacy nodes keep grant-only behavior", () => {
+  const required = forms.normalizeOAWorkflowDefinition({
+    version: 2,
+    nodes: [
+      { id: "create", type: "create_form", title: "创建表单" },
+      { id: "required", type: "fill_form", title: "必须填写", targetFormId: "form-2", completionRequired: true },
+      { id: "legacy", type: "fill_form", title: "旧节点", targetFormId: "form-3" },
+    ],
+  })
+
+  assert.equal(required.nodes[1].completionRequired, true)
+  assert.equal(required.nodes[2].completionRequired, false)
+  assert.match(schemaSource, /completionRequired:\s*v\.optional\(v\.boolean\(\)\)/)
+  assert.match(backendSource, /completionRequired:\s*node\.completionRequired === true/)
+})
+
 test("a workflow has one fixed first create node and globally unique node ids", () => {
   assert.throws(
     () => forms.validateOAWorkflowDefinition({ version: 2, nodes: [] }),

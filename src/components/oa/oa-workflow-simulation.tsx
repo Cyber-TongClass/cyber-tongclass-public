@@ -101,7 +101,9 @@ function nodeDetail(node: OAWorkflowNode, targetFormTitles: Record<string, strin
     case "batch_approval":
       return node.completion === "all" ? "全部审核人同意后推进" : "任一审核人同意后推进"
     case "fill_form":
-      return targetFormTitles[node.targetFormId] || "抵达后授予目标表单的可见与填写权限"
+      return node.completionRequired
+        ? `等待申请人填写：${targetFormTitles[node.targetFormId] || "目标表单"}`
+        : `仅开放权限：${targetFormTitles[node.targetFormId] || "目标表单"}`
     case "notification":
       return node.message || "向所选人员与用户组发送站内信"
   }

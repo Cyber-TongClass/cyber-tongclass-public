@@ -221,7 +221,7 @@ export type OAWorkflowNode =
   | { id: string; type: "create_form"; title: string }
   | { id: string; type: "approval"; title: string; scope: OAUserScope }
   | { id: string; type: "batch_approval"; title: string; scope: OAUserScope; completion: "any" | "all" }
-  | { id: string; type: "fill_form"; title: string; targetFormId: string }
+  | { id: string; type: "fill_form"; title: string; targetFormId: string; completionRequired?: boolean }
   | { id: string; type: "notification"; title: string; scope: OAUserScope; message: string }
 
 export interface OAWorkflowDefinition {

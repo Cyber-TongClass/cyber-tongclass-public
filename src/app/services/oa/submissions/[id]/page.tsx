@@ -31,6 +31,7 @@ type ApprovalHistoryItem = {
   completedAt?: number
   scopeLabels?: string[]
   targetFormTitle?: string
+  completionRequired?: boolean
   decisions?: ApprovalHistoryReviewer[]
   reviewers?: ApprovalHistoryReviewer[]
   tasks?: ApprovalHistoryReviewer[]
@@ -372,7 +373,9 @@ function WorkflowHistoryTimeline({ nodes }: { nodes: ApprovalHistoryItem[] }) {
             ) : null}
             {node.nodeType === "fill_form" ? (
               <p className="mt-2 text-xs leading-5 text-[hsl(var(--aia-ink))]">
-                {node.state === "completed" ? "已开放填写：" : "到达此节点后开放："}
+                {node.completionRequired
+                  ? node.state === "completed" ? "已完成填写：" : "等待填写："
+                  : "仅开放权限："}
                 {node.targetFormTitle || "目标表单"}
               </p>
             ) : null}

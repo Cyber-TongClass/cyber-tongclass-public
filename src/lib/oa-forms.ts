@@ -72,7 +72,7 @@ export type OAWorkflowNode =
   | { id: string; type: "create_form"; title: string }
   | { id: string; type: "approval"; title: string; scope: OAUserScope }
   | { id: string; type: "batch_approval"; title: string; scope: OAUserScope; completion: OAApprovalCompletion }
-  | { id: string; type: "fill_form"; title: string; targetFormId: string }
+  | { id: string; type: "fill_form"; title: string; targetFormId: string; completionRequired?: boolean }
   | { id: string; type: "notification"; title: string; scope: OAUserScope; message: string }
 
 export type OAWorkflowDefinition = {
@@ -447,7 +447,11 @@ export function normalizeOAWorkflowDefinition(
           case "batch_approval":
             return { ...base, scope: normalizeOAUserScope(node.scope) || {}, completion: node.completion }
           case "fill_form":
-            return { ...base, targetFormId: node.targetFormId.trim() }
+            return {
+              ...base,
+              targetFormId: node.targetFormId.trim(),
+              completionRequired: node.completionRequired === true,
+            }
           case "notification":
             return {
               ...base,

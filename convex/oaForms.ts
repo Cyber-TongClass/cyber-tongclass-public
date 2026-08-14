@@ -4,6 +4,7 @@ import { createR2UploadTarget, getR2DownloadUrl, getR2ObjectKeyFromStorageId, r2
 import {
   advanceOAWorkflow,
   adaptLegacyOAWorkflow,
+  completeRequiredOAFormGrants,
   resolveOAWorkflowRecipients,
   resumeOAWorkflow,
   startOAWorkflow,
@@ -131,6 +132,7 @@ const workflowNodeValidator = v.union(
     type: v.literal("fill_form"),
     title: v.string(),
     targetFormId: v.id("oaForms"),
+    completionRequired: v.optional(v.boolean()),
   }),
   v.object({
     id: v.string(),
@@ -478,7 +480,11 @@ function normalizeWorkflowDefinition(definition?: any): any {
         if (!String(node.targetFormId || "").trim()) {
           throw new Error(`填写节点“${title}”必须选择目标表单`)
         }
-        return { ...base, targetFormId: node.targetFormId }
+        return {
+          ...base,
+          targetFormId: node.targetFormId,
+          completionRequired: node.completionRequired === true,
+        }
       case "notification": {
         const message = normalizeText(node.message)
         if (!message) throw new Error(`通知节点“${title}”必须填写通知内容`)
@@ -1779,6 +1785,12 @@ export const submit = mutation({
     const submission = await ctx.db.get(submissionId)
     if (!submission) throw new Error("提交创建失败")
     await startOAWorkflow(ctx, { form: runtimeForm, submission, now })
+    await completeRequiredOAFormGrants(ctx, {
+      formId: form._id,
+      userId: user._id,
+      targetSubmissionId: submissionId,
+      now,
+    })
     return submissionId
   },
 })
@@ -1913,7 +1925,7 @@ export const listMineApprovalHistory = query({
       const isApproval = node.type === "approval" || node.type === "batch_approval"
       const completionEvent = [...nodeEvents].reverse().find((event: any) =>
         event.action === "step_completed"
-        || event.action === "form_access_granted"
+        || (event.action === "form_access_granted" && node.completionRequired !== true)
         || event.action === "notification_sent")
       const rejectionEvent = [...nodeEvents].reverse().find((event: any) => event.action === "rejected")
       const changesEvent = [...nodeEvents].reverse().find((event: any) => event.action === "changes_requested")
@@ -1971,7 +1983,10 @@ export const listMineApprovalHistory = query({
         ...(exposeScopeLabels && scopeLabels.length > 0 ? { scopeLabels } : {}),
         ...(decisions.length > 0 ? { decisions } : {}),
         ...(node.type === "fill_form"
-          ? { targetFormTitle: targetForm?.title || "目标表单（已停用）" }
+          ? {
+              targetFormTitle: targetForm?.title || "目标表单（已停用）",
+              completionRequired: node.completionRequired === true,
+            }
           : {}),
         ...(node.type === "create_form" ? { operatorName: submission.submitterName || "提交人" } : {}),
         ...(latestStarted?.createdAt !== undefined ? { startedAt: latestStarted.createdAt } : {}),

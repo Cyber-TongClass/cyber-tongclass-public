@@ -25,6 +25,10 @@ test("fill-form grants, tasks, and node effects have deterministic natural keys"
   assert.match(runtime, /oa:grant:/)
   assert.match(runtime, /oa:task:/)
   assert.match(runtime, /by_naturalKey/)
+  assert.match(runtime, /completionRequired/)
+  assert.match(runtime, /reason:\s*"fill_form"/)
+  assert.match(runtime, /completeRequiredOAFormGrants/)
+  assert.match(endpoints, /completeRequiredOAFormGrants\(ctx/)
 })
 
 test("fill-form grants participate in published list, detail, submit, and revision access", () => {

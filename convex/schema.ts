@@ -118,6 +118,7 @@ const oaWorkflowNode = v.union(
     type: v.literal("fill_form"),
     title: v.string(),
     targetFormId: v.id("oaForms"),
+    completionRequired: v.optional(v.boolean()),
   }),
   v.object({
     id: v.string(),
@@ -1103,6 +1104,9 @@ export default defineSchema({
     sourceSubmissionId: v.id("oaFormSubmissions"),
     nodeId: v.string(),
     workflowVersion: v.number(),
+    completionRequired: v.optional(v.boolean()),
+    completedBySubmissionId: v.optional(v.id("oaFormSubmissions")),
+    completedAt: v.optional(v.number()),
     naturalKey: v.string(),
     createdAt: v.number(),
   })

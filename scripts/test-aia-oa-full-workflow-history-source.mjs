@@ -12,6 +12,7 @@ test("submitter history projects every configured workflow node instead of only 
   assert.match(backend, /nodeType:\s*node\.type/)
   assert.match(backend, /scopeLabels/)
   assert.match(backend, /targetFormTitle/)
+  assert.match(backend, /event\.action === "form_access_granted" && node\.completionRequired !== true/)
 })
 
 test("pending group approvals show selector labels and completed approvals show only actual actors", () => {
@@ -31,4 +32,7 @@ test("the submitter timeline renders approval, notification, and fill-form nodes
   assert.match(detail, /fill_form:\s*"填写表单"/)
   assert.match(detail, /create_form:\s*"创建表单"/)
   assert.match(detail, /完整流程/)
+  assert.match(detail, /等待填写：/)
+  assert.match(detail, /仅开放权限：/)
+  assert.match(backend, /completionRequired:\s*node\.completionRequired === true/)
 })

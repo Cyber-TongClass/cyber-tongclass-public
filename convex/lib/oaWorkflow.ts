@@ -19,7 +19,7 @@ type OAWorkflowNode =
   | { id: string; type: "create_form"; title: string }
   | { id: string; type: "approval"; title: string; scope: OAUserScope }
   | { id: string; type: "batch_approval"; title: string; scope: OAUserScope; completion: "any" | "all" }
-  | { id: string; type: "fill_form"; title: string; targetFormId: unknown }
+  | { id: string; type: "fill_form"; title: string; targetFormId: unknown; completionRequired?: boolean }
   | { id: string; type: "notification"; title: string; scope: OAUserScope; message: string }
 
 type OAWorkflowDefinition = { version: 2; nodes: OAWorkflowNode[] }
@@ -447,6 +447,7 @@ export async function runWorkflowUntilBlocked(ctx: any, input: {
             sourceSubmissionId: input.submission._id,
             nodeId: node.id,
             workflowVersion: input.workflowVersion,
+            completionRequired: node.completionRequired === true,
             naturalKey,
             createdAt: input.now,
           })
@@ -460,6 +461,11 @@ export async function runWorkflowUntilBlocked(ctx: any, input: {
             action: "form_access_granted",
             createdAt: input.now,
           })
+        } else if (node.completionRequired === true && existing.completionRequired !== true) {
+          await ctx.db.patch(existing._id, { completionRequired: true })
+        }
+        if (node.completionRequired === true) {
+          return { blocked: true, reason: "fill_form" as const, nodeIndex }
         }
         break
       }
@@ -529,6 +535,65 @@ export async function runWorkflowUntilBlocked(ctx: any, input: {
     now: input.now,
   })
   return { blocked: false, workflowStatus: "approved" as const }
+}
+
+/** Completes every still-current required grant satisfied by one target submission. */
+export async function completeRequiredOAFormGrants(ctx: any, input: {
+  formId: any
+  userId: any
+  targetSubmissionId: any
+  now: number
+}) {
+  const grants = await ctx.db
+    .query("oaFormAccessGrants")
+    .withIndex("by_form_user", (index: any) => index.eq("formId", input.formId).eq("userId", input.userId))
+    .collect()
+  let completed = 0
+
+  for (const grant of grants) {
+    if (grant.completionRequired !== true || grant.completedBySubmissionId) continue
+    const sourceSubmission = await ctx.db.get(grant.sourceSubmissionId)
+    if (!sourceSubmission || sourceSubmission.workflowStatus !== "pending") continue
+    const workflowVersion = sourceSubmission.workflowVersion ?? 1
+    if (workflowVersion !== grant.workflowVersion) continue
+    const sourceForm = await ctx.db.get(sourceSubmission.formId)
+    if (!sourceForm) continue
+    const definition = workflowDefinition(sourceForm, sourceSubmission)
+    const nodeIndex = sourceSubmission.currentWorkflowNodeIndex ?? sourceSubmission.currentApprovalStep
+    const node = definition.nodes[nodeIndex]
+    if (
+      !node
+      || node.type !== "fill_form"
+      || node.completionRequired !== true
+      || normalizedId(node.id) !== normalizedId(grant.nodeId)
+      || normalizedId(node.targetFormId) !== normalizedId(input.formId)
+    ) continue
+
+    await ctx.db.patch(grant._id, {
+      completedBySubmissionId: input.targetSubmissionId,
+      completedAt: input.now,
+    })
+    await appendOAWorkflowEvent(ctx, {
+      submissionId: sourceSubmission._id,
+      formId: sourceForm._id,
+      stepIndex: nodeIndex,
+      stepId: node.id,
+      nodeType: node.type,
+      workflowVersion,
+      actorUserId: input.userId,
+      action: "step_completed",
+      createdAt: input.now,
+    })
+    await runWorkflowUntilBlocked(ctx, {
+      form: sourceForm,
+      submission: sourceSubmission,
+      startNodeIndex: nodeIndex + 1,
+      now: input.now,
+      workflowVersion,
+    })
+    completed += 1
+  }
+  return { completed }
 }
 
 export async function startOAWorkflow(ctx: any, input: {

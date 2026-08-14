@@ -68,7 +68,7 @@ function createNode(type: ConfigurableNodeType, position: number): OAWorkflowNod
     case "batch_approval":
       return { id, type, title: "批量审批", scope: {}, completion: "any" }
     case "fill_form":
-      return { id, type, title: "填写新表单", targetFormId: "" }
+      return { id, type, title: "填写新表单", targetFormId: "", completionRequired: true }
     case "notification":
       return { id, type, title: "发送通知", scope: {}, message: "" }
   }
@@ -91,7 +91,7 @@ function nodeSummary(node: OAWorkflowNode, candidates: OAFormTargetCandidate[]) 
     case "batch_approval":
       return `${node.completion === "all" ? "全部同意" : "任一同意"} · ${countScope(node.scope)} 个范围条件`
     case "fill_form":
-      return candidates.find((candidate) => candidate.id === node.targetFormId)?.title || "尚未选择目标表单"
+      return `${node.completionRequired ? "必须完成" : "仅开放"} · ${candidates.find((candidate) => candidate.id === node.targetFormId)?.title || "尚未选择目标表单"}`
     case "notification":
       return node.message.trim() || "尚未填写通知内容"
   }
@@ -211,19 +211,33 @@ function NodeConfiguration({
       ) : null}
 
       {node.type === "fill_form" ? (
-        <div>
-          <FieldLabel htmlFor={`${idPrefix}-form-search`}>目标表单</FieldLabel>
-          <div className="mt-2">
-            <OAFormTargetPicker
-              candidates={formCandidates}
-              value={node.targetFormId}
-              onChange={(targetFormId) => onChange({ ...node, targetFormId })}
-              idPrefix={idPrefix}
-            />
+        <div className="space-y-5">
+          <div>
+            <FieldLabel htmlFor={`${idPrefix}-form-search`}>目标表单</FieldLabel>
+            <div className="mt-2">
+              <OAFormTargetPicker
+                candidates={formCandidates}
+                value={node.targetFormId}
+                onChange={(targetFormId) => onChange({ ...node, targetFormId })}
+                idPrefix={idPrefix}
+              />
+            </div>
+            <p className="mt-2 text-xs leading-5 aia-text-muted">
+              只有当前编辑者有权查看的表单会出现在结果中；抵达此节点后才授予提交人权限。
+            </p>
           </div>
-          <p className="mt-2 text-xs leading-5 aia-text-muted">
-            只有当前编辑者有权查看的表单会出现在结果中；抵达此节点后才授予提交人权限。
-          </p>
+          <div>
+            <FieldLabel htmlFor={`${idPrefix}-form-completion`}>流程推进条件</FieldLabel>
+            <select
+              id={`${idPrefix}-form-completion`}
+              value={node.completionRequired ? "required" : "grant_only"}
+              className="aia-focus mt-2 w-full border aia-border-rule bg-transparent px-3 py-2 text-sm text-[hsl(var(--aia-ink))]"
+              onChange={(event) => onChange({ ...node, completionRequired: event.target.value === "required" })}
+            >
+              <option value="required">必须完成目标表单后推进</option>
+              <option value="grant_only">仅开放填写权限并继续</option>
+            </select>
+          </div>
         </div>
       ) : null}
 
