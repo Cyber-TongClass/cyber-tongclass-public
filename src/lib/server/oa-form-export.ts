@@ -14,7 +14,14 @@ export interface AuthorizedExportAccess {
     studentId?: string
     submittedAt?: number
     answers: Record<string, unknown>
-    formSnapshot?: { fields?: Array<{ id: string; label: string; type: string }> }
+    formSnapshot?: {
+      fields?: Array<{
+        id: string
+        label: string
+        type: string
+        columns?: Array<{ id: string; label: string; type: string; required?: boolean }>
+      }>
+    }
     documentTemplateVersionId?: string | null
   }
   form: { _id: string; title: string }
@@ -96,15 +103,47 @@ function cell(value: unknown) {
 }
 
 export function buildAuthorizedTable(accesses: AuthorizedExportAccess[]) {
-  const fields = new Map<string, string>()
+  type SnapshotField = NonNullable<NonNullable<AuthorizedExportAccess["submission"]["formSnapshot"]>["fields"]>[number]
+  const fields = new Map<string, SnapshotField>()
   for (const access of accesses) {
-    for (const field of access.submission.formSnapshot?.fields || []) if (!fields.has(field.id)) fields.set(field.id, field.label)
+    for (const field of access.submission.formSnapshot?.fields || []) if (!fields.has(field.id)) fields.set(field.id, field)
   }
-  if (!fields.size) for (const field of accesses[0]?.version?.manifest.fields || []) fields.set(field.fieldId, field.label)
-  const header = ["申请编号", "申请人", "学号", "提交时间", ...fields.values()]
-  const rows = accesses.map((access) => [
-    String(access.submission._id), access.submission.submitterName || "", access.submission.studentId || "",
+  if (!fields.size) {
+    for (const field of accesses[0]?.version?.manifest.fields || []) {
+      fields.set(field.fieldId, { id: field.fieldId, label: field.label, type: field.answerType })
+    }
+  }
+
+  const provenance = (access: AuthorizedExportAccess) => [
+    String(access.submission._id),
+    access.submission.submitterName || "",
+    access.submission.studentId || "",
     access.submission.submittedAt ? new Date(access.submission.submittedAt).toISOString() : "",
+  ]
+  const tableFields = [...fields.values()].filter((field) => field.type === "table")
+  const repeatableTable = tableFields.length === 1 && tableFields[0].columns?.length ? tableFields[0] : null
+  if (repeatableTable?.columns) {
+    const scalarFields = [...fields.values()].filter((field) => field.id !== repeatableTable.id)
+    const header = ["申请编号", "申请人", "学号", "提交时间", ...scalarFields.map((field) => field.label), ...repeatableTable.columns.map((column) => column.label)]
+    const rows = accesses.flatMap((access) => {
+      const answer = access.submission.answers[repeatableTable.id]
+      if (!Array.isArray(answer)) return []
+      return answer.flatMap((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return []
+        const record = item as Record<string, unknown>
+        return [[
+          ...provenance(access),
+          ...scalarFields.map((field) => cell(access.submission.answers[field.id])),
+          ...repeatableTable.columns!.map((column) => cell(record[column.id])),
+        ]]
+      })
+    })
+    return { header, rows }
+  }
+
+  const header = ["申请编号", "申请人", "学号", "提交时间", ...[...fields.values()].map((field) => field.label)]
+  const rows = accesses.map((access) => [
+    ...provenance(access),
     ...fields.keys().map((fieldId) => cell(access.submission.answers[fieldId])),
   ])
   return { header, rows }
