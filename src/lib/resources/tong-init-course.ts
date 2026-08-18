@@ -25,4 +25,14 @@ export const tongAiResearchCoursePdfs: CoursePdf[] = [
     description: "计算机的结构与硬件",
     href: "/resources/tong-init-course/slides-lec1.pdf",
   },
+  {
+    title: "第 2 讲 课件",
+    description: "操作系统与 Linux",
+    href: "/resources/tong-init-course/slides-lec2.pdf",
+  },
+  {
+    title: "第 3 讲 代码包",
+    description: "第三讲配套使用的代码包",
+    href: "/resources/tong-init-course/terminal-adventure.zip",
+  }
 ]
