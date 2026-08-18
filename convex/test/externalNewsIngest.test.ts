@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+// @ts-ignore -- Node's strip-types test runner requires the explicit extension.
 import { decideExternalNewsIngest } from "../lib/externalNewsModel.ts"
 
 test("first observation never creates a draft", () => {

@@ -1,4 +1,4 @@
-import type { PublicPublicationAuthor } from "@/types"
+import type { PublicPublicationAuthor } from "./index"
 
 export type InstitutePersonKind = "teacher" | "graduate"
 

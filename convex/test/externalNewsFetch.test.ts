@@ -65,7 +65,9 @@ test("sends only the public crawler headers and no credentials", async () => {
   }
 
   await fetchExternalNewsHtml("https://www.ai.pku.edu.cn/a.htm", { fetchImpl: fakeFetch })
-  assert.deepEqual([...requestHeaders.keys()].sort(), ["accept", "user-agent"])
+  const headerNames: string[] = []
+  requestHeaders.forEach((_value, key) => headerNames.push(key))
+  assert.deepEqual(headerNames.sort(), ["accept", "user-agent"])
   assert.equal(requestHeaders.has("cookie"), false)
   assert.equal(requestHeaders.has("authorization"), false)
 })

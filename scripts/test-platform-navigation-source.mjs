@@ -14,7 +14,7 @@ test("admin navigation keeps canonical form management but excludes foreground p
   const ordinaryAdminPrefixes = source.match(/const adminAllowedPrefixes = \[([^\]]+)\]/s)?.[1] ?? ""
   assert.doesNotMatch(ordinaryAdminPrefixes, /\/admin\/forms/)
   assert.doesNotMatch(ordinaryAdminPrefixes, /\/admin\/reimbursements/)
-  assert.match(source, /isSuperAdmin\s*\?\s*navItems/)
+  assert.match(source, /isSuperAdmin\s*\?\s*contentManagerNavItems/)
 })
 
 test("portal uses the three account-role labels and gates class-work reimbursement actions", () => {

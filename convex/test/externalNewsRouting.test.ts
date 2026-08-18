@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+// @ts-ignore -- Node's strip-types test runner requires the explicit extension.
 import { intersectActiveReviewers } from "../lib/externalNewsModel.ts"
+// @ts-ignore -- Node's strip-types test runner requires the explicit extension.
 import { contentReviewTaskNaturalKey } from "../lib/contentReviewWorkflow.ts"
 
 test("resolved routing is intersected with active canReview accounts", () => {
