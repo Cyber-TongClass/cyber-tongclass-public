@@ -26,6 +26,7 @@ export const listAll = query({
     skip: v.optional(v.number()),
     limit: v.optional(v.number()),
     category: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let query = ctx.db.query("news")
