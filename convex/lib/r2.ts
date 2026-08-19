@@ -8,12 +8,16 @@ export type R2Purpose =
   | "oa-form-attachment"
   | "techday-poster"
   | "techday-reimbursement-attachment"
+  | "tong-init-course-resource"
+  | "tong-init-course-resource-final"
 
 const R2_PURPOSES = new Set<R2Purpose>([
   "academic-exchange-paper",
   "oa-form-attachment",
   "techday-poster",
   "techday-reimbursement-attachment",
+  "tong-init-course-resource",
+  "tong-init-course-resource-final",
 ])
 
 export type R2Config = {
@@ -247,6 +251,10 @@ export async function createR2SignedUrl(args: {
   method: "GET" | "PUT" | "HEAD"
   key: string
   contentType?: string
+  contentDisposition?: string
+  copySource?: string
+  copySourceIfMatch?: string
+  metadataDirective?: "COPY"
   now?: Date
   expiresSeconds?: number
   config?: R2Config
@@ -261,7 +269,18 @@ export async function createR2SignedUrl(args: {
   const endpoint = new URL(config.endpoint.replace(/\/+$/, ""))
   const host = endpoint.host
   const canonicalUri = `/${encodeRfc3986(config.bucket)}/${encodeS3Path(args.key)}`
-  const signedHeaders = "host"
+  const requestHeaders = [
+    ["host", host],
+    ...(args.contentType ? [["content-type", args.contentType]] : []),
+    ...(args.contentDisposition ? [["content-disposition", args.contentDisposition]] : []),
+    ...(args.copySource ? [["x-amz-copy-source", args.copySource]] : []),
+    ...(args.copySourceIfMatch ? [["x-amz-copy-source-if-match", args.copySourceIfMatch]] : []),
+    ...(args.metadataDirective ? [["x-amz-metadata-directive", args.metadataDirective]] : []),
+  ]
+    .map(([name, value]) => [name.toLowerCase(), value.trim().replace(/\s+/g, " ")] as const)
+    .sort(([left], [right]) => left.localeCompare(right))
+  const signedHeaders = requestHeaders.map(([name]) => name).join(";")
+  const canonicalHeaders = `${requestHeaders.map(([name, value]) => `${name}:${value}`).join("\n")}\n`
   const params = {
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
     "X-Amz-Credential": `${config.accessKeyId}/${credentialScope}`,
@@ -274,7 +293,7 @@ export async function createR2SignedUrl(args: {
     args.method,
     canonicalUri,
     query,
-    `host:${host}\n`,
+    canonicalHeaders,
     signedHeaders,
     "UNSIGNED-PAYLOAD",
   ].join("\n")
@@ -293,6 +312,8 @@ export async function createR2UploadTarget(args: {
   ownerId: string
   fileName?: string
   contentType?: string
+  contentDisposition?: string
+  expiresSeconds?: number
 }) {
   const config = getR2ConfigFromEnv()
   if (!config) return null
@@ -304,10 +325,82 @@ export async function createR2UploadTarget(args: {
   })
   return {
     storageId: toR2StorageId(key),
-    uploadUrl: await createR2SignedUrl({ method: "PUT", key, contentType, config }),
+    uploadUrl: await createR2SignedUrl({
+      method: "PUT",
+      key,
+      contentType,
+      contentDisposition: args.contentDisposition,
+      expiresSeconds: args.expiresSeconds,
+      config,
+    }),
     method: "PUT" as const,
-    headers: { "Content-Type": contentType },
+    headers: {
+      "Content-Type": contentType,
+      ...(args.contentDisposition ? { "Content-Disposition": args.contentDisposition } : {}),
+    },
   }
+}
+
+export async function headR2Object(storageId: unknown) {
+  const key = getR2ObjectKeyFromStorageId(storageId)
+  if (!key) throw new Error("R2 storage id is invalid")
+  const response = await fetch(await createR2SignedUrl({ method: "HEAD", key }), { method: "HEAD" })
+  if (!response.ok) {
+    throw new Error(response.status === 404 ? "R2 文件不存在或上传未完成" : `R2 文件校验失败 (${response.status})`)
+  }
+  const size = Number(response.headers.get("content-length"))
+  if (!Number.isFinite(size) || size < 0) throw new Error("R2 未返回有效的文件大小")
+  return {
+    size,
+    mimeType: String(response.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase(),
+    contentDisposition: response.headers.get("content-disposition") || undefined,
+    etag: response.headers.get("etag") || undefined,
+  }
+}
+
+export async function copyR2ObjectToNewKey(args: {
+  sourceStorageId: string
+  sourcePurpose: R2Purpose
+  destinationPurpose: R2Purpose
+  ownerId: string
+  fileName?: string
+  sourceEtag: string
+}) {
+  if (!r2StorageIdMatches(args.sourceStorageId, { ownerId: args.ownerId, purpose: args.sourcePurpose })) {
+    throw new Error("R2 source storage id is invalid")
+  }
+  const sourceKey = getR2ObjectKeyFromStorageId(args.sourceStorageId)
+  const config = getR2ConfigFromEnv()
+  if (!sourceKey || !config) throw new Error("R2 is not configured")
+
+  const destinationKey = createR2ObjectKey({
+    purpose: args.destinationPurpose,
+    ownerId: args.ownerId,
+    fileName: args.fileName,
+  })
+  const copySource = `/${encodeRfc3986(config.bucket)}/${encodeS3Path(sourceKey)}`
+  const headers = {
+    "x-amz-copy-source": copySource,
+    "x-amz-copy-source-if-match": args.sourceEtag,
+    "x-amz-metadata-directive": "COPY",
+  } as const
+  const response = await fetch(await createR2SignedUrl({
+    method: "PUT",
+    key: destinationKey,
+    copySource,
+    copySourceIfMatch: args.sourceEtag,
+    metadataDirective: "COPY",
+    config,
+  }), {
+    method: "PUT",
+    headers,
+  })
+  if (!response.ok) {
+    throw new Error(response.status === 412
+      ? "R2 源文件在校验后发生变化，请重新上传"
+      : `R2 文件固化失败 (${response.status})`)
+  }
+  return toR2StorageId(destinationKey)
 }
 
 export async function getR2DownloadUrl(storageId: unknown) {

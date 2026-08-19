@@ -1,7 +1,7 @@
 import Link from "next/link"
-import { ArrowLeft, ArrowUpRight, FileText } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { tongAiResearchCoursePdfs } from "@/lib/resources/tong-init-course"
+import { TongInitCourseResourceList } from "@/components/resources/tong-init-course-resource-list"
 
 export default function TongAiResearchCoursePage() {
   return (
@@ -31,34 +31,7 @@ export default function TongAiResearchCoursePage() {
 
       <section className="bg-[hsl(211,30%,97%)] py-16 md:py-24">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          {tongAiResearchCoursePdfs.length > 0 ? (
-            <div className="space-y-3">
-              {tongAiResearchCoursePdfs.map((pdf) => (
-                <a
-                  key={pdf.href}
-                  href={pdf.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex items-center gap-4 bg-white p-5 md:p-6 shadow-sm hover:shadow-md transition-shadow duration-300"
-                >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center bg-primary/10 text-primary">
-                    <FileText className="h-5 w-5" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="font-bold text-slate-900 group-hover:text-primary transition-colors">{pdf.title}</h2>
-                    {pdf.description && <p className="mt-1 text-sm text-slate-600">{pdf.description}</p>}
-                  </div>
-                  <ArrowUpRight className="h-5 w-5 shrink-0 text-slate-400 group-hover:text-primary transition-colors" aria-hidden="true" />
-                </a>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-white px-6 py-16 text-center shadow-sm">
-              <FileText className="mx-auto h-9 w-9 text-primary" aria-hidden="true" />
-              <h2 className="mt-5 text-xl font-extrabold text-slate-900">课程资料即将上线</h2>
-              <p className="mt-3 text-slate-600">课件上传后会在这里展示，敬请期待。</p>
-            </div>
-          )}
+          <TongInitCourseResourceList />
         </div>
       </section>
     </div>

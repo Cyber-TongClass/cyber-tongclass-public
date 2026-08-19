@@ -54,6 +54,44 @@ const oaResultField = v.object({
   options: v.optional(v.array(oaOption)),
 })
 
+const tongInitCourseResourceKind = v.union(
+  v.literal("slides"),
+  v.literal("exercise"),
+  v.literal("supplement")
+)
+
+const tongInitCourseResourceSnapshot = v.object({
+  title: v.string(),
+  description: v.optional(v.string()),
+  kind: tongInitCourseResourceKind,
+  lectureNumber: v.optional(v.number()),
+  sortOrder: v.number(),
+  source: v.union(v.literal("static"), v.literal("r2")),
+  staticHref: v.optional(v.string()),
+  storageId: v.optional(v.string()),
+  fileName: v.string(),
+  mimeType: v.string(),
+  size: v.optional(v.number()),
+  etag: v.optional(v.string()),
+  uploadedBy: v.optional(v.id("users")),
+  uploadedAt: v.number(),
+})
+
+const tongInitCoursePendingUpload = v.object({
+  storageId: v.string(),
+  fileName: v.string(),
+  mimeType: v.string(),
+  size: v.number(),
+  title: v.string(),
+  description: v.optional(v.string()),
+  kind: tongInitCourseResourceKind,
+  lectureNumber: v.optional(v.number()),
+  sortOrder: v.number(),
+  uploaderId: v.id("users"),
+  startedAt: v.number(),
+  expiresAt: v.number(),
+})
+
 export default defineSchema({
   // Users table
   users: defineTable({
@@ -179,6 +217,7 @@ export default defineSchema({
     coverImageUrl: v.optional(v.string()),
     showOnHomepage: v.optional(v.boolean()),
     homepageSubtitle: v.optional(v.string()),
+    audiences: v.optional(v.array(v.string())),
     authorId: v.id("users"),
     authorName: v.optional(v.string()),
     category: v.string(),
@@ -203,6 +242,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     url: v.optional(v.string()),
     color: v.string(),
+    audiences: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -266,6 +306,24 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_author", ["authorId"]),
+
+  tongInitCourseResources: defineTable({
+    resourceKey: v.string(),
+    status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+    published: v.optional(tongInitCourseResourceSnapshot),
+    draft: v.optional(tongInitCourseResourceSnapshot),
+    pendingUpload: v.optional(tongInitCoursePendingUpload),
+    revision: v.number(),
+    createdBy: v.id("users"),
+    updatedBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    publishedAt: v.optional(v.number()),
+    archivedAt: v.optional(v.number()),
+  })
+    .index("by_resourceKey", ["resourceKey"])
+    .index("by_status", ["status"])
+    .index("by_updatedAt", ["updatedAt"]),
 
   studentFormProfiles: defineTable({
     userId: v.id("users"),
