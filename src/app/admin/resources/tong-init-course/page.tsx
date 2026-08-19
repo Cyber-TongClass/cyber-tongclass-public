@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import {
   useAdminTongInitCourseResources,
   useBeginTongInitCourseUpload,
@@ -126,22 +127,6 @@ function statusLabel(resource: AdminResource, uploading: boolean) {
   return { label: "上传未完成", variant: "destructive" as const }
 }
 
-async function uploadViaRelay(target: { uploadUrl: string; storageId: string; headers?: Record<string, string> }, file: File) {
-  const formData = new FormData()
-  formData.append("file", file)
-  formData.append("uploadUrl", target.uploadUrl)
-  formData.append("headersJson", JSON.stringify(target.headers || {}))
-  const response = await fetch("/api/resources/tong-init-course/upload", {
-    method: "POST",
-    body: formData,
-  })
-  const payload = await response.json().catch(() => null)
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.message || "上传到 R2 失败")
-  }
-  return target.storageId
-}
-
 export default function AdminTongInitCourseResourcesPage() {
   const resources = useAdminTongInitCourseResources() as AdminResource[] | undefined
   const beginUpload = useBeginTongInitCourseUpload()
@@ -240,8 +225,8 @@ export default function AdminTongInitCourseResourcesPage() {
       }
       setActiveUploadId(resourceId)
       loadedRevision.current = null
-      // 通过服务器中转上传到 R2（绕过浏览器直传的 CORS 限制）
-      const storageId = await uploadViaRelay(result.uploadTarget, file)
+      // 浏览器直接 PUT 到 R2 预签名地址（R2 桶已配置 CORS）
+      const storageId = await uploadFileToStorageTarget(result.uploadTarget, file, "上传到 R2 失败")
       await finalizeUpload({ id: resourceId, storageId })
       setSelectedId(resourceId)
       loadedRevision.current = null
