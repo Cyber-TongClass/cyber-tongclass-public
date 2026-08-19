@@ -160,8 +160,17 @@ export function mergeTongInitCourseResources(
       : `/api/resources/tong-init-course/${resource.id}/download`,
   }))
   return [...fallbackResources, ...dynamicResources].sort((left, right) => (
-    left.sortOrder - right.sortOrder || left.title.localeCompare(right.title, "zh-CN")
+    compareTongInitCourseResourceOrder(left, right)
   ))
+}
+
+/** 排序：先按讲次（lectureNumber，缺省排最后）→ 再按 sortOrder → 最后按标题字典序。 */
+function compareTongInitCourseResourceOrder(left: CourseResource, right: CourseResource) {
+  const leftLecture = left.lectureNumber ?? Number.MAX_SAFE_INTEGER
+  const rightLecture = right.lectureNumber ?? Number.MAX_SAFE_INTEGER
+  if (leftLecture !== rightLecture) return leftLecture - rightLecture
+  if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
+  return left.title.localeCompare(right.title, "zh-CN")
 }
 
 export const tongAiResearchCourseResources: CourseResource[] = [

@@ -99,6 +99,15 @@ function assertRevision(resource: any, expectedRevision?: number) {
   }
 }
 
+/** 排序：先按讲次（lectureNumber，缺省排最后）→ 再按 sortOrder → 最后按标题字典序。 */
+function compareTongInitCourseResource(left: { lectureNumber?: number; sortOrder: number; title: string }, right: { lectureNumber?: number; sortOrder: number; title: string }) {
+  const leftLecture = left.lectureNumber ?? Number.MAX_SAFE_INTEGER
+  const rightLecture = right.lectureNumber ?? Number.MAX_SAFE_INTEGER
+  if (leftLecture !== rightLecture) return leftLecture - rightLecture
+  if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
+  return left.title.localeCompare(right.title, "zh-CN")
+}
+
 export const listPublicManifest = query({
   args: {},
   handler: async (ctx) => {
@@ -125,7 +134,7 @@ export const listPublicManifest = query({
           size: resource.size,
         }
       })
-      .sort((left, right) => left.sortOrder - right.sortOrder || left.title.localeCompare(right.title, "zh-CN"))
+      .sort((left, right) => compareTongInitCourseResource(left, right))
     return { resources, managedKeys }
   },
 })
