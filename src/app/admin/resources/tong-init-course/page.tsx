@@ -21,10 +21,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import {
   useAdminTongInitCourseResources,
   useBeginTongInitCourseUpload,
+  useCancelTongInitCourseUpload,
   useDiscardTongInitCourseDraft,
   useFinalizeTongInitCourseUpload,
   usePublishTongInitCourseResource,
@@ -126,10 +126,27 @@ function statusLabel(resource: AdminResource, uploading: boolean) {
   return { label: "上传未完成", variant: "destructive" as const }
 }
 
+async function uploadViaRelay(target: { uploadUrl: string; storageId: string; headers?: Record<string, string> }, file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("uploadUrl", target.uploadUrl)
+  formData.append("headersJson", JSON.stringify(target.headers || {}))
+  const response = await fetch("/api/resources/tong-init-course/upload", {
+    method: "POST",
+    body: formData,
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.message || "上传到 R2 失败")
+  }
+  return target.storageId
+}
+
 export default function AdminTongInitCourseResourcesPage() {
   const resources = useAdminTongInitCourseResources() as AdminResource[] | undefined
   const beginUpload = useBeginTongInitCourseUpload()
   const finalizeUpload = useFinalizeTongInitCourseUpload()
+  const cancelUpload = useCancelTongInitCourseUpload()
   const saveDraftMetadata = useSaveTongInitCourseDraftMetadata()
   const publishResource = usePublishTongInitCourseResource()
   const setArchived = useSetTongInitCourseResourceArchived()
@@ -204,26 +221,50 @@ export default function AdminTongInitCourseResourcesPage() {
   const handleUpload = () => runBusy("upload", async () => {
     if (!file) throw new Error("请先选择文件")
     const checkedFile = validateTongInitCourseFile({ fileName: file.name, mimeType: file.type, size: file.size })
-    const result = await beginUpload({
-      id: selectedResource?._id,
-      expectedRevision: selectedResource?.revision,
-      resourceKey: form.resourceKey,
-      ...metadataPayload(),
-      fileName: checkedFile.fileName,
-      mimeType: checkedFile.mimeType,
-      size: checkedFile.size,
-    }) as any
-    const resourceId = String(result.resourceId)
-    setActiveUploadId(resourceId)
-    setSelectedId(resourceId)
-    loadedRevision.current = null
-    // 浏览器直接 PUT 到 R2 预签名地址（CORS 由 R2 桶配置控制）
-    const storageId = await uploadFileToStorageTarget(result.uploadTarget, file, "上传到 R2 失败")
-    await finalizeUpload({ id: resourceId, storageId })
-    loadedRevision.current = null
-    setFile(null)
-    setFileInputKey((value) => value + 1)
-    setMessage("文件已上传并保存为草稿。")
+    let startedUpload: { resourceId: string; storageId: string; wasNew: boolean } | null = null
+    try {
+      const result = await beginUpload({
+        id: selectedResource?._id,
+        expectedRevision: selectedResource?.revision,
+        resourceKey: form.resourceKey,
+        ...metadataPayload(),
+        fileName: checkedFile.fileName,
+        mimeType: checkedFile.mimeType,
+        size: checkedFile.size,
+      }) as any
+      const resourceId = String(result.resourceId)
+      startedUpload = {
+        resourceId,
+        storageId: String(result.uploadTarget.storageId),
+        wasNew: !selectedResource,
+      }
+      setActiveUploadId(resourceId)
+      loadedRevision.current = null
+      // 通过服务器中转上传到 R2（绕过浏览器直传的 CORS 限制）
+      const storageId = await uploadViaRelay(result.uploadTarget, file)
+      await finalizeUpload({ id: resourceId, storageId })
+      setSelectedId(resourceId)
+      loadedRevision.current = null
+      setFile(null)
+      setFileInputKey((value) => value + 1)
+      setMessage("文件已上传并保存为草稿。")
+    } catch (error) {
+      if (startedUpload) {
+        try {
+          const cancelled = await cancelUpload({
+            id: startedUpload.resourceId,
+            storageId: startedUpload.storageId,
+          }) as any
+          if (cancelled.removed && startedUpload.wasNew) setSelectedId(null)
+          loadedRevision.current = null
+        } catch {
+          console.warn("[ToNG upload] 未能清理中断的上传任务")
+        }
+      }
+      throw error
+    } finally {
+      setActiveUploadId(null)
+    }
   })
 
   const handleSaveMetadata = () => runBusy("save", async () => {
