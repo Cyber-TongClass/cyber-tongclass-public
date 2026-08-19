@@ -8,7 +8,6 @@ import {
   ExternalLink,
   FileUp,
   Plus,
-  RefreshCw,
   RotateCcw,
   Save,
   Send,
@@ -25,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   useAdminTongInitCourseResources,
   useBeginTongInitCourseUpload,
+  useCancelTongInitCourseUpload,
   useDiscardTongInitCourseDraft,
   useFinalizeTongInitCourseUpload,
   usePublishTongInitCourseResource,
@@ -32,7 +32,6 @@ import {
   useSeedTongInitCourseLegacyResources,
   useSetTongInitCourseResourceArchived,
 } from "@/lib/api"
-import { uploadFileToStorageTarget } from "@/lib/file-upload"
 import {
   TONG_INIT_COURSE_FILE_ACCEPT,
   validateTongInitCourseFile,
@@ -118,18 +117,36 @@ function formatTime(value?: number) {
   return value ? new Date(value).toLocaleString("zh-CN") : "-"
 }
 
-function statusLabel(resource: AdminResource) {
+function statusLabel(resource: AdminResource, uploading: boolean) {
+  if (uploading) return { label: "上传中", variant: "warning" as const }
   if (resource.status === "archived") return { label: "已归档", variant: "secondary" as const }
-  if (resource.pendingUpload) return { label: "上传待确认", variant: "warning" as const }
   if (resource.draft && resource.published) return { label: "有待发布修改", variant: "warning" as const }
   if (resource.draft) return { label: "草稿", variant: "secondary" as const }
-  return { label: "已发布", variant: "success" as const }
+  if (resource.published) return { label: "已发布", variant: "success" as const }
+  return { label: "上传未完成", variant: "destructive" as const }
+}
+
+async function uploadViaRelay(target: { uploadUrl: string; storageId: string; headers?: Record<string, string> }, file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("uploadUrl", target.uploadUrl)
+  formData.append("headersJson", JSON.stringify(target.headers || {}))
+  const response = await fetch("/api/resources/tong-init-course/upload", {
+    method: "POST",
+    body: formData,
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.message || "上传到 R2 失败")
+  }
+  return target.storageId
 }
 
 export default function AdminTongInitCourseResourcesPage() {
   const resources = useAdminTongInitCourseResources() as AdminResource[] | undefined
   const beginUpload = useBeginTongInitCourseUpload()
   const finalizeUpload = useFinalizeTongInitCourseUpload()
+  const cancelUpload = useCancelTongInitCourseUpload()
   const saveDraftMetadata = useSaveTongInitCourseDraftMetadata()
   const publishResource = usePublishTongInitCourseResource()
   const setArchived = useSetTongInitCourseResourceArchived()
@@ -142,6 +159,7 @@ export default function AdminTongInitCourseResourcesPage() {
   const [fileInputKey, setFileInputKey] = useState(0)
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState<string | null>(null)
+  const [activeUploadId, setActiveUploadId] = useState<string | null>(null)
   const initialized = useRef(false)
   const loadedRevision = useRef<number | null>(null)
 
@@ -203,37 +221,50 @@ export default function AdminTongInitCourseResourcesPage() {
   const handleUpload = () => runBusy("upload", async () => {
     if (!file) throw new Error("请先选择文件")
     const checkedFile = validateTongInitCourseFile({ fileName: file.name, mimeType: file.type, size: file.size })
-    const result = await beginUpload({
-      id: selectedResource?._id,
-      expectedRevision: selectedResource?.revision,
-      resourceKey: form.resourceKey,
-      ...metadataPayload(),
-      fileName: checkedFile.fileName,
-      mimeType: checkedFile.mimeType,
-      size: checkedFile.size,
-    }) as any
-    const resourceId = String(result.resourceId)
-    setSelectedId(resourceId)
-    loadedRevision.current = null
-    const storageId = await uploadFileToStorageTarget(result.uploadTarget, file, "上传到 R2 失败")
-    await finalizeUpload({ id: resourceId, storageId })
-    loadedRevision.current = null
-    setFile(null)
-    setFileInputKey((value) => value + 1)
-    setMessage("文件已通过 R2 校验并保存为草稿，请确认后发布。")
-  })
-
-  const handleFinalizePending = () => runBusy("finalize", async () => {
-    if (!selectedResource?.pendingUpload) throw new Error("没有待校验的上传任务")
-    if (selectedResource.pendingUpload.expiresAt <= Date.now()) {
-      throw new Error("上传任务已过期，请重新选择文件上传")
+    let startedUpload: { resourceId: string; storageId: string; wasNew: boolean } | null = null
+    try {
+      const result = await beginUpload({
+        id: selectedResource?._id,
+        expectedRevision: selectedResource?.revision,
+        resourceKey: form.resourceKey,
+        ...metadataPayload(),
+        fileName: checkedFile.fileName,
+        mimeType: checkedFile.mimeType,
+        size: checkedFile.size,
+      }) as any
+      const resourceId = String(result.resourceId)
+      startedUpload = {
+        resourceId,
+        storageId: String(result.uploadTarget.storageId),
+        wasNew: !selectedResource,
+      }
+      setActiveUploadId(resourceId)
+      loadedRevision.current = null
+      // 通过服务器中转上传到 R2（绕过浏览器直传的 CORS 限制）
+      const storageId = await uploadViaRelay(result.uploadTarget, file)
+      await finalizeUpload({ id: resourceId, storageId })
+      setSelectedId(resourceId)
+      loadedRevision.current = null
+      setFile(null)
+      setFileInputKey((value) => value + 1)
+      setMessage("文件已上传并保存为草稿。")
+    } catch (error) {
+      if (startedUpload) {
+        try {
+          const cancelled = await cancelUpload({
+            id: startedUpload.resourceId,
+            storageId: startedUpload.storageId,
+          }) as any
+          if (cancelled.removed && startedUpload.wasNew) setSelectedId(null)
+          loadedRevision.current = null
+        } catch {
+          console.warn("[ToNG upload] 未能清理中断的上传任务")
+        }
+      }
+      throw error
+    } finally {
+      setActiveUploadId(null)
     }
-    await finalizeUpload({
-      id: selectedResource._id,
-      storageId: selectedResource.pendingUpload.storageId,
-    })
-    loadedRevision.current = null
-    setMessage("已重新校验 R2 文件并固化为草稿，请确认后发布。")
   })
 
   const handleSaveMetadata = () => runBusy("save", async () => {
@@ -296,6 +327,11 @@ export default function AdminTongInitCourseResourcesPage() {
   })
 
   const currentFile = selectedResource?.pendingUpload || selectedResource?.draft || selectedResource?.published
+  const displayedFile = file
+    ? { fileName: file.name, size: file.size, pending: true }
+    : currentFile
+      ? { fileName: currentFile.fileName, size: currentFile.size, pending: false }
+      : null
   const pendingExpired = Boolean(
     selectedResource?.pendingUpload && selectedResource.pendingUpload.expiresAt <= Date.now()
   )
@@ -332,7 +368,10 @@ export default function AdminTongInitCourseResourcesPage() {
                 尚未初始化，可先导入现有 lec0–lec3。
               </p>
             ) : resources.map((resource) => {
-              const status = statusLabel(resource)
+              const status = statusLabel(
+                resource,
+                busy === "upload" && activeUploadId === String(resource._id)
+              )
               const title = resource.pendingUpload?.title || resource.draft?.title || resource.published?.title || resource.resourceKey
               return (
                 <button
@@ -364,6 +403,7 @@ export default function AdminTongInitCourseResourcesPage() {
               <div className="space-y-2">
                 <Label htmlFor="resource-key">资源标识</Label>
                 <Input id="resource-key" value={form.resourceKey} disabled={Boolean(selectedResource)} placeholder="例如 lec4-slides" onChange={(event) => setForm((current) => ({ ...current, resourceKey: event.target.value }))} />
+                <p className="text-xs text-slate-500">仅支持小写字母、数字和连字符（如 lec4-slides），长度不超过 80 字符。</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="resource-title">展示标题</Label>
@@ -403,33 +443,27 @@ export default function AdminTongInitCourseResourcesPage() {
                   <h2 className="text-sm font-semibold text-slate-900">R2 文件</h2>
                   <p className="mt-1 text-xs text-slate-500">支持 PDF、PPTX、DOCX、XLSX、ZIP/TAR.GZ、IPYNB、文本数据和常用图片；不支持视频和可执行内容。</p>
                 </div>
-                {currentFile ? <span className="text-xs text-slate-500">{currentFile.fileName} · {formatBytes(currentFile.size)}</span> : null}
+                {displayedFile ? (
+                  <span className="text-xs text-slate-500">
+                    {displayedFile.pending ? "待上传：" : ""}{displayedFile.fileName} · {formatBytes(displayedFile.size)}
+                  </span>
+                ) : null}
               </div>
               {selectedResource?.pendingUpload ? (
-                <p className={`mt-3 text-xs ${pendingExpired ? "text-red-600" : "text-amber-700"}`}>
-                  {pendingExpired
-                    ? "该上传任务已过期，请重新选择文件上传。"
-                    : `待校验上传有效至 ${formatTime(selectedResource.pendingUpload.expiresAt)}；页面刷新后仍可继续校验。`}
+                <p className={`mt-3 text-xs ${activeUploadId === selectedResource._id ? "text-amber-700" : "text-red-600"}`}>
+                  {activeUploadId === selectedResource._id
+                    ? "文件正在上传并自动处理…"
+                    : pendingExpired
+                    ? "上次上传已过期，请重新选择文件。"
+                    : "上次上传未完成，请重新选择文件。"}
                 </p>
               ) : null}
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Input key={fileInputKey} type="file" accept={TONG_INIT_COURSE_FILE_ACCEPT} onChange={(event) => setFile(event.target.files?.[0] || null)} />
                 <Button type="button" onClick={handleUpload} disabled={!file || Boolean(busy) || Boolean(selectedId && !selectedResource)} className="shrink-0">
-                  <FileUp className="mr-2 h-4 w-4" />{busy === "upload" ? "上传并校验中..." : selectedResource ? "上传新版本" : "上传为草稿"}
+                  <FileUp className="mr-2 h-4 w-4" />{busy === "upload" ? "上传处理中..." : selectedResource ? "上传新版本" : "上传为草稿"}
                 </Button>
               </div>
-              {selectedResource?.pendingUpload ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-2"
-                  onClick={handleFinalizePending}
-                  disabled={Boolean(busy) || pendingExpired}
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  {busy === "finalize" ? "重新校验中..." : "重新校验已上传文件"}
-                </Button>
-              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">

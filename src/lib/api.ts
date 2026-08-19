@@ -55,6 +55,7 @@ const listTongInitCourseResourcesRef = makeFunctionReference<"query">("tongInitC
 const listAdminTongInitCourseResourcesRef = makeFunctionReference<"query">("tongInitCourseResources:adminList")
 const beginTongInitCourseUploadRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminBeginUpload")
 const finalizeTongInitCourseUploadRef = makeFunctionReference<"action">("tongInitCourseResources:adminFinalizeUpload")
+const cancelTongInitCourseUploadRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminCancelUpload")
 const saveTongInitCourseDraftMetadataRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminSaveDraftMetadata")
 const publishTongInitCourseResourceRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminPublish")
 const setTongInitCourseResourceArchivedRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminSetArchived")
@@ -735,6 +736,15 @@ export function useFinalizeTongInitCourseUpload() {
     if (!sessionToken) throw new Error("请先登录")
     return finalizeUpload({ ...args, id: args.id as any, sessionToken } as any)
   }, [finalizeUpload])
+}
+
+export function useCancelTongInitCourseUpload() {
+  const cancelUpload = useMutation(cancelTongInitCourseUploadRef)
+  return useCallback((args: { id: string; storageId: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return cancelUpload({ ...args, id: args.id as any, sessionToken } as any)
+  }, [cancelUpload])
 }
 
 export function useSaveTongInitCourseDraftMetadata() {

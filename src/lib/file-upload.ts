@@ -12,23 +12,31 @@ export async function uploadFileToStorageTarget(
 ) {
   const contentType = file.type || "application/octet-stream"
 
+  const upload = async (url: string, init: RequestInit) => {
+    try {
+      return await fetch(url, init)
+    } catch {
+      throw new Error(`${failureMessage}：无法连接文件存储，请检查网络或 CORS 配置`)
+    }
+  }
+
   if (typeof target === "string") {
-    const response = await fetch(target, {
+    const response = await upload(target, {
       method: "POST",
       headers: { "Content-Type": contentType },
       body: file,
     })
-    if (!response.ok) throw new Error(failureMessage)
+    if (!response.ok) throw new Error(`${failureMessage} (${response.status})`)
     const payload = await response.json()
     if (!payload?.storageId) throw new Error(failureMessage)
     return String(payload.storageId)
   }
 
-  const response = await fetch(target.uploadUrl, {
+  const response = await upload(target.uploadUrl, {
     method: target.method || "PUT",
     headers: target.headers || { "Content-Type": contentType },
     body: file,
   })
-  if (!response.ok) throw new Error(failureMessage)
+  if (!response.ok) throw new Error(`${failureMessage} (${response.status})`)
   return target.storageId
 }

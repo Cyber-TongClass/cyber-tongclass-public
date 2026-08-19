@@ -439,6 +439,34 @@ export const adminDiscardDraft = mutation({
   },
 })
 
+export const adminCancelUpload = mutation({
+  args: {
+    sessionToken: v.optional(v.string()),
+    id: v.id("tongInitCourseResources"),
+    storageId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx, args.sessionToken)
+    const resource = await ctx.db.get(args.id)
+    const pending = resource?.pendingUpload
+    if (!resource || !pending || pending.storageId !== args.storageId) {
+      return { id: args.id, removed: false, cancelled: false }
+    }
+    if (!resource.published && !resource.draft && resource.status !== "archived") {
+      await ctx.db.delete(resource._id)
+      return { id: resource._id, removed: true, cancelled: true }
+    }
+    const now = Date.now()
+    await ctx.db.patch(resource._id, {
+      pendingUpload: undefined,
+      revision: resource.revision + 1,
+      updatedBy: admin._id,
+      updatedAt: now,
+    })
+    return { id: resource._id, removed: false, cancelled: true }
+  },
+})
+
 export const adminSeedLegacyResources = mutation({
   args: { sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
