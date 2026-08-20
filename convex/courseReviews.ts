@@ -194,6 +194,7 @@ export const listPending = query({
   args: {
     skip: v.optional(v.number()),
     limit: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const reviews = await ctx.db
