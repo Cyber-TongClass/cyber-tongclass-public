@@ -160,7 +160,7 @@ export const list = query({
 
 // Get a single user by ID
 export const getById = query({
-    args: { id: v.id("users") },
+    args: { id: v.id("users"), sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
         const user = await ctx.db.get(args.id)
         return user
