@@ -337,9 +337,10 @@ export const update = mutation({
         avatar: v.optional(v.string()),
         realPhoto: v.optional(v.string()),
         isClassMember: v.optional(v.boolean()),
+        sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const { id, ...updates } = args
+        const { id, sessionToken: _sessionToken, ...updates } = args
 
         const user = await ctx.db.get(id)
 
