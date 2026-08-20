@@ -7,6 +7,7 @@ export const list = query({
     skip: v.optional(v.number()),
     limit: v.optional(v.number()),
     category: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let query = ctx.db.query("news").filter((q) => q.eq(q.field("isPublished"), true))
@@ -139,7 +140,7 @@ export const remove = mutation({
 
 // Get news count
 export const count = query({
-  args: { category: v.optional(v.string()) },
+  args: { category: v.optional(v.string()), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     let query = ctx.db.query("news").filter((q) => q.eq(q.field("isPublished"), true))
     if (args.category) {

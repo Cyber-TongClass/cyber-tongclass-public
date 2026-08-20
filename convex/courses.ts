@@ -6,6 +6,7 @@ export const list = query({
   args: {
     skip: v.optional(v.number()),
     limit: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const allCourses = (await ctx.db.query("courses").order("desc").collect()).filter(

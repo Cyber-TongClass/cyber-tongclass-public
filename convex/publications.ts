@@ -9,6 +9,7 @@ export const list = query({
     limit: v.optional(v.number()),
     category: v.optional(v.string()),
     year: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let query = ctx.db.query("publications")
@@ -142,6 +143,7 @@ export const count = query({
   args: {
     category: v.optional(v.string()),
     year: v.optional(v.number()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let query = ctx.db.query("publications")

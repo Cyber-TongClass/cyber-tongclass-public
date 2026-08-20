@@ -8,6 +8,7 @@ export const list = query({
     limit: v.optional(v.number()),
     fromDate: v.optional(v.string()),
     toDate: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const allEvents = await ctx.db.query("events").order("asc").collect()

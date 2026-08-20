@@ -109,7 +109,7 @@ function compareTongInitCourseResource(left: { lectureNumber?: number; sortOrder
 }
 
 export const listPublicManifest = query({
-  args: {},
+  args: { sessionToken: v.optional(v.string()) },
   handler: async (ctx) => {
     const rows = await ctx.db.query("tongInitCourseResources").collect()
     const managedKeys = rows

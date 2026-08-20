@@ -2713,7 +2713,7 @@ async function getTableBySlug(ctx: any, slug: string) {
 }
 
 export const listPublished = query({
-  args: { category: v.optional(v.string()) },
+  args: { category: v.optional(v.string()), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const category = args.category ? normalizeSlug(args.category) : undefined
     const tables = category

@@ -137,6 +137,7 @@ export const list = query({
         organization: v.optional(v.union(v.literal("pku"), v.literal("thu"))),
         cohort: v.optional(v.union(v.number(), v.literal("mascot"))),
         classMembersOnly: v.optional(v.boolean()),
+        sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         let usersQuery = ctx.db.query("users")
@@ -752,6 +753,7 @@ export const count = query({
     args: {
         organization: v.optional(v.union(v.literal("pku"), v.literal("thu"))),
         classMembersOnly: v.optional(v.boolean()),
+        sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         let usersQuery = ctx.db.query("users")
