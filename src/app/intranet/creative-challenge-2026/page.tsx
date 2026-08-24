@@ -1008,7 +1008,12 @@ export default function CreativeChallenge2026Page() {
                             </Button>
                           </>
                         ) : (
-                          <p className="text-xs leading-5 text-slate-500">该报名已锁定，不能再修改。</p>
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/intranet/creative-challenge-2026/projects?project=${encodeURIComponent(item.id)}`}>
+                              <Edit3 className="mr-2 h-4 w-4" />
+                              修改 Demo
+                            </Link>
+                          </Button>
                         )}
                       </div>
                     </div>
