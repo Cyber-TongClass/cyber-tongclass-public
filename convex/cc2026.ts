@@ -178,7 +178,23 @@ function normalizeRegistrationForUser(incoming: any, existing: any, user: any, i
   }
 
   if (existing?.finalSubmittedAt) {
-    throw new Error("该项目已最终提交，不能再修改")
+    // Project is locked after final submission, except the demo link may be
+    // updated (organizers may ask teams to fix their demo).
+    if (isManager) {
+      return {
+        ...base,
+        status: base.status || existing?.status || "submitted",
+        adminNote: typeof base.adminNote === "string" ? base.adminNote : existing?.adminNote || "",
+        score: typeof base.score === "number" || base.score === null ? base.score : existing?.score ?? null,
+      }
+    }
+
+    const demoUrl = typeof incoming.demoUrl === "string" ? incoming.demoUrl.trim() : existing?.demoUrl || ""
+    return {
+      ...existing,
+      demoUrl,
+      updatedAt: now,
+    }
   }
 
   return {

@@ -179,24 +179,23 @@ export default function CreativeChallengeProjectsPage() {
       setMessage("报名和最终提交已截止，当前阶段不能再修改项目材料。")
       return
     }
-    if (selectedRegistration.finalSubmittedAt) {
-      setMessage("该项目已最终提交，不能再修改材料。")
-      return
-    }
-    if (computeReportFileError) {
-      setMessage(computeReportFileError)
-      return
-    }
 
     const now = Date.now()
-    const updatedRegistration = {
-      ...selectedRegistration,
-      projectSummary: draft.projectSummary,
-      githubUrl: draft.githubUrl,
-      demoUrl: draft.demoUrl,
-      ...(computeReportFile ? getComputeReportPatch(computeReportFile) : {}),
-      updatedAt: now,
-    }
+    const updatedRegistration = selectedRegistration.finalSubmittedAt
+      ? {
+          // After final submission only the demo link may be updated.
+          ...selectedRegistration,
+          demoUrl: draft.demoUrl,
+          updatedAt: now,
+        }
+      : {
+          ...selectedRegistration,
+          projectSummary: draft.projectSummary,
+          githubUrl: draft.githubUrl,
+          demoUrl: draft.demoUrl,
+          ...(computeReportFile ? getComputeReportPatch(computeReportFile) : {}),
+          updatedAt: now,
+        }
     const nextRegistrations = registrations.map((item) =>
       item.id === selectedRegistration.id ? updatedRegistration : item
     )
@@ -205,7 +204,7 @@ export default function CreativeChallengeProjectsPage() {
     try {
       await persistRegistration(updatedRegistration, nextRegistrations)
       setComputeReportFile(null)
-      setMessage("项目材料已保存。")
+      setMessage(selectedRegistration.finalSubmittedAt ? "Demo 链接已更新。" : "项目材料已保存。")
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "项目材料保存失败，请稍后重试。")
     } finally {
@@ -387,6 +386,12 @@ export default function CreativeChallengeProjectsPage() {
                   </div>
                 </div>
 
+                {selectedRegistration.finalSubmittedAt ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    项目已最终提交，作品简介、GitHub 链接和算力材料已锁定；如需修正演示地址，仅可修改下方的 Demo 链接。
+                  </div>
+                ) : null}
+
                 <fieldset disabled={Boolean(selectedRegistration.finalSubmittedAt) || !canEdit || isSaving} className="space-y-4 disabled:opacity-70">
                   <label className="block space-y-1.5">
                     <span className="text-sm font-medium text-slate-700">作品简介</span>
@@ -406,11 +411,6 @@ export default function CreativeChallengeProjectsPage() {
                   <label className="block space-y-1.5">
                     <span className="text-sm font-medium text-slate-700">GitHub 链接（请设置为公开仓库）</span>
                     <Input value={draft.githubUrl} onChange={(event) => updateDraft("githubUrl", event.target.value)} placeholder="https://github.com/..." />
-                  </label>
-
-                  <label className="block space-y-1.5">
-                    <span className="text-sm font-medium text-slate-700">Demo 链接</span>
-                    <Input value={draft.demoUrl} onChange={(event) => updateDraft("demoUrl", event.target.value)} placeholder="视频 / 在线演示" />
                   </label>
 
                   {selectedRegistration.wantsCompute ? (
@@ -442,12 +442,28 @@ export default function CreativeChallengeProjectsPage() {
                   )}
                 </fieldset>
 
+                <fieldset disabled={!canEdit || isSaving} className="space-y-4">
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium text-slate-700">Demo 链接</span>
+                    <Input value={draft.demoUrl} onChange={(event) => updateDraft("demoUrl", event.target.value)} placeholder="视频 / 在线演示" />
+                  </label>
+                </fieldset>
+
                 {message ? (
                   <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{message}</p>
                 ) : null}
 
                 <div className="flex flex-wrap gap-2">
-                  {!selectedRegistration.finalSubmittedAt && canEdit ? (
+                  {selectedRegistration.finalSubmittedAt ? (
+                    canEdit ? (
+                      <Button type="button" onClick={saveMaterials} disabled={isSaving}>
+                        <Save className="mr-2 h-4 w-4" />
+                        {isSaving ? "保存中..." : "更新 Demo"}
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-slate-500">当前阶段不能再修改。</p>
+                    )
+                  ) : canEdit ? (
                     <>
                       <Button type="button" onClick={saveMaterials} disabled={isSaving}>
                         <Save className="mr-2 h-4 w-4" />
@@ -459,9 +475,7 @@ export default function CreativeChallengeProjectsPage() {
                       </Button>
                     </>
                   ) : (
-                    <p className="text-sm text-slate-500">
-                      {selectedRegistration.finalSubmittedAt ? "该项目已锁定，不能再修改。" : "当前阶段不能再修改或提交。"}
-                    </p>
+                    <p className="text-sm text-slate-500">当前阶段不能再修改或提交。</p>
                   )}
                   {selectedRegistration.githubUrl ? (
                     <Button asChild type="button" variant="outline">
