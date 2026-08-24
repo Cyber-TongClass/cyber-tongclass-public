@@ -11,9 +11,7 @@ import {
   Code2,
   Cpu,
   Edit3,
-  ExternalLink,
   FileCheck2,
-  Github,
   LayoutDashboard,
   ListChecks,
   Rocket,
@@ -40,16 +38,16 @@ import {
   useUsers,
   useCC2026List,
   useCC2026Get,
-  useCC2026BatchSet,
   useCC2026MyRegistrations,
   useCC2026PublishedRegistrations,
   useCC2026UpsertRegistration,
+  useCC2026Vote,
 } from "@/lib/api"
 import { useAuth } from "@/lib/hooks/use-auth"
 import {
   bountyTasks,
   bountyTaskRequirements,
-  getCCSessionToken, canManageCreativeChallenge,
+  canManageCreativeChallenge,
   challengeMilestones,
   challengeTracks,
   createDefaultCreativeChallengeSettings,
@@ -133,7 +131,7 @@ export default function CreativeChallenge2026Page() {
   const cc2026Votes = useCC2026List("votes")
   const cc2026MyVotes = useCC2026Get("my_votes", currentUser ? String(currentUser._id) : "_")
   const upsertCC2026Registration = useCC2026UpsertRegistration()
-  const batchSetCC2026 = useCC2026BatchSet()
+  const voteCC2026 = useCC2026Vote()
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const projectSummaryTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [draft, setDraft] = useState<RegistrationDraft>(emptyDraft)
@@ -457,18 +455,6 @@ export default function CreativeChallenge2026Page() {
     }).length
   }
 
-  function persistVotes(nextVotes: Record<string, number>, nextMyVotes: string[]) {
-    setVotes(nextVotes)
-    setMyVotes(nextMyVotes)
-    batchSetCC2026({
-      entries: [
-        { collection: "votes", key: "_", value: JSON.stringify(nextVotes) },
-        { collection: "my_votes", key: currentUser ? String(currentUser._id) : "_", value: JSON.stringify(nextMyVotes) },
-      ],
-      sessionToken: getCCSessionToken() || undefined,
-    })
-  }
-
   function voteForProject(project: CreativeChallengeRegistration) {
     if (!canVote) return
     if (myVotes.includes(project.id)) return
@@ -480,14 +466,15 @@ export default function CreativeChallenge2026Page() {
       return
     }
 
-    const nextVotes = {
-      ...votes,
-      [project.id]: (votes[project.id] || 0) + 1,
-    }
-    const nextMyVotes = [...myVotes, project.id]
-
-    persistVotes(nextVotes, nextMyVotes)
-    setMessage(`已为「${project.projectName}」投票。`)
+    voteCC2026(project.id)
+      .then((result) => {
+        setVotes(result.votes)
+        setMyVotes(result.myVotes)
+        setMessage(`已为「${project.projectName}」投票。`)
+      })
+      .catch((error) => {
+        setMessage(error instanceof Error ? error.message : "投票失败")
+      })
   }
 
   return (
@@ -752,78 +739,78 @@ export default function CreativeChallenge2026Page() {
                  ) : null}
                  {localPublishedProjects.length > 0 ? (
                   <div className="space-y-4">
-                    {localPublishedProjects.map((item, index) => {
-                      const hasVoted = myVotes.includes(item.id)
-                      const voteLimit = getVoteLimit(item)
-                      const usedVoteCount = getUsedVoteCount(item)
-                      const remainingVotes = Math.max(0, voteLimit - usedVoteCount)
-                      const voteDisabled = hasVoted || remainingVotes <= 0
-                      const prevTrack = index > 0 ? localPublishedProjects[index - 1].track : null
-                      const trackChanged = prevTrack && prevTrack !== item.track
+                     {localPublishedProjects.map((item, index) => {
+                       const hasVoted = myVotes.includes(item.id)
+                       const voteLimit = getVoteLimit(item)
+                       const usedVoteCount = getUsedVoteCount(item)
+                       const remainingVotes = Math.max(0, voteLimit - usedVoteCount)
+                       const voteDisabled = hasVoted || remainingVotes <= 0
+                       const prevTrack = index > 0 ? localPublishedProjects[index - 1].track : null
+                       const trackChanged = prevTrack && prevTrack !== item.track
 
-                      return (
-                        <React.Fragment key={item.id}>
-                          {trackChanged && canVote ? (
-                            <div className="flex items-center gap-3 pt-2 -mb-2">
-                              <div className="flex-1 h-px bg-slate-200" />
-                              <Badge variant={item.track === "custom" ? "success" : "warning"} className="rounded-md text-xs">
-                                {item.track === "custom" ? "自定义开发赛道" : "悬赏任务赛道"}
-                              </Badge>
-                              <div className="flex-1 h-px bg-slate-200" />
-                            </div>
-                          ) : null}
-                          <div className="rounded-lg border border-slate-200 bg-white p-5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={item.track === "custom" ? "success" : "warning"} className="rounded-md">
-                              {item.track === "custom" ? "自定义开发" : "悬赏任务"}
-                            </Badge>
-                            <Badge variant="success" className="rounded-md">
-                              已最终提交
-                            </Badge>
-                          </div>
-                          <h3 className="mt-3 text-lg font-bold text-slate-950">{item.projectName}</h3>
-                          <p className="mt-1 text-sm text-slate-500">{item.teamName}</p>
-                          <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-600">{item.projectSummary}</p>
-                          <div className="mt-4 flex flex-wrap items-center gap-2">
-                            {item.githubUrl ? (
-                              <a href={item.githubUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                                <Github className="h-3.5 w-3.5" />
-                                GitHub
-                              </a>
-                            ) : null}
-                            {item.demoUrl ? (
-                              <a href={item.demoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                Demo
-                              </a>
-                            ) : null}
-                          </div>
-                          <div className="mt-4 flex flex-col gap-3 rounded-lg bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <span className="text-sm text-slate-600">票数：{votes[item.id] || 0}</span>
-                              {canVote ? (
-                                <p className="mt-1 text-xs text-slate-500">
-                                  {getVoteGroupLabel(item)}剩余：{remainingVotes} / {voteLimit}
-                                </p>
-                              ) : null}
-                            </div>
-                            {canVote ? (
-                              <Button
-                                size="sm"
-                                variant={hasVoted || remainingVotes <= 0 ? "outline" : "default"}
-                                disabled={voteDisabled}
-                                onClick={() => voteForProject(item)}
-                              >
-                                {hasVoted ? "已投票" : remainingVotes <= 0 ? "额度已满" : "投票"}
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-slate-500">投票已关闭</span>
-                            )}
-                          </div>
-                        </div>
-                      </React.Fragment>
-                    )
-                  })}
+                       return (
+                         <React.Fragment key={item.id}>
+                           {trackChanged && canVote ? (
+                             <div className="flex items-center gap-3 pt-2 -mb-2">
+                               <div className="flex-1 h-px bg-slate-200" />
+                               <Badge variant={item.track === "custom" ? "success" : "warning"} className="rounded-md text-xs">
+                                 {item.track === "custom" ? "自定义开发赛道" : "悬赏任务赛道"}
+                               </Badge>
+                               <div className="flex-1 h-px bg-slate-200" />
+                             </div>
+                           ) : null}
+                           <Link
+                             href={`/intranet/creative-challenge-2026/projects/${item.id}`}
+                             className="group block rounded-lg border border-slate-200 bg-white p-5 transition-colors hover:border-primary/40 hover:shadow-sm"
+                           >
+                           <div className="flex flex-wrap items-center gap-2">
+                             <Badge variant={item.track === "custom" ? "success" : "warning"} className="rounded-md">
+                               {item.track === "custom" ? "自定义开发" : "悬赏任务"}
+                             </Badge>
+                             {item.bountyTask ? (
+                               <span className="text-xs text-slate-400">{item.bountyTask}</span>
+                             ) : null}
+                           </div>
+                           <h3 className="mt-3 text-lg font-bold text-slate-950 group-hover:text-primary">
+                             {item.projectName}
+                           </h3>
+                           <p className="mt-1 text-sm text-slate-500">{item.teamName}</p>
+                           <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-600">{item.projectSummary}</p>
+                           <div className="mt-4 flex flex-col gap-3 rounded-lg bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                             <div>
+                               <span className="text-sm text-slate-600">票数：{votes[item.id] || 0}</span>
+                               {canVote ? (
+                                 <p className="mt-1 text-xs text-slate-500">
+                                   {getVoteGroupLabel(item)}剩余：{remainingVotes} / {voteLimit}
+                                 </p>
+                               ) : null}
+                             </div>
+                             <div className="flex items-center gap-2">
+                               {canVote ? (
+                                 <Button
+                                   size="sm"
+                                   variant={hasVoted || remainingVotes <= 0 ? "outline" : "default"}
+                                   disabled={voteDisabled}
+                                   onClick={(event) => {
+                                     event.preventDefault()
+                                     event.stopPropagation()
+                                     voteForProject(item)
+                                   }}
+                                 >
+                                   {hasVoted ? "已投票" : remainingVotes <= 0 ? "额度已满" : "投票"}
+                                 </Button>
+                               ) : (
+                                 <span className="text-xs text-slate-500">投票已关闭</span>
+                               )}
+                               <span className="text-xs font-medium text-slate-400 transition-colors group-hover:text-primary">
+                                 查看详情 →
+                               </span>
+                             </div>
+                           </div>
+                         </Link>
+                       </React.Fragment>
+                     )
+                   })}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center">

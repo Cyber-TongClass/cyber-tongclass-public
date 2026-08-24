@@ -267,9 +267,30 @@ export const listPublishedRegistrations = query({
   handler: async (ctx, args) => {
     await getUserBySession(ctx, args.sessionToken)
     const registrations = await getMergedRegistrations(ctx)
-    return registrations.filter((registration) => registration.finalSubmittedAt)
+    return registrations
+      .filter((registration) => registration.finalSubmittedAt)
+      .map(stripIdentityFieldsForVoting)
   },
 })
+
+// During the voting phase, voters must not be able to identify the team behind
+// a project (e.g. via the GitHub link or member list), so identity-bearing
+// fields are removed.
+function stripIdentityFieldsForVoting(registration: any) {
+  if (!registration) return registration
+  const out = { ...registration }
+  for (const key of [
+    "githubUrl",
+    "members",
+    "leaderStudentId",
+    "ownerUserId",
+    "submitterUserId",
+    "adminNote",
+  ]) {
+    delete out[key]
+  }
+  return out
+}
 
 export const listManageRegistrations = query({
   args: {
@@ -514,5 +535,129 @@ export const removeRegistration = mutation({
         // Leave malformed legacy data untouched.
       }
     }
+  },
+})
+
+const DEFAULT_CUSTOM_VOTE_LIMIT = 3
+const DEFAULT_BOUNTY_TASK_VOTE_LIMIT = 1
+
+async function getSettingsDoc(ctx: any) {
+  return ctx.db
+    .query("cc2026Store")
+    .withIndex("by_collection_key", (q: any) =>
+      q.eq("collection", "settings").eq("key", "_")
+    )
+    .first()
+}
+
+function getVoteGroupKey(project: any) {
+  return project.track === "custom" ? "custom" : `bounty:${project.bountyTask || "未选择任务"}`
+}
+
+function getVoteLimitFor(project: any, settings: any) {
+  const customVoteLimit = settings?.customVoteLimit ?? DEFAULT_CUSTOM_VOTE_LIMIT
+  const bountyVoteLimits = settings?.bountyVoteLimits || {}
+  if (project.track === "custom") return customVoteLimit
+  const task = project.bountyTask || "未选择任务"
+  return typeof bountyVoteLimits[task] === "number"
+    ? bountyVoteLimits[task]
+    : DEFAULT_BOUNTY_TASK_VOTE_LIMIT
+}
+
+export const vote = mutation({
+  args: {
+    projectId: v.string(),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getUserBySession(ctx, args.sessionToken)
+
+    const registrations = await getMergedRegistrations(ctx)
+    const project = registrations.find((r: any) => r.id === args.projectId)
+    if (!project) {
+      throw new Error("项目不存在")
+    }
+    if (!project.finalSubmittedAt) {
+      throw new Error("该项目尚未最终提交，不能投票")
+    }
+
+    const settingsDoc = await getSettingsDoc(ctx)
+    let settings: any = null
+    if (settingsDoc) {
+      try { settings = JSON.parse(settingsDoc.value) } catch { settings = null }
+    }
+
+    const votesDoc = await ctx.db
+      .query("cc2026Store")
+      .withIndex("by_collection_key", (q: any) =>
+        q.eq("collection", "votes").eq("key", "_")
+      )
+      .first()
+    const votes: Record<string, number> = votesDoc
+      ? (() => { try { return JSON.parse(votesDoc.value) } catch { return {} } })()
+      : {}
+
+    const myVotesKey = String(user._id)
+    const myVotesDoc = await ctx.db
+      .query("cc2026Store")
+      .withIndex("by_collection_key", (q: any) =>
+        q.eq("collection", "my_votes").eq("key", myVotesKey)
+      )
+      .first()
+    const myVotes: string[] = myVotesDoc
+      ? (() => { try { return JSON.parse(myVotesDoc.value) } catch { return [] } })()
+      : []
+
+    if (myVotes.includes(args.projectId)) {
+      throw new Error("你已为该项目投过票")
+    }
+
+    const groupKey = getVoteGroupKey(project)
+    const usedInGroup = myVotes.filter((id: string) => {
+      const voted = registrations.find((r: any) => r.id === id)
+      return voted ? getVoteGroupKey(voted) === groupKey : false
+    }).length
+    const voteLimit = getVoteLimitFor(project, settings)
+    if (usedInGroup >= voteLimit) {
+      throw new Error(`该组投票额度已用完（每组最多 ${voteLimit} 票）`)
+    }
+
+    const nextVotes = { ...votes, [args.projectId]: (votes[args.projectId] || 0) + 1 }
+    const nextMyVotes = [...myVotes, args.projectId]
+    const now = Date.now()
+
+    if (votesDoc) {
+      await ctx.db.patch(votesDoc._id, {
+        value: JSON.stringify(nextVotes),
+        updatedAt: now,
+        updatedBy: myVotesKey,
+      })
+    } else {
+      await ctx.db.insert("cc2026Store", {
+        collection: "votes",
+        key: "_",
+        value: JSON.stringify(nextVotes),
+        updatedAt: now,
+        updatedBy: myVotesKey,
+      })
+    }
+
+    if (myVotesDoc) {
+      await ctx.db.patch(myVotesDoc._id, {
+        value: JSON.stringify(nextMyVotes),
+        updatedAt: now,
+        updatedBy: myVotesKey,
+      })
+    } else {
+      await ctx.db.insert("cc2026Store", {
+        collection: "my_votes",
+        key: myVotesKey,
+        value: JSON.stringify(nextMyVotes),
+        updatedAt: now,
+        updatedBy: myVotesKey,
+      })
+    }
+
+    return { votes: nextVotes, myVotes: nextMyVotes, groupRemaining: voteLimit - usedInGroup - 1 }
   },
 })

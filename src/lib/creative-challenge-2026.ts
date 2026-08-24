@@ -431,3 +431,26 @@ export function formatCreativeChallengeMembers(members: unknown) {
     })
     .join("\n")
 }
+
+export type DemoEmbedKind = "video" | "iframe" | "external"
+
+const MP4_EXTENSION_RE = /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i
+const VIDEO_PLATFORM_RE = /(youtube\.com|youtu\.be|bilibili\.com|v\.qq\.com|vimeo\.com)/i
+
+export function classifyDemoUrl(url: string | undefined | null): DemoEmbedKind {
+  if (!url || !/^https?:\/\//i.test(url.trim())) return "external"
+  const u = url.trim()
+  if (MP4_EXTENSION_RE.test(u) || /^https?:\/\/[^/]+\/.*\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(u)) return "video"
+  if (VIDEO_PLATFORM_RE.test(u)) return "iframe"
+  return "external"
+}
+
+export function getEmbeddableVideoUrl(url: string): string | null {
+  const u = url.trim()
+  const youtubeMatch = u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{6,})/)
+  if (youtubeMatch) return `https://www.youtube.com/embed/${youtubeMatch[1]}`
+  const bilibiliMatch = u.match(/bilibili\.com\/video\/(BV[\w]+)/)
+  if (bilibiliMatch) return `https://player.bilibili.com/player.html?bvid=${bilibiliMatch[1]}&autoplay=0`
+  if (MP4_EXTENSION_RE.test(u)) return u
+  return null
+}

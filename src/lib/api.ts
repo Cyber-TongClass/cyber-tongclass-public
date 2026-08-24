@@ -1622,3 +1622,12 @@ export function useCC2026RemoveRegistration() {
     return remove({ id, sessionToken } as any)
   }, [remove])
 }
+
+export function useCC2026Vote() {
+  const vote = useMutation(api.cc2026.vote)
+  return useCallback((projectId: string) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return vote({ projectId, sessionToken } as any)
+  }, [vote])
+}
