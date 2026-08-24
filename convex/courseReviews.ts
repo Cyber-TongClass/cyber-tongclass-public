@@ -257,6 +257,7 @@ export const create = mutation({
     isAnonymous: v.optional(v.boolean()),
     authorId: v.optional(v.id("users")),
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const courseName = args.courseName.trim()
@@ -273,17 +274,20 @@ export const create = mutation({
     if (args.pace !== undefined) assertRatingRange(args.pace, 1, 5, "Pace")
     if (args.gradingFairness !== undefined) assertRatingRange(args.gradingFairness, 1, 5, "Grading fairness")
 
-    // Normal course submissions come from the local app auth state and pass authorId.
-    // Admin imports/manual entries pass an explicit status and may not have an author.
-    const identity = await ctx.auth.getUserIdentity()
     let user = null
-    if (!identity || !identity.email) {
-      user = args.authorId ? await ctx.db.get(args.authorId) : null
-    } else {
-      user = await ctx.db
-        .query("users")
-        .filter((q: any) => q.eq(q.field("email"), identity.email))
-        .first()
+    if (args.sessionToken) {
+      user = await getActorFromSession(ctx, args.sessionToken)
+    }
+    if (!user) {
+      const identity = await ctx.auth.getUserIdentity()
+      if (!identity || !identity.email) {
+        user = args.authorId ? await ctx.db.get(args.authorId) : null
+      } else {
+        user = await ctx.db
+          .query("users")
+          .filter((q: any) => q.eq(q.field("email"), identity.email))
+          .first()
+      }
     }
 
     const isAdminManagedEntry = args.status !== undefined && !args.authorId
