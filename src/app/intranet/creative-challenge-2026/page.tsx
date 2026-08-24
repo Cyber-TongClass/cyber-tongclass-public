@@ -168,7 +168,7 @@ export default function CreativeChallenge2026Page() {
       const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5)
       const custom = shuffle(published.filter((p) => p.track === "custom"))
       const bounty = shuffle(published.filter((p) => p.track === "bounty"))
-      return [...custom, ...bounty]
+      return [...bounty, ...custom]
     }
     // Results phase: sort by votes within each track
     const sorter = showcaseSortDir === "desc"
@@ -176,7 +176,7 @@ export default function CreativeChallenge2026Page() {
       : (a: any, b: any) => (votes[a.id] || 0) - (votes[b.id] || 0)
     const custom = published.filter((p) => p.track === "custom").sort(sorter)
     const bounty = published.filter((p) => p.track === "bounty").sort(sorter)
-    return [...custom, ...bounty]
+    return [...bounty, ...custom]
   }, [publishedRegistrations, votes, canShowcase, canVote, showcaseTrackFilter, showcaseSortDir])
   const registrationsById = useMemo(
     () => new Map(publishedRegistrations.map((item) => [item.id, item])),

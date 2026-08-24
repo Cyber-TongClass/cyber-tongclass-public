@@ -257,35 +257,6 @@ export default function ProjectDetailPage() {
                 <span className="text-slate-500">队伍名称：</span>
                 {project.teamName}
               </div>
-              {project.leaderName ? (
-                <div>
-                  <span className="text-slate-500">队长：</span>
-                  {project.leaderName}
-                </div>
-              ) : null}
-              {project.members && project.members.length > 0 ? (
-                <div className="sm:col-span-2">
-                  <span className="text-slate-500">核心成员：</span>
-                  {project.members.map((member, index) => (
-                    <span key={index}>
-                      {member.name || `核心成员 ${index + 1}`}
-                      {index < project.members!.length - 1 ? "、" : ""}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {project.freshmen ? (
-                <div className="sm:col-span-2">
-                  <span className="text-slate-500">新生成员：</span>
-                  {project.freshmen}
-                </div>
-              ) : null}
-              {project.computePlan ? (
-                <div className="sm:col-span-2">
-                  <span className="text-slate-500">算力使用计划：</span>
-                  {project.computePlan}
-                </div>
-              ) : null}
             </div>
           </CardContent>
         </Card>

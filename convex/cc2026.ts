@@ -282,7 +282,10 @@ function stripIdentityFieldsForVoting(registration: any) {
   for (const key of [
     "githubUrl",
     "members",
+    "leaderName",
     "leaderStudentId",
+    "leaderContact",
+    "freshmen",
     "ownerUserId",
     "submitterUserId",
     "adminNote",
