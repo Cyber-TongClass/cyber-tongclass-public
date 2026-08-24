@@ -704,6 +704,10 @@ export default function CreativeChallenge2026Page() {
                 </CardTitle>
               </CardHeader>
                <CardContent>
+                 <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600">
+                   <span className="font-semibold text-slate-700">匿名性声明：</span>
+                   各个参赛项目经过了组委会严密的匿名性检查，Demo 中可能包含的通班成员姓名为演示时随机选取，与项目参与者无关。
+                 </div>
                  {canShowcase ? (
                    <div className="flex items-center justify-between gap-3 mb-5">
                      <div className="flex items-center gap-2">
