@@ -827,6 +827,10 @@ export default function AdminCreativeChallenge2026Page() {
                         <div className="mb-1 font-semibold text-slate-700">核心成员</div>
                         <div className="whitespace-pre-wrap">{formatCreativeChallengeMembers(item.members) || "未填写"}</div>
                       </div>
+                      <div className="mt-2 rounded-md bg-emerald-50 p-2 text-xs leading-5 text-emerald-800">
+                        <div className="mb-1 font-semibold text-emerald-700">2026 级新生参与</div>
+                        <div className="whitespace-pre-wrap">{item.freshmen.trim() || "无"}</div>
+                      </div>
                       <div className="mt-2 text-xs text-slate-400">提交：{formatDateTime(item.createdAt)}</div>
                     </TableCell>
                     <TableCell>
