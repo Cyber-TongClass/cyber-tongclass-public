@@ -498,16 +498,30 @@ export const resetPasswordAsSuperAdmin = mutation({
         requesterId: v.id("users"),
         targetUserId: v.id("users"),
         newPassword: v.string(),
+        sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         if (args.newPassword.length < PASSWORD_MIN_LENGTH) {
             throw new Error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
         }
 
-        const [requester, targetUser] = await Promise.all([
-            ctx.db.get(args.requesterId),
-            ctx.db.get(args.targetUserId),
-        ])
+        let requester: any = null
+        if (args.sessionToken) {
+            const tokenHash = await sha256Hex(args.sessionToken)
+            const session = await ctx.db
+                .query("authSessions")
+                .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+                .first()
+            if (session && !session.revokedAt && session.expiresAt > Date.now()) {
+                requester = await ctx.db.get(session.userId)
+            }
+        }
+
+        if (!requester) {
+            requester = await ctx.db.get(args.requesterId)
+        }
+
+        const targetUser = await ctx.db.get(args.targetUserId)
 
         if (!requester) {
             throw new Error("Requester not found")
