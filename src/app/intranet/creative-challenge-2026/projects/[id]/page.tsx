@@ -20,6 +20,7 @@ import { useAuth } from "@/lib/hooks/use-auth"
 import {
   classifyDemoUrl,
   getEmbeddableVideoUrl,
+  getEmbeddableShareUrl,
   challengeStageDetails,
   createDefaultCreativeChallengeSettings,
 } from "@/lib/creative-challenge-2026"
@@ -83,6 +84,7 @@ export default function ProjectDetailPage() {
   const canVote = settings.stage === "showcase"
   const demoKind = useMemo(() => classifyDemoUrl(project?.demoUrl), [project?.demoUrl])
   const embedUrl = useMemo(() => (project?.demoUrl ? getEmbeddableVideoUrl(project.demoUrl) : null), [project?.demoUrl])
+  const shareEmbedUrl = useMemo(() => (project?.demoUrl ? getEmbeddableShareUrl(project.demoUrl) : null), [project?.demoUrl])
   const hasVoted = project ? myVotes.includes(project.id) : false
 
   const handleVote = async () => {
@@ -196,6 +198,18 @@ export default function ProjectDetailPage() {
                   >
                     您的浏览器不支持视频播放，请点击下方链接在新窗口打开。
                   </video>
+                </div>
+              ) : demoKind === "iframe" && shareEmbedUrl ? (
+                <div className="overflow-hidden rounded-lg border border-slate-200">
+                  <iframe
+                    src={shareEmbedUrl}
+                    title="项目 Demo"
+                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                    className="aspect-video w-full"
+                  />
+                  <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-500">
+                    以上为网盘内嵌预览，若无法加载请使用下方按钮在新窗口打开。
+                  </div>
                 </div>
               ) : demoKind === "iframe" && embedUrl ? (
                 <div className="overflow-hidden rounded-lg border border-slate-200">

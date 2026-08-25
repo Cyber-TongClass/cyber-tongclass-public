@@ -436,12 +436,13 @@ export type DemoEmbedKind = "video" | "iframe" | "external"
 
 const MP4_EXTENSION_RE = /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i
 const VIDEO_PLATFORM_RE = /(youtube\.com|youtu\.be|bilibili\.com|v\.qq\.com|vimeo\.com)/i
+const EMBEDDABLE_SHARE_RE = /(disk\.pku\.edu\.cn|pan\.(?:pku|bjmu)\.edu\.cn|webdisk\.pku\.edu\.cn)/i
 
 export function classifyDemoUrl(url: string | undefined | null): DemoEmbedKind {
   if (!url || !/^https?:\/\//i.test(url.trim())) return "external"
   const u = url.trim()
   if (MP4_EXTENSION_RE.test(u) || /^https?:\/\/[^/]+\/.*\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(u)) return "video"
-  if (VIDEO_PLATFORM_RE.test(u)) return "iframe"
+  if (VIDEO_PLATFORM_RE.test(u) || EMBEDDABLE_SHARE_RE.test(u)) return "iframe"
   return "external"
 }
 
@@ -453,4 +454,12 @@ export function getEmbeddableVideoUrl(url: string): string | null {
   if (bilibiliMatch) return `https://player.bilibili.com/player.html?bvid=${bilibiliMatch[1]}&autoplay=0`
   if (MP4_EXTENSION_RE.test(u)) return u
   return null
+}
+
+export function getEmbeddableShareUrl(url: string): string | null {
+  const u = url.trim()
+  if (!EMBEDDABLE_SHARE_RE.test(u)) return null
+  // Disk share links may include extra text after the URL (e.g. "文件名：xxx");
+  // strip everything after the first whitespace.
+  return u.split(/\s+/)[0] || null
 }
