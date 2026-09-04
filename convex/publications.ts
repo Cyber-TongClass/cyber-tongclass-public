@@ -67,6 +67,7 @@ export const create = mutation({
     category: v.string(),
     subCategory: v.optional(v.string()),
     userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { title, authors, venue, year, abstract, category, userId } = args
@@ -102,9 +103,10 @@ export const update = mutation({
     url: v.optional(v.string()),
     category: v.optional(v.string()),
     subCategory: v.optional(v.string()),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { id, ...updates } = args
+    const { id, sessionToken: _sessionToken, ...updates } = args
     const publication = await ctx.db.get(id)
 
     if (!publication) {
@@ -125,7 +127,7 @@ export const update = mutation({
 
 // Delete a publication
 export const remove = mutation({
-  args: { id: v.id("publications") },
+  args: { id: v.id("publications"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const publication = await ctx.db.get(args.id)
 
