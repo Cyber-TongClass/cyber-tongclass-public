@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server"
+import { query, mutation, internalMutation } from "./_generated/server"
 import { v } from "convex/values"
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
@@ -116,6 +116,22 @@ const createAuthSession = async (ctx: any, userId: any) => {
     return token
 }
 
+const getActorFromSession = async (ctx: any, sessionToken?: string) => {
+    if (!sessionToken) return undefined
+
+    const tokenHash = await sha256Hex(sessionToken)
+    const session = await ctx.db
+        .query("authSessions")
+        .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
+        .first()
+    if (!session || session.revokedAt || session.expiresAt <= Date.now()) return undefined
+
+    const actor = await ctx.db.get(session.userId)
+    return actor || undefined
+}
+
+const isAdminRole = (user: any) => user?.role === "admin" || user?.role === "super_admin"
+
 const verifyPassword = async (password: string, credential: { passwordHash: string; salt?: string }) => {
     if (credential.salt) {
         return credential.passwordHash === await sha256Hex(password + credential.salt)
@@ -197,34 +213,35 @@ export const getByStudentId = query({
     },
 })
 
-// Create a new user
-export const create = mutation({
-    args: {
-        email: v.string(),
-        username: v.string(),
-        englishName: v.string(),
-        chineseName: v.optional(v.string()),
-        organization: v.union(v.literal("pku"), v.literal("thu")),
-        cohort: v.union(v.number(), v.literal("mascot")),
-        studentId: v.string(),
-        role: v.optional(v.union(v.literal("member"), v.literal("admin"), v.literal("super_admin"))),
-        password: v.optional(v.string()),
-        personalEmails: v.optional(v.array(v.string())),
-        personalEmail: v.optional(v.string()),
-        bio: v.optional(v.string()),
-        profileMarkdown: v.optional(v.string()),
-        researchDirections: v.optional(v.array(v.string())),
-        researchInterests: v.optional(v.array(v.string())),
-        links: v.optional(v.array(v.object({ type: linkTypeValidator, label: v.string(), url: v.string() }))),
-        titles: v.optional(v.array(v.object({ title: v.string(), link: v.string() }))),
-        scholarUrl: v.optional(v.string()),
-        orcidUrl: v.optional(v.string()),
-        avatar: v.optional(v.string()),
-        realPhoto: v.optional(v.string()),
-        isClassMember: v.optional(v.boolean()),
-        isEmailVerified: v.optional(v.boolean()),
-    },
-    handler: async (ctx, args) => {
+const userCreateArgs = {
+    email: v.string(),
+    username: v.string(),
+    englishName: v.string(),
+    chineseName: v.optional(v.string()),
+    organization: v.union(v.literal("pku"), v.literal("thu")),
+    cohort: v.union(v.number(), v.literal("mascot")),
+    studentId: v.string(),
+    role: v.optional(v.union(v.literal("member"), v.literal("admin"), v.literal("super_admin"))),
+    password: v.optional(v.string()),
+    personalEmails: v.optional(v.array(v.string())),
+    personalEmail: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    profileMarkdown: v.optional(v.string()),
+    researchDirections: v.optional(v.array(v.string())),
+    researchInterests: v.optional(v.array(v.string())),
+    links: v.optional(v.array(v.object({ type: linkTypeValidator, label: v.string(), url: v.string() }))),
+    titles: v.optional(v.array(v.object({ title: v.string(), link: v.string() }))),
+    scholarUrl: v.optional(v.string()),
+    orcidUrl: v.optional(v.string()),
+    avatar: v.optional(v.string()),
+    realPhoto: v.optional(v.string()),
+    isClassMember: v.optional(v.boolean()),
+    isEmailVerified: v.optional(v.boolean()),
+}
+
+// Shared account creation logic used by both the admin-only public mutation
+// and the internal CLI/script mutation.
+const createUserRecord = async (ctx: any, args: any) => {
         const email = normalizeEmail(args.email)
         const username = normalizeUsername(args.username)
         const studentId = normalizeStudentId(args.studentId)
@@ -232,15 +249,15 @@ export const create = mutation({
         const [existingEmailUser, existingUsernameUser, existingStudentIdUser] = await Promise.all([
             ctx.db
                 .query("users")
-                .filter((q) => q.eq(q.field("email"), email))
+                .filter((q: any) => q.eq(q.field("email"), email))
                 .first(),
             ctx.db
                 .query("users")
-                .filter((q) => q.eq(q.field("username"), username))
+                .filter((q: any) => q.eq(q.field("username"), username))
                 .first(),
             ctx.db
                 .query("users")
-                .filter((q) => q.eq(q.field("studentId"), studentId))
+                .filter((q: any) => q.eq(q.field("studentId"), studentId))
                 .first(),
         ])
 
@@ -291,7 +308,7 @@ export const create = mutation({
 
             const existingCredential = await ctx.db
                 .query("authCredentials")
-                .filter((q) => q.eq(q.field("userId"), userId))
+                .filter((q: any) => q.eq(q.field("userId"), userId))
                 .first()
 
             if (existingCredential) {
@@ -309,7 +326,30 @@ export const create = mutation({
         }
 
         return userId
+}
+
+// Create a new user (admin-only; the first account on an empty deployment may
+// be created without a session for bootstrap).
+export const create = mutation({
+    args: { ...userCreateArgs, sessionToken: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        const anyExistingUser = await ctx.db.query("users").first()
+        if (anyExistingUser) {
+            const actor = await getActorFromSession(ctx, args.sessionToken)
+            if (!isAdminRole(actor)) {
+                throw new Error("需要管理员权限")
+            }
+        }
+        const { sessionToken: _sessionToken, ...createArgs } = args
+        return createUserRecord(ctx, createArgs)
     },
+})
+
+// Internal-only account creation for CLI and maintenance scripts.
+// Internal functions are not callable from clients.
+export const internalCreateUser = internalMutation({
+    args: userCreateArgs,
+    handler: async (ctx, args) => createUserRecord(ctx, args),
 })
 
 // Update user profile
@@ -340,7 +380,18 @@ export const update = mutation({
         sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const { id, sessionToken: _sessionToken, ...updates } = args
+        const { id, sessionToken, ...updates } = args
+
+        const actor = await getActorFromSession(ctx, sessionToken)
+        const isSelf = Boolean(actor && String(actor._id) === String(id))
+        const isAdmin = isAdminRole(actor)
+        if (!isSelf && !isAdmin) {
+            throw new Error("需要权限")
+        }
+        if (!isAdmin) {
+            // Non-admins cannot change roles through profile updates.
+            delete updates.role
+        }
 
         const user = await ctx.db.get(id)
 
@@ -453,8 +504,14 @@ export const updatePasswordByUserId = mutation({
     args: {
         userId: v.id("users"),
         newPassword: v.string(),
+        sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const actor = await getActorFromSession(ctx, args.sessionToken)
+        if (!actor || actor.role !== "super_admin") {
+            throw new Error("需要超级管理员权限")
+        }
+
         if (args.newPassword.length < PASSWORD_MIN_LENGTH) {
             throw new Error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
         }
@@ -569,8 +626,14 @@ export const updatePasswordWithCurrent = mutation({
         userId: v.id("users"),
         currentPassword: v.string(),
         newPassword: v.string(),
+        sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const actor = await getActorFromSession(ctx, args.sessionToken)
+        if (!actor || String(actor._id) !== String(args.userId)) {
+            throw new Error("只能修改自己的密码")
+        }
+
         if (args.newPassword.length < PASSWORD_MIN_LENGTH) {
             throw new Error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
         }
@@ -615,8 +678,14 @@ export const updateRole = mutation({
     args: {
         id: v.id("users"),
         role: v.union(v.literal("member"), v.literal("admin"), v.literal("super_admin")),
+        sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const actor = await getActorFromSession(ctx, args.sessionToken)
+        if (!isAdminRole(actor)) {
+            throw new Error("需要管理员权限")
+        }
+
         const user = await ctx.db.get(args.id)
 
         if (!user) {
@@ -636,26 +705,23 @@ export const updateRole = mutation({
 export const updateProfileMarkdown = mutation({
     args: {
         userId: v.id("users"),
-        requesterId: v.id("users"),
+        requesterId: v.optional(v.id("users")),
         profileMarkdown: v.string(),
+        sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const [targetUser, requester] = await Promise.all([
-            ctx.db.get(args.userId),
-            ctx.db.get(args.requesterId),
-        ])
-
-        if (!targetUser) {
-            throw new Error("User not found")
-        }
-
-        if (!requester) {
-            throw new Error("Requester not found")
-        }
-
-        const canEdit = requester._id === targetUser._id || requester.role === "super_admin"
+        const actor = await getActorFromSession(ctx, args.sessionToken)
+        const canEdit = Boolean(
+            actor &&
+            (String(actor._id) === String(args.userId) || actor.role === "super_admin")
+        )
         if (!canEdit) {
             throw new Error("Unauthorized to edit profile markdown")
+        }
+
+        const targetUser = await ctx.db.get(args.userId)
+        if (!targetUser) {
+            throw new Error("User not found")
         }
 
         if (args.profileMarkdown.length > PROFILE_MARKDOWN_MAX_LENGTH) {
@@ -673,8 +739,13 @@ export const updateProfileMarkdown = mutation({
 
 // Delete a user (admin only)
 export const remove = mutation({
-    args: { id: v.id("users") },
+    args: { id: v.id("users"), sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
+        const actor = await getActorFromSession(ctx, args.sessionToken)
+        if (!isAdminRole(actor)) {
+            throw new Error("需要管理员权限")
+        }
+
         const user = await ctx.db.get(args.id)
 
         if (!user) {

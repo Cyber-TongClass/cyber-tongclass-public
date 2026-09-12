@@ -2,6 +2,54 @@ import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 import { ensurePublicationVenue } from "./publicationVenues"
 
+const sha256Hex = async (input: string) => {
+  const cryptoImpl = (globalThis as any).crypto || (global as any).crypto
+  const enc = new TextEncoder().encode(input)
+  const hashBuffer = await cryptoImpl.subtle.digest("SHA-256", enc)
+  return Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, "0")).join("")
+}
+
+async function getActorFromSession(ctx: any, sessionToken?: string) {
+  if (!sessionToken) return undefined
+
+  const tokenHash = await sha256Hex(sessionToken)
+  const session = await ctx.db
+    .query("authSessions")
+    .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash))
+    .first()
+  if (!session || session.revokedAt || session.expiresAt <= Date.now()) return undefined
+
+  const actor = await ctx.db.get(session.userId)
+  return actor || undefined
+}
+
+const isAdminRole = (user: any) => user?.role === "admin" || user?.role === "super_admin"
+
+const AUTHOR_META_PATTERN = /^(.*?)\s*\[tc-author:([^\]]+)\]\s*$/
+
+function parseAuthorMeta(value: unknown): { userId?: string; coFirst?: boolean } | null {
+  if (typeof value !== "string") return null
+  const match = value.match(AUTHOR_META_PATTERN)
+  if (!match) return null
+  try {
+    const parsed = JSON.parse(decodeURIComponent(match[2]))
+    return parsed && typeof parsed === "object" ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function canManagePublication(publication: any, actor: any) {
+  if (!actor) return false
+  if (isAdminRole(actor)) return true
+  if (String(publication.userId) === String(actor._id)) return true
+
+  return Array.isArray(publication.authors) && publication.authors.some((author: unknown) => {
+    const meta = parseAuthorMeta(author)
+    return Boolean(meta?.coFirst && meta.userId && String(meta.userId) === String(actor._id))
+  })
+}
+
 // Get all publications with pagination
 export const list = query({
   args: {
@@ -72,6 +120,14 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const { title, authors, venue, year, abstract, category, userId } = args
 
+    const actor = await getActorFromSession(ctx, args.sessionToken)
+    if (!actor) {
+      throw new Error("请先登录")
+    }
+    // Admins may create records on behalf of another user; members can only
+    // create publications owned by themselves.
+    const ownerId = isAdminRole(actor) ? userId : actor._id
+
     const publicationId = await ctx.db.insert("publications", {
       title,
       authors,
@@ -81,11 +137,11 @@ export const create = mutation({
       url: args.url,
       category,
       subCategory: args.subCategory,
-      userId,
+      userId: ownerId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await ensurePublicationVenue(ctx, venue, userId)
+    await ensurePublicationVenue(ctx, venue, ownerId)
 
     return publicationId
   },
@@ -106,11 +162,16 @@ export const update = mutation({
     sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { id, sessionToken: _sessionToken, ...updates } = args
+    const { id, sessionToken, ...updates } = args
     const publication = await ctx.db.get(id)
 
     if (!publication) {
       throw new Error("Publication not found")
+    }
+
+    const actor = await getActorFromSession(ctx, sessionToken)
+    if (!canManagePublication(publication, actor)) {
+      throw new Error("无权修改该成果")
     }
 
     await ctx.db.patch(id, {
@@ -133,6 +194,11 @@ export const remove = mutation({
 
     if (!publication) {
       throw new Error("Publication not found")
+    }
+
+    const actor = await getActorFromSession(ctx, args.sessionToken)
+    if (!canManagePublication(publication, actor)) {
+      throw new Error("无权删除该成果")
     }
 
     await ctx.db.delete(args.id)
