@@ -6,6 +6,7 @@ import {
   Link as LinkIcon,
   MessageSquare,
   Receipt,
+  Sparkles,
   Trophy,
   type LucideIcon,
 } from "lucide-react"
@@ -18,6 +19,7 @@ export type IntranetModuleId =
   | "wps"
   | "techday"
   | "creative-challenge-2026"
+  | "apps"
   | "materials"
   | "reimbursements"
   | "forms"
@@ -70,6 +72,13 @@ export const defaultIntranetModules: IntranetModuleDefinition[] = [
     description: "2026通班创意开发挑战赛入口，诚邀你来一起建设智慧通班！",
     icon: Trophy,
     href: "/intranet/creative-challenge-2026",
+  },
+  {
+    id: "apps",
+    title: "创意工具",
+    description: "CC2026 获奖作品在线工具集：课堂笔记、通小喵、嘉会、招生咨询、易知。",
+    icon: Sparkles,
+    href: "/intranet/apps",
   },
   {
     id: "materials",

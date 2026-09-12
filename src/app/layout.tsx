@@ -28,7 +28,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <body className="font-sans">
+      <body className="font-sans" suppressHydrationWarning>
         <Script id="mathjax-config" strategy="beforeInteractive">
           {`
             window.MathJax = {
