@@ -56,7 +56,7 @@ function sortUsers(users: User[]) {
 }
 
 function getProfileSlug(user: User) {
-  return user.username || user._id
+  return user.username
 }
 
 function getUserDirections(user: User) {
@@ -72,10 +72,7 @@ export default function MembersPage() {
   // Fetch users from Convex
   const usersData = useUsers({ limit: 1000, classMembersOnly: true })
   const usersFromConvex = usersData || []
-  const users: User[] = usersFromConvex.map((u) => ({
-    ...u,
-    _id: u._id,
-  }))
+  const users: User[] = usersFromConvex as User[]
 
   // Show loading state while fetching
   if (!usersData) {
@@ -255,7 +252,7 @@ export default function MembersPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {group.users.map((user) => (
-              <Link key={user._id} href={`/members/${getProfileSlug(user)}`}>
+              <Link key={user.username} href={`/members/${getProfileSlug(user)}`}>
                 <Card className="group h-full bg-white shadow-sm hover:bg-slate-50 border-l-[3px] border-transparent hover:border-primary transition-all duration-200 rounded-none border-0">
                   <CardContent className="p-6">
                     {/* Avatar */}

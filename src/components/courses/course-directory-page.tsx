@@ -74,6 +74,17 @@ export default function CourseDirectoryPage() {
     )
   }
 
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-slate-600">课程测评仅对通班成员开放，请先登录。</p>
+          <Button asChild><Link href={`/login?next=${encodeURIComponent("/courses")}`}>登录后查看课程</Link></Button>
+        </div>
+      </div>
+    )
+  }
+
   const filteredCourses = courses
     .filter((course) => course.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {

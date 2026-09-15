@@ -1,12 +1,14 @@
 "use client"
 
 import { useCallback, useMemo, useSyncExternalStore } from "react"
+import { withAccountId } from "@/lib/account-dto"
 import { useAction, useQuery, useMutation } from "convex/react"
 import { makeFunctionReference } from "convex/server"
 import { api } from "../../convex/_generated/api"
 import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
 import { toOAFormUpsertPayload } from "@/lib/oa-forms"
+import { parsePublicationAuthors, toPublicationAuthorInput } from "@/lib/publication-authors"
 
 type IdLike =
   | string
@@ -37,9 +39,13 @@ const toIdArg = (input: IdLike) => {
 
 const techdayApi = api as any
 const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
+const sessionAccountRef = makeFunctionReference<"query">("auth:currentUserBySession")
 const currentUserRoleRef = makeFunctionReference<"query">("auth:currentUserRole")
 const isAdminRef = makeFunctionReference<"query">("auth:isAdmin")
 const isSuperAdminRef = makeFunctionReference<"query">("auth:isSuperAdmin")
+const publicMembersRef = makeFunctionReference<"query">("users:listPublicTongClassMembers")
+const directoryMembersRef = makeFunctionReference<"query">("users:listTongClassDirectoryMembers")
+const publicMemberBySlugRef = makeFunctionReference<"query">("users:getPublicTongClassMemberBySlug")
 const academicExchangeProfileRef = makeFunctionReference<"query">("academicExchange:getStudentFormProfile")
 const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("academicExchange:upsertStudentFormProfile")
 const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
@@ -110,7 +116,11 @@ export function getTongClassStoredSessionToken() {
 }
 
 export function useTongClassSessionToken() {
-  return useSyncExternalStore(subscribeTechDayActorArgs, () => getTongClassStoredSessionToken() || "", () => "")
+  const token = useSyncExternalStore(subscribeTechDayActorArgs, () => getTongClassStoredSessionToken() || "", () => "")
+  // Old cloud sessions are not migrated. Resolve identity before issuing
+  // protected queries so an expired token cannot crash public pages.
+  const account = useQuery(sessionAccountRef, token ? { sessionToken: token } : "skip")
+  return account ? token : ""
 }
 
 function getTechDayActorSnapshot() {
@@ -255,7 +265,7 @@ export function useSignIn() {
 export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number | boolean; limit?: number; classMembersOnly?: boolean }) {
   const sessionToken = useTongClassSessionToken()
   const queryArgs = useMemo(() => {
-    const { skip, ...rest } = args || {}
+    const { skip, classMembersOnly: _classMembersOnly, ...rest } = args || {}
     return {
       ...rest,
       ...(typeof skip === "number" ? { skip } : {}),
@@ -263,29 +273,38 @@ export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortV
     }
   }, [args, sessionToken])
 
-  return useQuery(api.users.list, args?.skip === true ? "skip" : (queryArgs as any))
+  const query = args?.skip === true
+    ? "skip"
+    : sessionToken
+      ? ({ ...queryArgs, sessionToken } as any)
+      : queryArgs
+  const result = useQuery(
+    sessionToken ? directoryMembersRef : publicMembersRef,
+    query as any,
+  ) as any
+  return useMemo(() => result?.map(withAccountId), [result])
+}
+
+export function useAdminUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number; limit?: number; classMembersOnly?: boolean }) {
+  const sessionToken = useTongClassSessionToken()
+  const result = useQuery(
+    api.users.list,
+    sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip",
+  ) as any
+  return useMemo(() => result?.map(withAccountId), [result])
 }
 
 export function useUserById(id?: string | null) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(
+  const result = useQuery(
     api.users.getById,
-    id ? ({ id: id as any, sessionToken: sessionToken || undefined } as any) : "skip"
+    id && sessionToken ? ({ id: id as any, sessionToken } as any) : "skip"
   )
+  return result ? withAccountId(result as any) : result
 }
 
 export function useUserByProfileSlug(slug?: string | null) {
-  const users = useUsers({ limit: 1000, classMembersOnly: true })
-  const normalizedSlug = slug?.trim().toLowerCase()
-
-  if (!slug) return null
-  if (users === undefined) return undefined
-
-  return (
-    users.find((user: any) => user.username?.toLowerCase() === normalizedSlug) ||
-    users.find((user: any) => String(user._id) === slug) ||
-    null
-  )
+  return useQuery(publicMemberBySlugRef, slug ? { slug } : "skip") as any
 }
 
 export function useCreateUser() {
@@ -347,7 +366,8 @@ export function useSimpleLogin() {
 }
 
 export function useUsersCount(args?: { organization?: "pku" | "thu"; classMembersOnly?: boolean }) {
-  return useQuery(api.users.count, args || {})
+  const users = useUsers({ ...args, limit: 1000 }) as any[] | undefined
+  return users?.length
 }
 
 // ==================== 新闻相关 ====================
@@ -577,15 +597,18 @@ export function useEventsCount() {
 // ==================== 出版物相关 ====================
 
 export function usePublications(args?: { category?: string; year?: number; skip?: number; limit?: number }) {
-  return useQuery(api.publications.list, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.publications.list, { ...(args || {}), ...(sessionToken ? { sessionToken } : {}) } as any)
 }
 
 export function usePublicationsByUser(userId?: string | null) {
-  return useQuery(api.publications.listByUser, userId ? ({ userId: userId as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.publications.listByUser, userId && sessionToken ? ({ userId: userId as any, sessionToken } as any) : "skip")
 }
 
 export function usePublicationById(id?: string | null) {
-  return useQuery(api.publications.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.publications.getById, id ? ({ id: id as any, ...(sessionToken ? { sessionToken } : {}) } as any) : "skip")
 }
 
 export function useCreatePublication() {
@@ -593,7 +616,8 @@ export function useCreatePublication() {
   return useCallback((args: any) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
-    return create({ ...args, sessionToken } as any)
+    const authorDetails = args.authorDetails || parsePublicationAuthors(args.authors || []).map(toPublicationAuthorInput)
+    return create({ ...args, authors: authorDetails.map((author: any) => author.snapshot), authorDetails, sessionToken } as any)
   }, [create])
 }
 
@@ -602,7 +626,8 @@ export function useUpdatePublication() {
   return useCallback((args: any) => {
     const sessionToken = getTongClassStoredSessionToken()
     if (!sessionToken) throw new Error("请先登录")
-    return update({ ...args, sessionToken } as any)
+    const authorDetails = args.authorDetails || (args.authors ? parsePublicationAuthors(args.authors).map(toPublicationAuthorInput) : undefined)
+    return update({ ...args, ...(authorDetails ? { authors: authorDetails.map((author: any) => author.snapshot), authorDetails } : {}), sessionToken } as any)
   }, [update])
 }
 
@@ -1052,15 +1077,18 @@ export function useUpdatePublicationVenue() {
 // ==================== 课程相关 ====================
 
 export function useCourses(args?: { skip?: number; limit?: number }) {
-  return useQuery(api.courses.list, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.courses.list, sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip")
 }
 
 export function useCourseById(id?: string | null) {
-  return useQuery(api.courses.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.courses.getById, id && sessionToken ? ({ id: id as any, sessionToken } as any) : "skip")
 }
 
 export function useCourseByName(name?: string | null) {
-  return useQuery(api.courses.getByName, name ? { name } : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.courses.getByName, name && sessionToken ? { name, sessionToken } : "skip")
 }
 
 export function useCreateCourse() {
@@ -1108,7 +1136,7 @@ export function useCourseReviews(args?: string | {
 
   return useQuery(
     api.courseReviews.listByCourse,
-    normalized?.courseName ? ({ ...normalized, sessionToken: sessionToken || undefined } as any) : "skip"
+    normalized?.courseName && sessionToken ? ({ ...normalized, sessionToken } as any) : "skip"
   )
 }
 
@@ -1132,7 +1160,8 @@ export function usePendingReviews(args?: { skip?: number; limit?: number }) {
 }
 
 export function useCourseListWithReviews() {
-  return useQuery(api.courseReviews.listCourses)
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.courseReviews.listCourses, sessionToken ? { sessionToken } as any : "skip")
 }
 
 export function useCreateCourseReview() {
@@ -1216,7 +1245,8 @@ export function useSetReviewTagColor() {
 }
 
 export function useCommonReviewTags() {
-  return useQuery(api.courseReviews.commonTags)
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.courseReviews.commonTags, sessionToken ? { sessionToken } as any : "skip")
 }
 
 export function useVoteCourseReview() {

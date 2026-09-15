@@ -15,7 +15,7 @@ import {
   usePublicationById,
   usePublicationVenues,
   usePublications,
-  useUsers,
+  useAdminUsers,
   useCreatePublication,
   useUpdatePublication,
 } from "@/lib/api"
@@ -75,7 +75,7 @@ export default function AdminPublicationEditorPage() {
   const publicationLoading = !isCreateMode && publicationData === undefined
 
   // Fetch users from Convex
-  const usersData = useUsers({ limit: 1000 })
+  const usersData = useAdminUsers({ limit: 1000 })
   const users: any[] = usersData || []
 
   // Mutations
@@ -325,7 +325,7 @@ export default function AdminPublicationEditorPage() {
                   请选择用户
                 </option>
                 {users.map((user) => (
-                  <option key={user._id} value={user._id}>
+                  <option key={user.id || user._id} value={user.id || user._id}>
                     {user.englishName} ({user.username})
                   </option>
                 ))}

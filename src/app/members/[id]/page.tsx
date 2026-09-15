@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PublicationAuthorsList } from "@/components/publications/publication-authors-list"
 import { usePublications, useUserByProfileSlug } from "@/lib/api"
-import { publicationBelongsToUser } from "@/lib/publication-authors"
 import { normalizeUrl } from "@/lib/utils"
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer"
 import { getUserLinks, getUserPersonalEmails } from "@/lib/user-profile"
@@ -19,10 +18,12 @@ export default function MemberDetailPage() {
   const memberSlug = params.id
 
   const userData = useUserByProfileSlug(memberSlug)
-  const member = userData ? { ...userData, id: userData._id } : null
+  const member = userData || null
   const publicationsData = usePublications({ limit: 1000 })
-  const publications: Publication[] = (publicationsData || []).filter((publication: Publication) =>
-    publicationBelongsToUser(publication, member?._id)
+  const publications: Publication[] = (publicationsData || []).filter((publication: Publication & { authorDetails?: Array<{ profile?: { kind?: string; slug?: string } }> }) =>
+    publication.authorDetails?.some((author) =>
+      author.profile?.kind === "tong_class_member" && author.profile.slug === member?.username
+    )
   )
   const personalEmails = member ? getUserPersonalEmails(member) : []
   const profileLinks = member ? getUserLinks(member) : []
@@ -196,7 +197,7 @@ export default function MemberDetailPage() {
                         <h4 className="font-extrabold text-slate-900 hover:text-primary mb-1 line-clamp-2">{pub.title}</h4>
                       </Link>
                       <p className="text-sm text-slate-600 mb-2">
-                        <PublicationAuthorsList authors={pub.authors} emphasizedUserId={String(member._id)} />
+                        <PublicationAuthorsList authors={pub.authors} authorDetails={pub.authorDetails} />
                       </p>
                       <div className="flex items-center gap-3 text-xs text-slate-600">
                         <span className="font-medium text-primary">{pub.venue}</span>

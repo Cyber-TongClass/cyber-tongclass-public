@@ -140,7 +140,7 @@ export function CreativeChallengeMemberEditor({
   })
   const rowsRef = useRef(rows)
 
-  const userMap = useMemo(() => new Map(users.map((user) => [String(user._id), user])), [users])
+  const userMap = useMemo(() => new Map(users.map((user) => [String(user.id || user._id), user])), [users])
 
   useEffect(() => {
     rowsRef.current = rows
@@ -191,10 +191,10 @@ export function CreativeChallengeMemberEditor({
     updateRow(row.key, {
       name: displayUserName(user),
       isTongClass: true,
-      userId: String(user._id),
+      userId: String(user.id || user._id),
       username: user.username,
       studentId: user.studentId,
-      confirmedUserId: String(user._id),
+      confirmedUserId: String(user.id || user._id),
       declinedUserId: undefined,
       message: "已确认通班成员。",
     })
@@ -207,7 +207,7 @@ export function CreativeChallengeMemberEditor({
       username: undefined,
       studentId: undefined,
       confirmedUserId: undefined,
-      declinedUserId: String(user._id),
+      declinedUserId: String(user.id || user._id),
       message: "已选择不是该通班成员，将仅按文本保存。",
     })
   }
@@ -237,7 +237,7 @@ export function CreativeChallengeMemberEditor({
           const pendingExactUser = exactUser && !confirmedUser && !isDeclinedExactMatch ? exactUser : null
           const candidates = confirmedUser
             ? []
-            : findCandidateUsers(users, row.name).filter((user) => String(user._id) !== row.declinedUserId)
+            : findCandidateUsers(users, row.name).filter((user) => String(user.id || user._id) !== row.declinedUserId)
           const displayedUser = confirmedUser || pendingExactUser || (isDeclinedExactMatch ? exactUser : null)
           const photo = displayedUser?.realPhoto || displayedUser?.avatar
 
@@ -351,7 +351,7 @@ export function CreativeChallengeMemberEditor({
                           <div className="grid gap-2">
                             {candidates.map((user) => (
                               <button
-                                key={String(user._id)}
+                                key={String(user.id || user._id)}
                                 type="button"
                                 onClick={() => confirmUser(row, user)}
                                 className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"

@@ -300,6 +300,7 @@ await fetch('/api/request-verification', { method: 'POST', body: JSON.stringify(
 
 ## Environment variables used by the API & server routes
 
+- Convex endpoint: the browser client and Next.js server routes share `https://aiagora.pku.edu.cn/convex` by default. Set `NEXT_PUBLIC_AIA_CONVEX_URL` to override it (the value must be an HTTPS URL whose path is `/convex`; credentials, query strings, and fragments are rejected). The legacy `NEXT_PUBLIC_CONVEX_URL` variable is ignored so a stale deployment setting cannot take precedence.
 - `EMAIL_SIGNING_KEY` (required) — HMAC secret used to sign verification/reset proofs. Must be set on server.
 - `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_API_URL` / `NEXTAUTH_URL` — used to construct verification links (fallbacks supported).
 - Mailer (used by `src/lib/server/mailer`):

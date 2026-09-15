@@ -1,12 +1,15 @@
-import type { Publication } from "@/types"
+import type { Publication, PublicationAuthorInput, PublicPublicationAuthor } from "@/types"
 
 const AUTHOR_META_PATTERN = /^(.*?)\s*\[tc-author:([^\]]+)\]\s*$/
 
 export type PublicationAuthor = {
+  memberUserId?: string
+  skipAutoMatch?: boolean
   name: string
   isTongClass?: boolean
   userId?: string
   username?: string
+  institutePersonSlug?: string
   coFirst?: boolean
   corresponding?: boolean
 }
@@ -47,6 +50,9 @@ export function encodePublicationAuthor(author: PublicationAuthor) {
   const meta: EncodedAuthorMeta = {
     ...(author.isTongClass && author.userId ? { isTongClass: true, userId: author.userId } : {}),
     ...(author.username ? { username: author.username } : {}),
+    ...(author.institutePersonSlug ? { institutePersonSlug: author.institutePersonSlug } : {}),
+    ...(author.memberUserId ? { memberUserId: author.memberUserId } : {}),
+    ...(author.skipAutoMatch ? { skipAutoMatch: true } : {}),
     ...(author.coFirst ? { coFirst: true } : {}),
     ...(author.corresponding ? { corresponding: true } : {}),
   }
@@ -56,6 +62,29 @@ export function encodePublicationAuthor(author: PublicationAuthor) {
   }
 
   return `${name} [tc-author:${encodeMeta(meta)}]`
+}
+
+export function toPublicationAuthorInput(author: PublicationAuthor): PublicationAuthorInput {
+  return {
+    snapshot: encodePublicationAuthor(author), name: author.name.trim(),
+    coFirst: author.coFirst === true, corresponding: author.corresponding === true,
+    ...(author.memberUserId ? { memberUserId: author.memberUserId } : {}),
+    ...(author.skipAutoMatch ? { skipAutoMatch: true } : {}),
+    ...(author.isTongClass && author.userId ? { tongClassUserId: author.userId } : {}),
+    ...(author.isTongClass && author.username ? { tongClassUsername: author.username } : {}),
+    ...(author.institutePersonSlug ? { institutePersonSlug: author.institutePersonSlug } : {}),
+  }
+}
+
+export function toPublicPublicationAuthor(author: PublicationAuthor): PublicPublicationAuthor {
+  return {
+    name: author.name, coFirst: author.coFirst === true, corresponding: author.corresponding === true,
+    ...(author.institutePersonSlug
+      ? { profile: { kind: "institute_person" as const, slug: author.institutePersonSlug } }
+      : author.isTongClass && author.username
+        ? { profile: { kind: "tong_class_member" as const, slug: author.username } }
+        : {}),
+  }
 }
 
 export function parsePublicationAuthors(values: string[]) {

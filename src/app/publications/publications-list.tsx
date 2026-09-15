@@ -138,7 +138,7 @@ export function PublicationsList() {
                           </h3>
                         </Link>
                         <p className="text-sm text-slate-600 mb-2">
-                          <PublicationAuthorsList authors={pub.authors} />
+                          <PublicationAuthorsList authors={pub.authors} authorDetails={pub.authorDetails} />
                         </p>
                         <div className="flex items-center gap-3 text-xs text-slate-600">
                           <span className="font-medium text-primary">{pub.venue}</span>
@@ -186,7 +186,7 @@ export function PublicationsList() {
                           </h3>
                         </Link>
                         <p className="text-sm text-slate-600 mb-2">
-                          <PublicationAuthorsList authors={pub.authors} />
+                          <PublicationAuthorsList authors={pub.authors} authorDetails={pub.authorDetails} />
                         </p>
                         <div className="flex items-center gap-3 text-xs text-slate-600">
                           <span className="font-medium text-primary">{pub.venue}</span>

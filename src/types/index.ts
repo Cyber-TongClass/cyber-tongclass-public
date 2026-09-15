@@ -19,6 +19,7 @@ export interface UserLink {
 
 export interface User {
   _id: string
+  id?: string
   email: string
   username: string
   englishName: string
@@ -52,6 +53,7 @@ export interface Publication {
   _id: string
   title: string
   authors: string[]
+  authorDetails?: PublicPublicationAuthor[]
   venue: string
   year: number
   abstract: string
@@ -61,6 +63,26 @@ export interface Publication {
   userId: string // Owner
   createdAt: number
   updatedAt: number
+}
+
+export type PublicationAuthorProfile = { kind: "institute_person" | "tong_class_member"; slug: string }
+export type PublicPublicationAuthor = {
+  recognizedMember?: boolean
+  name: string
+  coFirst: boolean
+  corresponding: boolean
+  profile?: PublicationAuthorProfile
+}
+export type PublicationAuthorInput = {
+  memberUserId?: string
+  skipAutoMatch?: boolean
+  snapshot: string
+  name: string
+  coFirst: boolean
+  corresponding: boolean
+  tongClassUserId?: string
+  tongClassUsername?: string
+  institutePersonSlug?: string
 }
 
 export interface PublicationVenue {

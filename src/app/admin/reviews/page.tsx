@@ -217,7 +217,7 @@ export default function ReviewsPage() {
   const reviews = [...allReviews].sort((a, b) => b.createdAt - a.createdAt)
   const usersData = useUsers({ limit: 1000, skip: !isSuperAdmin })
   const usersById = useMemo(() => {
-    const entries = ((usersData || []) as User[]).map((user) => [String(user._id), user] as const)
+    const entries = ((usersData || []) as Array<User & { id?: string }>).map((user) => [String(user.id || user._id), user] as const)
     return new Map(entries)
   }, [usersData])
 

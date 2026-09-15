@@ -81,7 +81,7 @@ export function PublicationAuthorEditor({ value, users, onChange, onValidationCh
   })
   const rowsRef = useRef(rows)
 
-  const userMap = useMemo(() => new Map(users.map((user) => [String(user._id), user])), [users])
+  const userMap = useMemo(() => new Map(users.map((user) => [String(user.id || user._id), user])), [users])
 
   useEffect(() => {
     rowsRef.current = rows

@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye, Save, X } from "lucide-react"
 import {
-  useUsers,
+  useAdminUsers,
   usePublications,
   useDeletePublication,
   usePublicationVenues,
@@ -46,7 +46,7 @@ export default function AdminPublicationsPage() {
 
   // Fetch data from Convex
   const publicationsData = usePublications({ limit: 1000 })
-  const usersData = useUsers({})
+  const usersData = useAdminUsers({})
   const publicationVenuesData = usePublicationVenues()
   const deletePublication = useDeletePublication()
   const createPublicationVenue = useCreatePublicationVenue()
@@ -64,7 +64,7 @@ export default function AdminPublicationsPage() {
   )
 
   const userNameMap = useMemo(() => {
-    return new Map(users.map((user) => [String(user._id), user.englishName]))
+    return new Map(users.map((user: any) => [String(user.id || user._id), user.englishName]))
   }, [users])
 
   const categoryOptions = useMemo(() => {
@@ -191,7 +191,7 @@ export default function AdminPublicationsPage() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setOwnerFilter(null)}>全部归属用户</DropdownMenuItem>
                 {users.map((user) => (
-                  <DropdownMenuItem key={String(user._id)} onClick={() => setOwnerFilter(String(user._id))}>
+                  <DropdownMenuItem key={String((user as any).id || user._id)} onClick={() => setOwnerFilter(String((user as any).id || user._id))}>
                     {user.englishName}
                   </DropdownMenuItem>
                 ))}
@@ -307,7 +307,7 @@ export default function AdminPublicationsPage() {
                   <TableRow key={publication._id}>
                     <TableCell className="font-medium max-w-[300px] truncate">{publication.title}</TableCell>
                     <TableCell className="max-w-[220px] text-gray-600">
-                      <PublicationAuthorsList authors={publication.authors} />
+                      <PublicationAuthorsList authors={publication.authors} authorDetails={publication.authorDetails} />
                     </TableCell>
                     <TableCell>
                       <Badge className="bg-slate-100 text-slate-800">
