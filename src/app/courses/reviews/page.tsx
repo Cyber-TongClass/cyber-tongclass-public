@@ -204,7 +204,6 @@ function CreateReviewForm() {
         overallRating,
         content,
         isAnonymous: false,
-        authorId: currentUser._id as any,
       } as any)
       // simple success behavior: reload page
       window.location.reload()

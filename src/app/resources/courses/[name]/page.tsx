@@ -296,7 +296,6 @@ export default function CourseDetailPage() {
       await createReview({
         courseName: course.name,
         ...payload,
-        authorId: currentUser._id as any,
       })
 
       closeForm()
