@@ -1,4 +1,6 @@
-# Email Auth Setup Checklist
+# Email Verification Setup Checklist
+
+> Updated 2026-08-19. Public self-registration and self-service password reset are currently disabled. The active login flow uses administrator-created accounts and student IDs.
 
 ## Required environment variables
 
@@ -9,7 +11,7 @@
 ### SMTP (163 mail)
 - `SMTP_HOST` (recommended: `smtp.163.com`)
 - `SMTP_PORT` (recommended: `465`)
-- `SMTP_USER` (you said: `tongclasspku@163.com`)
+- `SMTP_USER` (the authenticated mailbox address)
 - `SMTP_PASS` (SMTP auth/app password)
 - `SMTP_FROM` (recommended: `"TongClass" <noreply@tongclass.ac.cn>`)
 
@@ -18,9 +20,10 @@
 - `TURNSTILE_SECRET`
 
 ### Verification token behavior
-- `EMAIL_SIGNING_KEY` (required for password reset proof signing)
-- `EMAIL_TOKEN_EXPIRY_MIN` (password reset token expiry, default fallback `15`)
+- `EMAIL_SIGNING_KEY` (required for email-verification proof signing)
 - `EMAIL_VERIFY_EXPIRY_MIN` (email verification expiry, default fallback `30`)
+
+`EMAIL_TOKEN_EXPIRY_MIN` and password-reset proof helpers remain in the codebase for an incomplete legacy flow. There is currently no `/reset-password` page or `/api/reset-password` route.
 
 ### Mailtrap (API)
 - `MAILTRAP_API_TOKEN` (use Mailtrap API when set)
@@ -33,27 +36,23 @@
 
 ## Post-change commands
 
-```powershell
-npm install
-npx convex codegen
-npx convex deploy
+```bash
+npm ci
 npm run build
 ```
 
+Never append `--prod` to a Convex command unless a maintainer explicitly requests a production deployment.
+
 ## Manual smoke test
-1. Register page: send code, verify code, continue registration.
-2. Forgot password: request reset email, click link, set new password, login with new password.
-3. Settings page: change password with current password.
+1. Call the email-verification request endpoint in a development environment and confirm the message is delivered.
+2. Verify the token/code once and confirm a second use is rejected.
+3. Settings page: change password with the current password.
 4. Safety path: trigger frequent send requests and verify Turnstile appears.
 
 ### Mailtrap API smoke test (recommended when using Mailtrap)
-1. Install the Mailtrap client locally (if not installed):
+1. Install the locked project dependencies with `npm ci`; `mailtrap` is already a runtime dependency.
 
-```bash
-npm install mailtrap --save-dev
-```
-
-2. Export env vars and run the smoke test script (script created at `scripts/mailtrap-smoke-test.js`):
+2. Export env vars and run `scripts/mailtrap-smoke-test.js`:
 
 ```bash
 export MAILTRAP_API_TOKEN="<your-token>"

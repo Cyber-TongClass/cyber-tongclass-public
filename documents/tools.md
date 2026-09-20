@@ -1,268 +1,91 @@
-# Tools Documentation
+# 技术栈与工具
 
-本文档记录了 tongclass.ac.cn 项目中使用到的工具和库。
+> 当前版本说明，更新于 2026-08-19。精确版本以 `package-lock.json` 为准。
 
----
+## 核心运行时
 
-## 前端工具
+| 层 | 工具 | 说明 |
+|---|---|---|
+| Web | Next.js 16 App Router | 页面、Layout、Route Handler、standalone 构建 |
+| UI | React 18 + TypeScript | 客户端交互与严格类型检查 |
+| 数据 | Convex | Schema、实时查询、mutation、会话和存储 |
+| 样式 | Tailwind CSS 3 + Radix UI | CSS 变量主题和本地 UI 原语 |
+| 部署 | Docker + Nginx + GitHub Actions | 镜像构建、反向代理和自动部署 |
 
-### 1. UI 组件库
+最低运行版本：Node.js 24.14.0、npm 11.9.0。
 
-#### Shadcn/UI
-基于 Radix UI 的可定制组件库，提供高质量的 React 组件。
+## 前端组件
 
-**使用方式**:
+- `src/components/ui/`：Button、Card、Dialog、Dropdown、Select、Sheet、Table、Tabs 等本地组件。
+- `lucide-react`：统一图标来源。
+- `class-variance-authority`、`clsx`、`tailwind-merge`：组件变体和 class 合并。
+- `next-themes`：class 模式的浅色/深色主题容器。
+
+## Markdown 与数学公式
+
+- `react-markdown`：Markdown 渲染。
+- `remark-gfm`：表格、任务列表等 GFM 语法。
+- `remark-math` + `rehype-katex` + `katex`：数学公式。
+- `rehype-highlight` + `highlight.js`：代码高亮。
+- `MarkdownSplitEditor`：项目自有的编辑/预览组件，不依赖第三方富文本编辑器。
+
+## PDF、表格和邮件
+
+- `pdf-lib` + `@pdf-lib/fontkit`：学术交流申请 PDF 生成和中文字体嵌入。
+- `src/lib/server/simple-xlsx.ts`：轻量 XLSX 生成。
+- `src/lib/server/simple-zip.ts`：批量导出 ZIP。
+- `nodemailer`：SMTP 邮件发送。
+- `mailtrap`：配置 token 时优先走 Mailtrap API。
+
+## 文件存储
+
+上传入口统一接受两种目标：
+
+- Cloudflare R2 预签名 PUT URL；
+- Convex Storage POST URL。
+
+是否允许回退由业务决定。学术交流论文、OA 附件、TechDay 海报和 TechDay 报销附件保留原有策略；ToNG 先导课资源要求 R2 已配置，不使用 Convex Storage 回退。
+
+先导课文件限定为 PDF、PPTX、DOCX、XLSX、ZIP/TAR.GZ/TGZ、IPYNB、MD/TXT/CSV/JSON 和 PNG/JPG/JPEG/WebP，并按类型设置 25–300 MB 上限。上传期限按文件大小估算（15–120 分钟）；上传完成后使用 R2 HEAD 校验大小、MIME 和 ETag，再条件复制到不可被原 PUT URL 覆盖的 final key。公开下载是私有 bucket 的点击时短签名链接。
+
+## 数据访问
+
+- 客户端页面：从 `src/lib/api.ts` 引入 Hook。
+- 主站认证状态：`src/lib/hooks/use-auth.ts`。
+- 服务端访问 Convex：`src/lib/server/convex-http.ts`。
+- 生成类型：`convex/_generated/`，不提交到 Git。
+
+旧的 `src/lib/hooks/use-news.ts`、`use-events.ts` 等文件仅作兼容保留，不应用于新页面。
+
+## 常用命令
+
 ```bash
-npx shadcn-ui@latest add button
+npm ci
+npx convex dev
+npm run dev
 ```
 
-**组件文件位置**: `src/components/ui/`
+质量检查：
 
-**已实现组件**:
-- Button - 按钮组件
-- Card - 卡片组件
-- Input - 输入框组件
-- Sheet - 侧边栏组件
-- DropdownMenu - 下拉菜单组件
-
----
-
-### 2. 样式工具
-
-#### Tailwind CSS
-Utility-first CSS 框架
-
-**配置文件**: `tailwind.config.ts`
-
-**自定义设计系统**:
-- 颜色系统 (Yale Blue 主色调)
-- 字体系统
-- 间距系统
-- 阴影系统
-
-**样式文件**: `src/styles/globals.css`
-
----
-
-#### class-variance-authority (cva)
-用于创建类型安全的组件变体
-
-**使用示例**:
-```typescript
-const buttonVariants = cva(
-  "inline-flex items-center justify-center rounded-md text-sm font-medium",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground",
-        outline: "border border-input bg-background",
-      },
-      size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-      },
-    },
-  }
-)
+```bash
+npm run lint
+npx tsc --noEmit --incremental false
+npm run build
 ```
 
----
+`npm run build` 已包含 `npx convex codegen`。不要在任何 npm lifecycle 中自动运行迁移脚本。
 
-#### clsx & tailwind-merge
-用于合并 CSS 类名
+## 依赖维护
 
-**使用示例**:
-```typescript
-import { cn } from "@/lib/utils"
+- 依赖安装统一使用 `npm ci`。
+- 更新依赖后必须提交 `package.json` 和 `package-lock.json`。
+- 不使用 `--force` 或 `--legacy-peer-deps` 绕过 peer dependency 检查。
+- React、Next.js、Tailwind、Convex 等跨 major 升级应单独进行，不混入普通内容变更。
+- 使用 `npm outdated` 审计可升级版本，并在升级后运行 lint、typecheck 和 build。
 
-function Card({ className }) {
-  return (
-    <div className={cn("rounded-lg border bg-card", className)}>
-      // ...
-    </div>
-  )
-}
-```
+## 运维检查
 
----
-
-### 3. 图标库
-
-#### Lucide React
-现代、简洁的开源图标库
-
-**使用示例**:
-```typescript
-import { Search, User, Menu } from "lucide-react"
-
-<Search className="h-4 w-4" />
-```
-
----
-
-### 4. 表单与数据处理
-
-#### Zod
-TypeScript 优先的 schema 验证库
-
-**使用示例**:
-```typescript
-import { z } from "zod"
-
-const UserSchema = z.object({
-  email: z.string().email(),
-  username: z.string().min(3),
-  role: z.enum(["member", "admin", "super_admin"]),
-})
-```
-
----
-
-### 5. 日期处理
-
-#### date-fns
-现代日期处理库
-
-**使用示例**:
-```typescript
-import { format, formatDistanceToNow } from "date-fns"
-
-format(new Date(), "yyyy-MM-dd")
-formatDistanceToNow(new Date(), { addSuffix: true })
-```
-
----
-
-### 6. Markdown 处理
-
-#### react-markdown
-React Markdown 渲染器
-
-**使用示例**:
-```typescript
-import ReactMarkdown from "react-markdown"
-
-<ReactMarkdown>{content}</ReactMarkdown>
-```
-
----
-
-#### @uiw/react-md-editor
-Markdown 编辑器 (带预览)
-
-**使用示例**:
-```typescript
-import MDEditor from "@uiw/react-md-editor"
-
-<MDEditor value={content} onChange={setContent} />
-```
-
----
-
-### 7. 日历组件
-
-#### react-big-calendar
-React 日历组件
-
-**使用示例**:
-```typescript
-import { Calendar } from "react-big-calendar"
-import "react-big-calendar/lib/css/react-big-calendar.css"
-```
-
----
-
-#### react-day-picker
-日期选择器
-
-**使用示例**:
-```typescript
-import { DayPicker } from "react-day-picker"
-```
-
----
-
-## 后端工具
-
-### 1. Convex
-
-#### @convex-dev/react
-Convex React 集成
-
-**使用示例**:
-```typescript
-import { useQuery, useMutation } from "@convex-dev/react"
-
-const users = useQuery(api.users.list)
-const createUser = useMutation(api.users.create)
-```
-
----
-
-#### @convex-dev/convex-auth
-Convex 认证集成
-
-**功能**:
-- 邮箱/密码认证
-- OAuth (可选)
-- Session 管理
-
----
-
-## 开发工具
-
-### 1. TypeScript
-类型安全的 JavaScript 超集
-
-### 2. ESLint + Prettier
-代码规范和格式化
-
-### 3. Next.js
-
----
-
-## 本地开发补充工具
-
-### Local Auth Store
-
-- **文件**: `src/lib/mock-auth.ts`
-- **用途**: 在未连接 Convex 后端时提供本地注册/登录/会话能力
-- **存储**: 浏览器 `localStorage`
-- **配套 Hook**: `src/lib/hooks/use-auth.ts`
-React 全栈框架
-
----
-
-## 设计系统
-
-### 色彩系统 (Yale-inspired)
-
-```typescript
-// src/styles/design-system.ts
-export const colors = {
-  primary: {
-    DEFAULT: '#0F4C81', // Yale Blue
-    light: '#1E6BA8',
-    dark: '#0A3559',
-  },
-  // ...
-}
-```
-
-### 字体系统
-
-- **Sans**: Inter (主要字体)
-- **Serif**: Playfair Display (标题)
-- **Mono**: JetBrains Mono (代码)
-
----
-
-## 工具创建指南
-
-创建新工具时:
-
-1. 在对应的组件目录创建文件
-2. 使用现有的设计系统颜色和样式
-3. 遵循组件命名规范
-4. 导出类型定义
-5. 更新本文档
+- `GET /api/health`：容器健康检查。
+- `.github/workflows/ci-cd.yml`：安装、lint、typecheck、build、Docker 和部署。
+- `next.config.js`：standalone 输出与 PDF runtime assets tracing。
+- `Dockerfile`：Node 24 多阶段构建。

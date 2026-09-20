@@ -1,5 +1,7 @@
 # 通班官方网站 — 前端架构完整报告
 
+> 历史归档：本文基于旧提交生成，可能包含已变更的路由、依赖和实现。当前开发说明请以 `README.md` 与 `documents/module.md` 为准。
+
 > 基于 `cyber-tongclass-public` 最新 commit (`1fe8f59`) 的深度分析
 
 ---

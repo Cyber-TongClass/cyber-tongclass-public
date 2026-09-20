@@ -1,5 +1,7 @@
 # Search Documentation
 
+> 历史归档：本文记录 2024 年的早期技术调研，不代表当前实现。当前技术栈和依赖请以 `package.json`、`documents/tools.md` 和实际源码为准。
+
 本文档记录项目中技术细节的互联网搜索结果。
 
 ---

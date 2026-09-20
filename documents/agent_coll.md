@@ -1,5 +1,7 @@
 # Agent Collaboration
 
+> 历史归档：本文保留早期多 Agent 分工记录，不再作为当前进度或架构说明。请改读 `README.md`、`documents/module.md` 和 `documents/todo.md`。
+
 本文档记录项目中多个 Agent 的分工与协作。
 
 ---

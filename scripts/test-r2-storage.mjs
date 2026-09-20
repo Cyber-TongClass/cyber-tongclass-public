@@ -63,6 +63,25 @@ test("R2 storage ids are prefixed and reversible", () => {
   assert.equal(r2.r2StorageIdMatches(`r2:${key}`, { ownerId: "user-1", purpose: "oa-form-attachment" }), true)
   assert.equal(r2.r2StorageIdMatches(`r2:${key}`, { ownerId: "user-1", purpose: "techday-poster" }), false)
   assert.equal(r2.getR2ObjectKeyFromStorageId("r2:not/a/generated/key"), null)
+
+  const courseKey = r2.createR2ObjectKey({
+    purpose: "tong-init-course-resource",
+    ownerId: "admin-1",
+    fileName: "slides.pdf",
+    now: new Date("2026-06-30T10:00:00Z"),
+    randomId: "fixed",
+  })
+  assert.equal(r2.r2StorageIdMatches(`r2:${courseKey}`, { ownerId: "admin-1", purpose: "tong-init-course-resource" }), true)
+
+  const finalCourseKey = r2.createR2ObjectKey({
+    purpose: "tong-init-course-resource-final",
+    ownerId: "admin-1",
+    fileName: "slides.pdf",
+    now: new Date("2026-06-30T10:00:00Z"),
+    randomId: "immutable",
+  })
+  assert.equal(r2.r2StorageIdMatches(`r2:${finalCourseKey}`, { purpose: "tong-init-course-resource-final" }), true)
+  assert.equal(r2.r2StorageIdMatches(`r2:${finalCourseKey}`, { purpose: "tong-init-course-resource" }), false)
 })
 
 test("R2 presigned URLs use path-style bucket URLs and SigV4 query params", async () => {
@@ -83,6 +102,46 @@ test("R2 presigned URLs use path-style bucket URLs and SigV4 query params", asyn
   assert.equal(url.origin, "https://example-account.r2.cloudflarestorage.com")
   assert.equal(url.pathname, "/tongclass-uploads/oa/file.pdf")
   assert.equal(url.searchParams.get("X-Amz-Algorithm"), "AWS4-HMAC-SHA256")
-  assert.equal(url.searchParams.get("X-Amz-SignedHeaders"), "host")
+  assert.equal(url.searchParams.get("X-Amz-SignedHeaders"), "content-type;host")
   assert.match(url.searchParams.get("X-Amz-Signature"), /^[0-9a-f]{64}$/)
+})
+
+test("R2 PUT signatures can bind download metadata headers", async () => {
+  const target = await r2.createR2SignedUrl({
+    method: "PUT",
+    key: "tong-init-course-resource/2026/06/admin/file.pdf",
+    contentType: "application/pdf",
+    contentDisposition: "attachment; filename=resource.pdf",
+    now: new Date("2026-06-30T10:00:00Z"),
+    config: {
+      endpoint: "https://example-account.r2.cloudflarestorage.com",
+      bucket: "tongclass-uploads",
+      accessKeyId: "AKIAEXAMPLE",
+      secretAccessKey: "secret",
+    },
+  })
+  const url = new URL(target)
+  assert.equal(url.searchParams.get("X-Amz-SignedHeaders"), "content-disposition;content-type;host")
+})
+
+test("R2 CopyObject signatures bind the verified staging ETag", async () => {
+  const target = await r2.createR2SignedUrl({
+    method: "PUT",
+    key: "tong-init-course-resource-final/2026/06/admin/final.pdf",
+    copySource: "/tongclass-uploads/tong-init-course-resource/2026/06/admin/staging.pdf",
+    copySourceIfMatch: "\"verified-etag\"",
+    metadataDirective: "COPY",
+    now: new Date("2026-06-30T10:00:00Z"),
+    config: {
+      endpoint: "https://example-account.r2.cloudflarestorage.com",
+      bucket: "tongclass-uploads",
+      accessKeyId: "AKIAEXAMPLE",
+      secretAccessKey: "secret",
+    },
+  })
+  const url = new URL(target)
+  assert.equal(
+    url.searchParams.get("X-Amz-SignedHeaders"),
+    "host;x-amz-copy-source;x-amz-copy-source-if-match;x-amz-metadata-directive"
+  )
 })

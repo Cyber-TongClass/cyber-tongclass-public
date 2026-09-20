@@ -1,351 +1,118 @@
-# Module Documentation
+# 项目模块说明
 
-本文档记录了 tongclass.ac.cn 网站的功能模块详细描述。
+> 与 `cyber-tongclass-public/main` 对齐于 2026-08-19。代码和 `convex/schema.ts` 是最终事实来源。
 
----
+## 总体架构
 
-## 1. 首页模块
+项目是一个 Next.js + Convex 全栈单体应用。页面、HTTP Route Handler 和服务端文档生成位于 Next.js；数据、权限校验、实时查询和文件元数据位于 Convex。
 
-### 1.1 Hero 区域
-- **功能**: 展示项目主视觉和核心价值主张
-- **组件**: `src/app/page.tsx`
-- **内容**:
-  - 大标题: "人工智能创新人才培养"
-  - 副标题: "北京大学 & 清华大学 联合培养项目"
-  - 行动按钮: "了解更多" / "查看成员"
-- **样式**: Yale Blue 渐变背景, 居中对齐
+```text
+浏览器
+├── Next.js 页面与组件
+│   └── src/lib/api.ts → Convex React hooks
+└── Next.js /api Route Handlers
+    ├── ConvexHttpClient → Convex
+    └── 邮件、Turnstile、PDF、ZIP、XLSX
 
-### 1.2 统计展示
-- **功能**: 展示项目关键指标
-- **内容**:
-  - 成员数量: 100+
-  - 学术成果: 200+
-  - 课程资源: 50+
-  - 学术奖项: 30+
-
-### 1.3 项目特色
-- **功能**: 介绍项目三大特色
-- **模块**:
-  1. 双校联合培养
-  2. 学术成果丰硕
-  3. 丰富学术活动
-
-### 1.4 最新动态
-- **功能**: 展示最新新闻
-- **组件**: 卡片列表, 每行3列
-- **内容**: 标题、分类、日期、摘要
-
----
-
-## 2. 导航栏模块
-
-### 2.1 顶部导航
-- **组件**: `src/components/layout/navbar.tsx`
-- **功能**:
-  - Logo 展示
-  - 菜单导航
-  - 搜索框
-  - 登录按钮
-- **响应式**:
-  - 桌面端: 完整菜单
-  - 移动端: 汉堡菜单
-
-### 2.2 菜单项
-| 名称 | 路径 | 权限 |
-|------|------|------|
-| 动态 | /news | 公开 |
-| 成员 | /members | 公开 |
-| 成果 | /publications | 公开 |
-| 资源 | /resources | 需登录 |
-| 活动 | /events | 公开 |
-| 关于 | /about | 公开 |
-
----
-
-## 3. 成员模块
-
-### 3.1 成员列表页
-- **路径**: `/members`
-- **功能**:
-  - 按学校/年级排序
-  - 按标签筛选
-  - 搜索功能
-- **排序规则**:
-  1. 学校 (北大→清华)
-  2. 年级 (新→旧)
-  3. 拼音排序
-- **卡片内容**:
-  - 头像
-  - 英文名
-  - 年级
-  - 研究兴趣标签
-
-### 3.2 成员主页
-- **路径**: `/users/[id]`
-- **功能**:
-  - 个人 Profile 展示
-  - Markdown Canvas
-  - 学术成果列表
-- **用户可编辑**:
-  - 个人简介
-  - 研究兴趣
-  - 学术链接
-
----
-
-## 4. 成果模块
-
-### 4.1 成果列表页
-- **路径**: `/publications`
-- **功能**:
-  - 搜索作者/题目
-  - 按领域筛选
-  - 按时间/名称排序
-- **模块划分**:
-  - Latest Works (最新)
-  - Archive (归档)
-- **列表字段**:
-  - 标题
-  - 作者 (加粗当前用户)
-  - 领域
-  - 会议/期刊
-  - 年份
-
-### 4.2 成果详情页
-- **路径**: `/publications/[id]`
-- **内容**:
-  - 标题
-  - 作者列表
-  - 领域/子领域
-  - 发表信息
-  - Abstract
-  - 链接
-
----
-
-## 5. 新闻模块
-
-### 5.1 新闻列表页
-- **路径**: `/news`
-- **功能**:
-  - 分类筛选
-  - 按发布者筛选
-  - 时间筛选
-  - 时间轴布局
-- **列表字段**:
-  - 标题
-  - 署名
-  - 分类
-  - 时间
-
-### 5.2 新闻详情页
-- **路径**: `/news/[id]`
-- **内容**:
-  - Markdown 渲染
-  - 作者信息
-  - 发布时间
-
-### 5.3 新闻管理 (Admin)
-- **路径**: `/admin/news`
-- **功能**:
-  - 创建新闻 (Markdown 编辑器)
-  - 编辑新闻
-  - 发布/撤回新闻
-
----
-
-## 6. 活动模块
-
-### 6.1 活动列表页
-- **路径**: `/events`
-- **功能**:
-  - 事件卡片展示
-  - 时间/地点信息
-- **卡片内容**:
-  - 活动名称
-  - 时间/时间段
-  - 地点
-
-### 6.2 日历视图
-- **组件**: React Big Calendar
-- **功能**:
-  - 月/周/日视图
-  - 点击显示详情
-  - 不同颜色区分活动类型
-
-### 6.3 活动详情页
-- **路径**: `/events/[id]`
-- **内容**:
-  - 活动名称
-  - 日期/时间
-  - 地点
-  - 描述 (Markdown)
-  - 外部链接
-
----
-
-## 7. 资源模块
-
-### 7.1 课程测评论坛
-- **路径**: `/resources`
-- **功能**:
-  - 课程列表
-  - 提交评测
-  - 查看评测
-
-#### 7.1.1 课程列表
-- **功能**:
-  - 课程名称搜索
-  - 按评分排序
-  - 按时间排序
-- **字段**:
-  - 课程名称
-  - 评测数量
-  - 平均评分
-
-#### 7.1.2 课程详情
-- **路径**: `/resources/courses/[name]`
-- **功能**:
-  - 所有评测列表
-  - 提交评测入口
-- **字段**:
-  - 评分 (0-10)
-  - 评测内容
-  - 学期
-
-#### 7.1.3 提交评测
-- **表单字段**:
-  - 课程名称 (必填)
-  - 开课学期 (必填)
-  - 评分 0-10 (必填)
-  - 详情 (可选)
-- **匿名机制**: 默认匿名
-
-#### 7.1.4 评测管理 (Admin)
-- **功能**:
-  - 审核待通过评测
-  - 修改评测
-  - 删除评测
-  - 合并课程名称
-
----
-
-## 8. 关于模块
-
-### 8.1 关于页面
-- **路径**: `/about`
-- **结构**:
-  - Introduction (项目介绍)
-  - Official Accounts (公众号)
-  - Campus Life (校园生活)
-  - Student Council (学生组织)
-  - Merchandise (周边产品)
-  - Contact (联系方式)
-- **特性**: 返回旧版网站按钮
-
----
-
-## 9. 认证模块
-
-### 9.1 登录页
-- **路径**: `/login`
-- **功能**:
-  - 邮箱/密码登录
-  - 注册入口
-  - 忘记密码
-
-### 9.2 注册页
-- **路径**: `/register`
-- **功能**:
-  - 组织选择 (北大/清华)
-  - 年级选择 (2020-2025)
-  - 学号输入
-  - 邮箱验证
-  - 密码设置
-
-### 9.3 用户设置
-- **路径**: `/settings`
-- **功能**:
-  - 个人信息编辑
-  - 密码修改
-  - 邮箱修改 (需验证)
-
----
-
-## 10. 管理后台
-
-### 10.1 Dashboard
-- **路径**: `/admin`
-- **功能**:
-  - 数据概览
-  - 快捷操作
-
-### 10.2 用户管理
-- **路径**: `/admin/users`
-- **功能**:
-  - 用户列表
-  - 新建用户
-  - 修改角色
-  - 删除用户
-
-### 10.3 内容管理
-- **路径**: `/admin/news`, `/admin/events`
-- **功能**:
-  - 内容 CRUD
-
----
-
-## Pipes (数据流)
-
-### 公开数据流
-```
-Convex DB → API → Next.js Page → User
+Convex
+├── schema 与业务函数
+├── authSessions / techDaySessions / reviewerSessions
+└── R2 签名上传与 Convex Storage（按业务策略使用）
 ```
 
-### 用户数据流
+## 路由模块
+
+| 模块 | 主要路由 | 访问范围 |
+|---|---|---|
+| 公开门户 | `/`、`/about`、`/news`、`/members`、`/publications`、`/resources` | 公开 |
+| 主站账号 | `/login`、`/settings`、`/my-publications` | 主站成员 |
+| 课程与活动 | `/courses`、`/events` | 主站成员 |
+| 通班内网 | `/intranet/*` | 主站成员 |
+| 管理后台 | `/admin/*` | admin / super_admin，部分子系统有附加角色 |
+| TechDay | `/techday/*` | 公开浏览、主站成员或 TechDay-only 账号 |
+| Reviewer | `/reviewer/*` | 独立 Reviewer 账号 |
+| 服务端 API | `/api/*` | 按端点验证主站 token 或 Reviewer Cookie |
+
+## 身份边界
+
+### 主站身份
+
+- 登录入口：`src/app/login/page.tsx`
+- 客户端状态：`src/lib/hooks/use-auth.ts`
+- 会话表：`authSessions`
+- 会话 token 存储键：`tongclass_session_token`
+- 受保护页面通过 `MemberOnlyGuard` 或管理后台 Layout 控制展示。
+
+### TechDay 身份
+
+- 支持主站会话映射和独立 TechDay 会话。
+- 客户端参数由 `useTechDayActorArgs()` 统一读取。
+- 服务端权限核心位于 `convex/techday/lib.ts`。
+- 角色包括 author、volunteer、reviewer 和 admin。
+
+### Reviewer 身份
+
+- 与 TechDay reviewer 不同，是学术交流报销审核的独立账号域。
+- Next.js API 将 Reviewer session 写入 HttpOnly Cookie。
+- 页面只通过 `/api/reviewer/*` 获取审核数据和下载文件。
+
+## 数据访问约定
+
+- React 页面和组件统一从 `src/lib/api.ts` 引入 Hook。
+- 不在组件内直接使用 `convex/react` 或 `convex/_generated/api`。
+- Next.js Route Handler 使用 `src/lib/server/convex-http.ts`。
+- `src/lib/hooks/use-news.ts` 等文件属于遗留兼容层，不用于新代码。
+- `convex/_generated/` 不提交，由 `npx convex codegen` 或 `npm run build` 生成。
+
+## 业务域与数据表
+
+| 业务域 | 关键表 |
+|---|---|
+| 用户与认证 | `users`、`authCredentials`、`authSessions`、`emailVerifications` |
+| 内容 | `news`、`events`、`publications`、`publicationVenues` |
+| 课程评价 | `courses`、`courseReviews`、`reviewTags`、`contentVotes` |
+| 先导课资源 | `tongInitCourseResources` |
+| 内网 | `treeholePosts`、`treeholeReplies`、`feedbackEntries` |
+| OA 与报销 | `oaForms`、`oaFormSubmissions`、`studentFormProfiles`、`academicExchangeSupportApplications`、`reimbursementMaterialTables` |
+| Reviewer | `reviewerAccounts`、`reviewerSessions`、`reviewerAuditLogs` |
+| TechDay | `techDayUsers`、`techDaySubmissions`、`techDayReimbursements`、`techDayAwards`、`techDayPosts` 等 |
+| 挑战赛 | `cc2026Store` |
+
+## 文件上传与导出
+
+通用上传链路由各业务选择 R2 预签名 PUT URL 或 Convex Storage POST URL，浏览器统一通过 `src/lib/file-upload.ts` 上传。
+
+先导课资源是严格 R2 流程，不会回退到 Convex Storage：
+
+1. admin / super_admin 在 `/admin/resources/tong-init-course` 选择白名单文件并填写展示信息。
+2. `adminBeginUpload` 创建带内容类型和下载文件名约束的 R2 预签名目标；浏览器直传 R2。
+3. `adminFinalizeUpload` 用 HEAD 核对 staging 对象的大小、MIME 和 ETag，再通过带源 ETag 条件的 CopyObject 复制到一个从未签发 PUT URL 的 final key；旧 PUT URL 无法覆盖 final 对象。
+4. final 对象校验通过后写入草稿快照；`adminPublish` 原子替换公开快照，归档只隐藏资源，不物理删除 R2 对象。
+5. 公开页面使用稳定的站内下载路由，点击时才生成短时 R2 签名地址并 `307` 跳转。
+
+`public/resources/tong-init-course/` 仅保留历史静态文件。幂等的后台初始化操作可将其登记为兼容资源。
+
+学术交流申请的 PDF 由 Next.js Node runtime 生成。模板和字体通过 `next.config.js` 的 `outputFileTracingIncludes` 显式加入 serverless/standalone 构建。
+
+## 关键目录
+
+```text
+src/app/                 路由、Layout、页面与 HTTP API
+src/components/ui/       UI 基础组件
+src/components/*/        OA、TechDay、Markdown、报销等领域组件
+src/lib/api.ts           前端 Convex 访问入口
+src/lib/server/          仅服务端工具
+src/types/               前端共享类型
+convex/schema.ts         数据模型
+convex/*.ts              主站业务函数
+convex/techday/          TechDay 业务函数
+public/resources/        历史静态课程资源（兼容回退）
+scripts/                 手动迁移与回归脚本
 ```
-User Input → Validation → Convex Mutation → DB → Real-time Update
-```
 
-### 审核数据流
-```
-User Submit → Pending Queue → Admin Review → Publish/Reject → User View
-```
+## 变更边界
 
----
-
-## 11. 补齐更新 (2026-02-21)
-
-### 11.1 首页轮播 Banner
-- **实现文件**: `src/app/page.tsx`
-- **新增能力**:
-  - 自动轮播与手动切换
-  - Banner 卡片含标题/摘要/跳转链接
-
-### 11.2 活动日历视图
-- **实现文件**: `src/app/events/page.tsx`
-- **新增能力**:
-  - 月历网格展示
-  - 不同活动类型颜色标识
-  - 点击色块跳转 `/events/[id]`
-
-### 11.3 高危操作确认
-- **通用组件**: `src/components/ui/confirm-dialog.tsx`
-- **接入页面**:
-  - `src/app/admin/users/page.tsx`
-  - `src/app/admin/news/page.tsx`
-  - `src/app/admin/events/page.tsx`
-  - `src/app/admin/reviews/page.tsx`
-
-### 11.4 认证体验补齐
-- **实现文件**:
-  - `src/lib/mock-auth.ts`
-  - `src/lib/hooks/use-auth.ts`
-  - `src/app/login/page.tsx`
-  - `src/app/register/page.tsx`
-  - `src/app/settings/page.tsx`
-  - `src/components/layout/navbar.tsx`
-- **新增能力**:
-  - 本地可用注册/登录/会话
-  - 登录后导航头像与菜单
-  - 资源页登录门禁
+- `convex/` 默认只读，后端变更需维护者明确授权。
+- 批量写入必须幂等，迁移脚本必须手动触发。
+- 不得把迁移或数据修复挂到 `dev`、`build`、`start` 生命周期。
+- 生产部署必须由用户明确指定，不能自行给 Convex 命令追加 `--prod`。
