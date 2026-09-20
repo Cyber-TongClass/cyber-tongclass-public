@@ -276,7 +276,12 @@ export function useCreateUser() {
 }
 
 export function useUpdateUser() {
-  return useMutation(api.users.update)
+  const update = useMutation(api.users.update)
+  return useCallback((args: any) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return update({ ...args, sessionToken } as any)
+  }, [update])
 }
 
 export function useUpdateUserRole() {
