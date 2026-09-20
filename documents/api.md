@@ -21,7 +21,7 @@ Contents
 
 Two common invocation patterns:
 
-- Client-to-Convex (browser): import the canonical typed wrappers from `src/lib/api.ts`. Those wrappers own the generated `api` and `convex/react` calls; pages and components should not call Convex directly.
+- Client-to-Convex (browser): use the generated `api` via `convex/react` hooks (`useQuery`, `useMutation`). See `src/lib/api.ts` for typed helpers.
 - Server-side (Next API routes): use the Convex HTTP client helper (`getConvexHttpClient()` in `src/lib/server/convex-http`) to call `api.*` from server code.
 
 ---
@@ -110,25 +110,6 @@ Note: type signatures in code are authoritative. This section summarizes common 
 - `seed` (mutation): create seed data (development)
 - `addCredentials` (mutation): helper to add initial credentials
 
-### Module: `tongInitCourseResources`
-
-- `listPublicManifest` (query)
-  - returns: published resource metadata plus `managedKeys`, used to merge database entries with the legacy static fallback without resurrecting archived resources.
-- `adminList` (query)
-  - args: `{ sessionToken? }`; admin / super_admin only.
-- `adminBeginUpload` (mutation)
-  - args: resource identity, display metadata, file name, MIME and size.
-  - behavior: validates the file allowlist, stores an expiring pending upload and returns an R2-only presigned PUT target. It fails closed when R2 is not configured.
-- `adminFinalizeUpload` (action)
-  - args: `{ sessionToken?, id, storageId }`.
-  - behavior: performs an R2 HEAD request, verifies the stored size and MIME, then conditionally copies the staging object to a new immutable final key using the verified source ETag before committing a draft snapshot.
-- `adminSaveDraftMetadata`, `adminPublish`, `adminSetArchived`, `adminDiscardDraft` (mutations)
-  - behavior: edit draft metadata, atomically replace the published snapshot, archive/restore without deleting R2 objects, or discard an unpublished draft.
-- `adminSeedLegacyResources` (mutation)
-  - behavior: idempotently registers lec0–lec3 and the existing exercise archive as published static compatibility entries.
-- `getDownloadTarget` (action)
-  - behavior: resolves a published static path or creates a short-lived signed URL for a private R2 object. The public browser flow normally calls it through the stable Next.js download route.
-
 ### TechDay modules
 
 TechDay is implemented as a Convex-native event platform under `convex/techday/*`. Client components should use the wrapper hooks in `src/lib/api.ts` and should not call generated Convex functions directly from pages.
@@ -166,28 +147,17 @@ TechDay is implemented as a Convex-native event platform under `convex/techday/*
 
 ## Next.js HTTP endpoints (server routes)
 
-The app exposes REST-like HTTP endpoints under `/api/*` for health checks, email verification, Reviewer sessions, and academic-exchange exports. These are server-only and call Convex through the server HTTP client when data access is required.
+The app exposes REST-like HTTP endpoints under `/api/*` used for email verification and password reset flows. These are server-only and call Convex via the server HTTP client.
 
-JSON endpoints accept and return JSON. PDF and batch-export endpoints return binary download responses on success and JSON errors on failure.
-
-### GET /api/health
-- Purpose: container and reverse-proxy health check.
-- Response: `{ ok: true, service: "tongclass-website", timestamp }` with `cache-control: no-store`.
-
-### GET /api/resources/tong-init-course/[id]/download
-
-- Purpose: stable public download entry for one published introductory-course resource.
-- Behavior: asks Convex for the current published snapshot, then returns a no-store `307` redirect to either the legacy static path or a click-time, short-lived R2 signed URL.
-- Responses: `307` on success, `404` for missing/unpublished/archived ids, `503` when the storage target cannot be resolved.
+All routes accept and return JSON.
 
 ### POST /api/request-verification
-- Purpose: request an email-verification message.
-- Current UI status: public registration is disabled, so this endpoint is retained for the existing verification implementation but is not linked from the active registration page.
+- Purpose: request a verification email (email verification or password reset)
 - Request body:
 
   {
     "email": "user@domain",
-    "purpose": "email_verification",
+    "purpose": "email_verification" | "password_reset",
     "turnstileToken": "..." // optional, when required
   }
 
@@ -204,25 +174,41 @@ JSON endpoints accept and return JSON. PDF and batch-export endpoints return bin
   - If requires Turnstile: { ok: false, requiresTurnstile: true, message }
 
 ### POST /api/verify-token
-- Purpose: consume an email-verification token or code.
+- Purpose: consume a token or a code (used by verify-email and reset-password pages)
 - Request body:
 
   {
-    "purpose": "email_verification",
+    "purpose": "email_verification" | "password_reset",
     "token": "<token-from-link>",    // optional
     "code": "123456",               // optional
     "email": "user@domain"          // required when verifying by code
   }
 
 - Behavior:
-  - Calls `emailVerifications.consume` with the hashed token/code.
-  - Marks an existing user's email as verified and returns a signed email proof when needed by the legacy registration client.
+  - Calls `emailVerifications.consume` with hashed token/code
+  - For `email_verification`: marks user email verified (if user exists) and returns a signed email proof
+  - For `password_reset`: returns a signed password-reset proof containing `userId` and `email`
 
 - Responses:
   - success: { ok: true, message?, proof?, email? }
   - failure: { ok: false, message } (HTTP 400 for invalid/expired/used)
 
-> Password-reset helpers and the `password_reset` Convex verification purpose still exist internally, but the current repository has no `/reset-password` page or `/api/reset-password` route. The active `/forgot-password` page directs members to an administrator. Do not document or expose the dormant reset flow as a supported endpoint until both pieces are implemented and reviewed.
+### POST /api/reset-password
+- Purpose: finish password reset using a signed proof
+- Request body:
+
+  {
+    "proof": "<signed-reset-proof>",
+    "newPassword": "..."
+  }
+
+- Behavior:
+  - Verifies the proof using server-side HMAC + `EMAIL_SIGNING_KEY`
+  - If valid, runs `users.updatePasswordByUserId` to set the new password
+
+- Responses:
+  - success: { ok: true, message: "Password updated successfully." }
+  - failure: { ok: false, message }
 
 ### POST /api/complete-email-verification
 - Purpose: attach email verification proof to a newly created user (used in registration flow)
@@ -238,26 +224,6 @@ JSON endpoints accept and return JSON. PDF and batch-export endpoints return bin
 
 - Responses: { ok: true } or { ok: false, message }
 
-### Reviewer session and academic-exchange routes
-
-Reviewer routes use a dedicated HttpOnly session cookie and do not accept the main-site or TechDay session as a substitute.
-
-| Method | Route | Success response |
-|---|---|---|
-| `POST` | `/api/reviewer/login` | Creates the Reviewer cookie and returns account data as JSON |
-| `POST` | `/api/reviewer/logout` | Clears the Reviewer cookie |
-| `GET` | `/api/reviewer/me` | Current Reviewer account as JSON |
-| `GET` | `/api/reviewer/academic-exchange` | Authorized application list as JSON |
-| `GET` | `/api/reviewer/academic-exchange/[id]` | One authorized application as JSON |
-| `POST` | `/api/reviewer/academic-exchange/[id]/pdf` | Generated application PDF |
-| `POST` | `/api/reviewer/academic-exchange/export` | ZIP containing an XLSX summary and selected PDFs |
-
-### Member academic-exchange export
-
-- `POST /api/intranet/academic-exchange/[id]/pdf`
-- Accepts the main-site `sessionToken` in the JSON body.
-- Returns the authenticated member's generated application PDF, or a JSON error.
-
 ---
 
 ## Client helper hooks (src/lib/api.ts)
@@ -267,11 +233,11 @@ The project exposes convenience React hooks around Convex `api` calls. These wra
 Key hooks (examples):
 
 - Authentication
-  - `useAuth()` from `src/lib/hooks/use-auth.ts` → resolves the current main-site user from the stored session and exposes login/logout helpers.
-  - `useTongClassSessionToken()` → subscribes to the stored `tongclass_session_token` for API wrappers.
   - `useCurrentUser()` → returns `useQuery(api.auth.currentUser)`
+  - `useCurrentUserBySession()` → returns the authenticated user for the stored `tongclass_session_token`
+  - `useSignUp()` → returns a callback that calls `api.users.create` (sign up)
   - `useSignIn()` → calls `api.users.simpleLogin` and returns `{ success, userId, email, role, sessionToken }`
-  - `useSignUp()` remains for the legacy registration client; public registration is disabled.
+  - `useSimpleLogin()` → raw mutation for development login
 
 - Users
   - `useUsers({ organization?, cohort?, skip?, limit? })` → `api.users.list`
@@ -282,19 +248,15 @@ Key hooks (examples):
 - News / Events / Publications / Courses / CourseReviews
   - Hooks mapped to the module functions: `useNews`, `useCreateNews`, `useEvents`, `usePublications`, `useCourses`, `useCourseReviews`, etc.
 
-- ToNG introductory-course resources
-  - `useTongInitCourseResources()` reads the public manifest.
-  - `useAdminTongInitCourseResources()` and the begin/finalize/save/publish/archive/discard/seed hooks automatically attach the main-site session token and are restricted server-side to admin / super_admin.
-
 - TechDay
-  - `useTechDayCurrentPrincipal()`, `useSyncInternalTechDayUser()`, `useTechDayLogin()`, `useTechDayLogout()`
-  - `useTechDayPublicSubmissions()`, `useTechDaySubmissionById()`, `useMyTechDaySubmissions()`, `useCreateTechDaySubmission()`, `useUpdateTechDaySubmission()`
-  - `useAdminTechDaySubmissions()`, `useAdminUpdateTechDaySubmission()`, `useExportTechDaySubmissions()`
-  - `useTechDayReimbursements()`, `useReviewTechDayReimbursement()`
+  - `useTechDayCurrent()`, `useSyncTechDayInternalUser()`, `useTechDayLogin()`, `useTechDayLogout()`
+  - `useTechDayPublicSubmissions()`, `useTechDaySubmission()`, `useTechDayMySubmissions()`, `useCreateTechDaySubmission()`, `useUpdateTechDaySubmission()`
+  - `useTechDayManageSubmissions()`, `useTechDayUpdateManagedSubmission()`, `useExportTechDaySubmissions()`
+  - `useTechDayReimbursements()`, `useTechDayManageReimbursements()`, `useReviewTechDayReimbursement()`
   - `useTechDayAwards()`, `useTechDayAwardSubmissions()`, `useAssignTechDayAwards()`
-  - `useTechDayPosts()`, `useTechDayPostBySlug()`, `useManageTechDayPosts()`
+  - `useTechDayPublishedPosts()`, `useTechDayPostBySlug()`, `useManageTechDayPosts()`
   - `useTechDayOrganizations()`, `useTechDayDirections()`, `useTechDaySettings()`, `useUpdateTechDaySettings()`
-  - `useAdminTechDayUsers()`, `useUpdateTechDayUser()`, `useTechDayReviewerInvites()`
+  - `useTechDayUsers()`, `useUpdateTechDayUser()`, `useTechDayReviewerInvites()`
 
 - Intranet
   - Treehole and feedback hooks automatically attach the stored `tongclass_session_token`.
@@ -302,11 +264,15 @@ Key hooks (examples):
   - TechDay-only sessions are not accepted by intranet functions.
 
 - Verification helpers
-  - The legacy verification client calls `/api/request-verification`, `/api/verify-token`, and `/api/complete-email-verification` directly via `fetch`.
+  - The frontend calls the Next API routes above (`/api/request-verification`, `/api/verify-token`, `/api/reset-password`, `/api/complete-email-verification`) directly via `fetch`.
 
 Examples
 
 ```ts
+// Sign up (using helper)
+const signUp = useSignUp()
+await signUp({ email, username, englishName, organization: 'pku', cohort: 2024, studentId, password })
+
 // Query users
 const users = useUsers({ organization: 'pku', cohort: 2024 })
 
@@ -316,17 +282,18 @@ await fetch('/api/request-verification', { method: 'POST', body: JSON.stringify(
 
 ---
 
-## Email verification flow (implementation notes)
+## Email verification & password reset flow (implementation notes)
 
 - Tokens & codes:
   - The system generates a long random token (`generateVerificationToken`) and a 6-digit numeric code (`generateVerificationCode`). Only hashes (SHA-256 hex) are stored in the database (`emailVerifications.tokenHash` / `codeHash`).
 - Proofs:
-  - After consuming a token, the server may return a signed HMAC-SHA256 proof for email verification.
+  - After consuming a token, the server may return a signed proof (HMAC-SHA256) for email verification and password reset.
   - Proofs are created with `EMAIL_SIGNING_KEY` and include an expiration timestamp.
-  - Dormant password-reset proof helpers remain in `src/lib/server/verification.ts`, but no supported reset route currently consumes them.
+  - Verification functions: `signEmailVerificationProof`, `signPasswordResetProof`, and verification `verifyEmailVerificationProof`, `verifyPasswordResetProof` in `src/lib/server/verification.ts`.
 - Next API route responsibilities:
   - `/api/request-verification`: throttle/cooldown checks (email & IP), optional Turnstile verification, email sending via server mailer.
   - `/api/verify-token`: consume token/code and return signed proofs or mark user email verified.
+  - `/api/reset-password`: verify proof and update password.
   - `/api/complete-email-verification`: attach proof to newly created account (registration flow).
 
 ---
@@ -339,32 +306,10 @@ await fetch('/api/request-verification', { method: 'POST', body: JSON.stringify(
 - Mailer (used by `src/lib/server/mailer`):
   - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — SMTP transport configuration.
   - `SMTP_FORCE_AUTH_FROM` — when true, forces envelope From to the authenticated user (useful for providers that require it).
-  - `MAILTRAP_API_TOKEN`, `MAILTRAP_SENDER_EMAIL`, `MAILTRAP_SENDER_NAME` — optional Mailtrap API transport; SMTP remains the fallback.
-- Turnstile (optional): `TURNSTILE_SECRET`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` — used to verify human interaction when rate limiting triggers.
-- Token expiry override: `EMAIL_VERIFY_EXPIRY_MIN` (email verification default minutes).
-- Cloudflare R2 (set in the Convex deployment environment, not as browser-visible secrets):
-  - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` — required by the introductory-course resource service.
-  - `R2_ENDPOINT` — optional S3-compatible endpoint override; `R2_SIGNED_URL_TTL_SECONDS` controls the default download signature lifetime.
-  - The private bucket CORS policy must allow the website origins to issue `PUT` with both `Content-Type` and `Content-Disposition`. `ETag` exposure is useful for diagnostics but not required by the current browser client. Keep production and local-development origins explicit.
-
-Example R2 CORS policy (replace the origins with the actual deployment and local-development origins):
-
-```json
-[
-  {
-    "AllowedOrigins": [
-      "https://tongclass.ac.cn",
-      "http://localhost:3000"
-    ],
-    "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["Content-Type", "Content-Disposition"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
-```
-
-CopyObject finalization is executed inside Convex with R2 credentials and is not a browser CORS operation.
+- Turnstile (optional): `TURNSTILE_SECRET`, `TURNSTILE_SITEKEY` — used to verify human interaction when rate limiting triggers.
+- Token expiry overrides:
+  - `EMAIL_TOKEN_EXPIRY_MIN` (password reset default minutes)
+  - `EMAIL_VERIFY_EXPIRY_MIN` (email verification default minutes)
 
 ---
 
@@ -378,7 +323,7 @@ CopyObject finalization is executed inside Convex with R2 credentials and is not
 
 ## Extending APIs
 
-- After explicit backend-maintainer authorization, add a Convex function in `convex/*.ts` and run `npx convex codegen` (or the project's build) to regenerate `convex/_generated/api`.
+- Add a Convex function in `convex/*.ts` and run `npx convex codegen` (or the project's build) to regenerate `convex/_generated/api`.
 - Add client helpers in `src/lib/api.ts` to expose typed hooks for new functions.
 
 End of document.

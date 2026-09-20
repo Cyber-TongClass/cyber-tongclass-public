@@ -32,7 +32,7 @@ async function sendViaMailtrapApi(opts: {
     const token = process.env.MAILTRAP_API_TOKEN
     if (!token) throw new Error("MAILTRAP_API_TOKEN not configured")
 
-    // Load the API client only when Mailtrap is configured.
+    // dynamic import so package is optional
     const mod = await import("mailtrap").catch((err) => {
         throw new Error("mailtrap package not available: " + String(err))
     })

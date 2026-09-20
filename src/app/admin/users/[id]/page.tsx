@@ -216,6 +216,7 @@ export default function UserFormPage() {
 
       if (isSuperAdmin && formData.password.trim()) {
         await resetPasswordAsSuperAdmin({
+          requesterId: currentUser?._id as any,
           targetUserId: userId as any,
           newPassword: formData.password,
         })
