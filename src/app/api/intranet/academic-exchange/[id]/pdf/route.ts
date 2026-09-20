@@ -1,3 +1,4 @@
+import { isUndergraduate, UNDERGRADUATE_ONLY_MESSAGE } from "@/lib/undergraduate-access"
 import { NextRequest, NextResponse } from "next/server"
 import { makeFunctionReference } from "convex/server"
 import { getConvexHttpClient } from "@/lib/server/convex-http"
@@ -23,6 +24,10 @@ export async function POST(
     }
 
     const client = getConvexHttpClient()
+    const user = await client.query(makeFunctionReference<"query">("auth:currentUserBySession"), { sessionToken })
+    if (!isUndergraduate(user)) {
+      return NextResponse.json({ ok: false, message: UNDERGRADUATE_ONLY_MESSAGE }, { status: 403 })
+    }
     const application = await client.query(getApplicationRef, {
       sessionToken,
       id: params.id as any,

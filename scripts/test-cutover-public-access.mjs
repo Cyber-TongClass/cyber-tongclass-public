@@ -8,7 +8,7 @@ const search = fs.readFileSync("src/app/search/page.tsx", "utf8")
 const courses = fs.readFileSync("src/components/courses/course-directory-page.tsx", "utf8")
 
 assert.match(api, /users:listPublicTongClassMembers/)
-assert.match(api, /users:getPublicTongClassMemberBySlug/)
+assert.match(api, /export function useUserByProfileSlug[\s\S]*useUsers\(\{ classMembersOnly: true, limit: 10000 \}\)/)
 assert.match(api, /users:listTongClassDirectoryMembers/)
 assert.match(api, /export function useAdminUsers[\s\S]*api\.users\.list[\s\S]*sessionToken/)
 assert.match(api, /export function useUsersCount[\s\S]*useUsers\(\{ \.\.\.args, limit: 1000 \}\)/)

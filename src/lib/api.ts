@@ -7,6 +7,7 @@ import { makeFunctionReference } from "convex/server"
 import { api } from "../../convex/_generated/api"
 import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
+import { restrictToUndergraduate, isUndergraduate } from "@/lib/undergraduate-access"
 import { toOAFormUpsertPayload } from "@/lib/oa-forms"
 import { parsePublicationAuthors, toPublicationAuthorInput } from "@/lib/publication-authors"
 import { useAuth } from "@/lib/hooks/use-auth"
@@ -44,7 +45,6 @@ const adminEventsRef = makeFunctionReference<"query">("events:adminList")
 const adminEventByIdRef = makeFunctionReference<"query">("events:adminGetById")
 const publicMembersRef = makeFunctionReference<"query">("users:listPublicTongClassMembers")
 const directoryMembersRef = makeFunctionReference<"query">("users:listTongClassDirectoryMembers")
-const publicMemberBySlugRef = makeFunctionReference<"query">("users:getPublicTongClassMemberBySlug")
 const academicExchangeProfileRef = makeFunctionReference<"query">("academicExchange:getStudentFormProfile")
 const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("academicExchange:upsertStudentFormProfile")
 const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
@@ -109,7 +109,7 @@ export function useTongClassSessionToken() {
   // Old cloud sessions are not migrated. Resolve identity before issuing
   // protected queries so an expired token cannot crash public pages.
   const account = useQuery(sessionAccountRef, token ? { sessionToken: token } : "skip")
-  return account ? token : ""
+  return isUndergraduate(account) ? token : ""
 }
 
 function getTechDayActorSnapshot() {
@@ -202,7 +202,7 @@ type SignInInput = {
 }
 
 export function useSignIn() {
-  const login = useMutation(api.users.simpleLogin)
+  const login = useSimpleLogin()
 
   return useCallback(
     async (input: SignInInput) => {
@@ -232,6 +232,7 @@ export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortV
     const { skip, classMembersOnly: _classMembersOnly, ...rest } = args || {}
     return {
       ...rest,
+      identityType: "undergrad",
       ...(typeof skip === "number" ? { skip } : {}),
       sessionToken: sessionToken || undefined,
     }
@@ -253,9 +254,9 @@ export function useAdminUsers(args?: { organization?: "pku" | "thu"; cohort?: Co
   const sessionToken = useTongClassSessionToken()
   const result = useQuery(
     api.users.list,
-    sessionToken ? ({ ...(args || {}), sessionToken } as any) : "skip",
+    sessionToken ? ({ ...(args || {}), identityType: "undergrad", sessionToken } as any) : "skip",
   ) as any
-  return useMemo(() => result?.map(withAccountId), [result])
+  return useMemo(() => result?.filter(isUndergraduate).map(withAccountId), [result])
 }
 
 export function useUserById(id?: string | null) {
@@ -264,11 +265,14 @@ export function useUserById(id?: string | null) {
     api.users.getById,
     id && sessionToken ? ({ id: id as any, sessionToken } as any) : "skip"
   )
-  return result ? withAccountId(result as any) : result
+  return restrictToUndergraduate(result ? withAccountId(result as any) : result)
 }
 
 export function useUserByProfileSlug(slug?: string | null) {
-  return useQuery(publicMemberBySlugRef, slug ? { slug } : "skip") as any
+  const members = useUsers({ classMembersOnly: true, limit: 10000 })
+  if (!slug) return null
+  if (members === undefined) return undefined
+  return members.find((member: any) => member.username?.toLowerCase() === slug.trim().toLowerCase()) || null
 }
 
 export function useCreateUser() {
@@ -326,7 +330,16 @@ export function useDeleteUser() {
 }
 
 export function useSimpleLogin() {
-  return useMutation(api.users.simpleLogin)
+  return useCallback(async (args: { studentId: string; password: string }) => {
+    const response = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(args),
+    })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result?.message || "登录失败")
+    return result
+  }, [])
 }
 
 export function useUsersCount(args?: { organization?: "pku" | "thu"; classMembersOnly?: boolean }) {
