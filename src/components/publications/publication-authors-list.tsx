@@ -3,25 +3,32 @@
 import Link from "next/link"
 import { Mail } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useUsers } from "@/lib/api"
+import { undergraduateAuthorHref, type WebsiteAuthorDetail } from "@/lib/undergraduate-author"
 import { parsePublicationAuthor } from "@/lib/publication-authors"
 
 type PublicationAuthorsListProps = {
   authors: string[]
+  authorDetails?: WebsiteAuthorDetail[]
   emphasizedUserId?: string
   className?: string
 }
 
-export function PublicationAuthorsList({ authors, emphasizedUserId, className }: PublicationAuthorsListProps) {
+export function PublicationAuthorsList({ authors, authorDetails, emphasizedUserId, className }: PublicationAuthorsListProps) {
+  const members = useUsers({ classMembersOnly: true, limit: 10000 })
   return (
     <span className={className}>
       {authors.map((rawAuthor, index) => {
-        const author = parsePublicationAuthor(rawAuthor)
-        const isEmphasized = emphasizedUserId && author.userId && String(author.userId) === String(emphasizedUserId)
+        const legacyAuthor = parsePublicationAuthor(rawAuthor)
+        const detail = authorDetails?.[index]
+        const author = { ...legacyAuthor, ...detail }
+        const href = undergraduateAuthorHref(detail, legacyAuthor, members)
+        const isEmphasized = href && emphasizedUserId && author.userId && String(author.userId) === String(emphasizedUserId)
         const content = (
           <>
             <span
               className={cn(
-                author.isTongClass && author.userId && "underline underline-offset-2 decoration-primary/60",
+                href && "underline underline-offset-2 decoration-primary/60",
                 isEmphasized && "font-extrabold text-slate-700"
               )}
             >
@@ -38,8 +45,8 @@ export function PublicationAuthorsList({ authors, emphasizedUserId, className }:
 
         return (
           <span key={`${rawAuthor}-${index}`}>
-            {author.isTongClass && author.userId ? (
-              <Link href={`/members/${author.username || author.userId}`} className="text-slate-900 hover:text-primary">
+            {href ? (
+              <Link href={href} className="text-slate-900 hover:text-primary">
                 {content}
               </Link>
             ) : (

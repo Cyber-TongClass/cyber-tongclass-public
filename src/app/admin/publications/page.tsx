@@ -307,7 +307,7 @@ export default function AdminPublicationsPage() {
                   <TableRow key={publication._id}>
                     <TableCell className="font-medium max-w-[300px] truncate">{publication.title}</TableCell>
                     <TableCell className="max-w-[220px] text-gray-600">
-                      <PublicationAuthorsList authors={publication.authors} />
+                      <PublicationAuthorsList authors={publication.authors} authorDetails={publication.authorDetails} />
                     </TableCell>
                     <TableCell>
                       <Badge className="bg-slate-100 text-slate-800">

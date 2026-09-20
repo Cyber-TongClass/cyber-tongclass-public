@@ -180,7 +180,7 @@ export default function MyPublicationsPage() {
                       <TableRow key={publication._id}>
                         <TableCell className="font-medium max-w-[320px] truncate">{publication.title}</TableCell>
                         <TableCell className="max-w-[260px] text-gray-600">
-                          <PublicationAuthorsList authors={publication.authors} />
+                          <PublicationAuthorsList authors={publication.authors} authorDetails={publication.authorDetails} />
                         </TableCell>
                         <TableCell>
                           <span className="text-xs font-bold uppercase tracking-wider text-[hsl(211,60%,35%)]">

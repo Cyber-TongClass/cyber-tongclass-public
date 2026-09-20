@@ -1,11 +1,12 @@
 "use client"
 
 import { useCallback, useMemo, useSyncExternalStore } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useQuery, useMutation, useConvex } from "convex/react"
 import { makeFunctionReference } from "convex/server"
 import { api } from "../../convex/_generated/api"
 import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
+import { restrictToUndergraduate, isUndergraduate, verifyUndergraduateLogin } from "@/lib/undergraduate-access"
 import { toOAFormUpsertPayload } from "@/lib/oa-forms"
 
 type IdLike =
@@ -37,9 +38,8 @@ const toIdArg = (input: IdLike) => {
 
 const techdayApi = api as any
 const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
-const currentUserRoleRef = makeFunctionReference<"query">("auth:currentUserRole")
-const isAdminRef = makeFunctionReference<"query">("auth:isAdmin")
-const isSuperAdminRef = makeFunctionReference<"query">("auth:isSuperAdmin")
+const currentUserBySessionRef = makeFunctionReference<"query">("auth:currentUserBySession")
+const publicMembersRef = makeFunctionReference<"query">("users:listPublicTongClassMembers")
 const academicExchangeProfileRef = makeFunctionReference<"query">("academicExchange:getStudentFormProfile")
 const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("academicExchange:upsertStudentFormProfile")
 const listAcademicExchangeApplicationsRef = makeFunctionReference<"query">("academicExchange:listApplications")
@@ -96,7 +96,9 @@ export function getTongClassStoredSessionToken() {
 }
 
 export function useTongClassSessionToken() {
-  return useSyncExternalStore(subscribeTechDayActorArgs, () => getTongClassStoredSessionToken() || "", () => "")
+  const token = useSyncExternalStore(subscribeTechDayActorArgs, () => getTongClassStoredSessionToken() || "", () => "")
+  const user = useQuery(currentUserBySessionRef, token ? { sessionToken: token } : "skip")
+  return isUndergraduate(user) ? token : ""
 }
 
 function getTechDayActorSnapshot() {
@@ -140,19 +142,20 @@ export function useTechDayActorArgs() {
 // ==================== 认证相关 ====================
 
 export function useCurrentUser() {
-  return useQuery(currentUserRef)
+  return restrictToUndergraduate(useQuery(currentUserRef))
 }
 
 export function useCurrentUserRole() {
-  return useQuery(currentUserRoleRef)
+  return useCurrentUser()?.role ?? null
 }
 
 export function useIsAdmin() {
-  return useQuery(isAdminRef)
+  const user = useCurrentUser()
+  return user?.role === "admin" || user?.role === "super_admin"
 }
 
 export function useIsSuperAdmin() {
-  return useQuery(isSuperAdminRef)
+  return useCurrentUser()?.role === "super_admin"
 }
 
 type SignUpInput = {
@@ -214,7 +217,7 @@ type SignInInput = {
 }
 
 export function useSignIn() {
-  const login = useMutation(api.users.simpleLogin)
+  const login = useSimpleLogin()
 
   return useCallback(
     async (input: SignInInput) => {
@@ -239,20 +242,19 @@ export function useSignIn() {
 // ==================== 用户相关 ====================
 
 export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number | boolean; limit?: number; classMembersOnly?: boolean }) {
-  const queryArgs = useMemo(() => {
-    if (!args) return {}
-    const { skip, ...rest } = args
-    return {
-      ...rest,
-      ...(typeof skip === "number" ? { skip } : {}),
-    }
-  }, [args])
-
-  return useQuery(api.users.list, args?.skip === true ? "skip" : queryArgs)
+  const sessionToken = useTongClassSessionToken()
+  const publicOnly = args?.classMembersOnly === true
+  const { skip, classMembersOnly: _classMembersOnly, ...rest } = args || {}
+  const queryArgs = { ...rest, identityType: "undergrad", ...(typeof skip === "number" ? { skip } : {}) }
+  const publicUsers = useQuery(publicMembersRef, publicOnly && skip !== true ? queryArgs : "skip")
+  const accounts = useQuery(api.users.list, !publicOnly && sessionToken && skip !== true ? { ...queryArgs, sessionToken } as any : "skip")
+  return useMemo(() => publicOnly ? publicUsers : accounts?.filter(isUndergraduate), [publicOnly, publicUsers, accounts])
 }
 
 export function useUserById(id?: string | null) {
-  return useQuery(api.users.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  const user = useQuery(api.users.getById, id && sessionToken ? ({ id: id as any, sessionToken } as any) : "skip")
+  return restrictToUndergraduate(user)
 }
 
 export function useUserByProfileSlug(slug?: string | null) {
@@ -295,11 +297,17 @@ export function useDeleteUser() {
 }
 
 export function useSimpleLogin() {
-  return useMutation(api.users.simpleLogin)
+  const login = useMutation(api.users.simpleLogin)
+  const client = useConvex()
+  return useCallback(async (args: { studentId: string; password: string }) => {
+    const result = await login(args)
+    return verifyUndergraduateLogin(result, (sessionToken) => client.query(currentUserBySessionRef, { sessionToken }))
+  }, [login, client])
 }
 
 export function useUsersCount(args?: { organization?: "pku" | "thu"; classMembersOnly?: boolean }) {
-  return useQuery(api.users.count, args || {})
+  const users = useUsers({ ...args, limit: 10000 })
+  return users?.length
 }
 
 // ==================== 新闻相关 ====================

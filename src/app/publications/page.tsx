@@ -243,7 +243,7 @@ export default function PublicationsPage() {
                             </Link>
 
                             <p className="text-sm text-slate-500">
-                              <PublicationAuthorsList authors={pub.authors} />
+                              <PublicationAuthorsList authors={pub.authors} authorDetails={pub.authorDetails} />
                             </p>
                           </div>
 

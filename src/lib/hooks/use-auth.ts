@@ -1,16 +1,17 @@
 "use client"
 
-import { useCallback, useMemo, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery, useMutation } from "convex/react"
 import { makeFunctionReference } from "convex/server"
+import { useSimpleLogin } from "@/lib/api"
+import { isUndergraduate, restrictToUndergraduate } from "@/lib/undergraduate-access"
 import type { UserRole } from "@/types"
 
 const TONGCLASS_SESSION_TOKEN_KEY = "tongclass_session_token"
 const TONGCLASS_AUTH_STORAGE_EVENT = "tongclass-auth-storage"
 const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
 const currentUserBySessionRef = makeFunctionReference<"query">("auth:currentUserBySession")
-const simpleLoginRef = makeFunctionReference<"mutation">("users:simpleLogin")
 const signOutRef = makeFunctionReference<"mutation">("auth:signOut")
 
 function readStoredSessionToken() {
@@ -52,10 +53,19 @@ export function useAuth() {
   // Prefer the explicit local session token when present; it represents the account
   // the user selected through this app's login flow.
   const isUserQueryPending = storedSessionToken !== null && tokenUser === undefined
-  const currentUser = storedSessionToken
+  const rawCurrentUser = storedSessionToken
     ? (!isUserQueryPending ? tokenUser || null : null)
     : sessionUser || null
   
+  const currentUser = restrictToUndergraduate(rawCurrentUser)
+  useEffect(() => {
+    if (!storedSessionToken || tokenUser === undefined || isUndergraduate(tokenUser)) return
+    localStorage.removeItem(TONGCLASS_SESSION_TOKEN_KEY)
+    localStorage.removeItem("tongclass_user_email")
+    localStorage.removeItem("tongclass_user_id")
+    notifyStoredSessionTokenChanged()
+  }, [storedSessionToken, tokenUser])
+
   // Get user role
   const currentRole = currentUser?.role ?? null
   
@@ -63,7 +73,7 @@ export function useAuth() {
   const isLoading = (sessionUser === undefined && !storedSessionToken) || isUserQueryPending
 
   // Login mutation
-  const loginMutation = useMutation(simpleLoginRef)
+  const loginMutation = useSimpleLogin()
   const signOutMutation = useMutation(signOutRef)
 
   const login = useCallback(async (identifier: string, password: string) => {

@@ -49,6 +49,7 @@ export interface User {
 
 // Publication types
 export interface Publication {
+  authorDetails?: import("@/lib/undergraduate-author").WebsiteAuthorDetail[]
   _id: string
   title: string
   authors: string[]
