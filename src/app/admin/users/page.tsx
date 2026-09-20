@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { MemberVisibilityToggle } from "@/components/admin/member-visibility-toggle"
 import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye } from "lucide-react"
@@ -89,7 +90,7 @@ export default function UsersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900">用户管理</h1>
-          <p className="text-gray-500 mt-1">管理系统用户账号和权限</p>
+          <p className="text-gray-500 mt-1">管理系统用户账号和权限。关闭成员页展示不会停用账号。</p>
         </div>
         <Button asChild className="bg-blue-900 hover:bg-blue-800">
           <Link href="/admin/users/new">
@@ -140,6 +141,7 @@ export default function UsersPage() {
                 <TableHead>组织</TableHead>
                 <TableHead>年级</TableHead>
                 <TableHead>角色</TableHead>
+                <TableHead>成员页展示</TableHead>
                 <TableHead>注册时间</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -157,6 +159,13 @@ export default function UsersPage() {
                   <TableCell>{getCohortLabel(user.cohort)}</TableCell>
                   <TableCell>
                     <Badge className={roleColors[user.role]}>{roleLabels[user.role]}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <MemberVisibilityToggle
+                      userId={user._id}
+                      name={user.chineseName || user.englishName || user.username}
+                      enabled={user.isClassMember === true}
+                    />
                   </TableCell>
                   <TableCell className="text-gray-500">{new Date(user.createdAt).toLocaleDateString("zh-CN")}</TableCell>
                   <TableCell className="text-right">
