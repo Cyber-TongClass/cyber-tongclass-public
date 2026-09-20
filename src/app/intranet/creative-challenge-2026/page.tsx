@@ -151,7 +151,9 @@ export default function CreativeChallenge2026Page() {
   const stageDetails = challengeStageDetails[settings.stage]
   const canRegister = settings.stage === "registration"
   const canShowcase = settings.stage === "showcase" || settings.stage === "results"
-  const canVote = settings.stage === "showcase"
+  // AIA removed cc2026.vote; keep the showcase read-only until a replacement
+  // voting contract is deployed.
+  const canVote = false
   const daysLeft = useMemo(() => daysUntilSubmitDeadline(), [])
   const localPublishedProjects = useMemo(() => {
     let published = publishedRegistrations.filter((item) => item.finalSubmittedAt)
@@ -700,7 +702,7 @@ export default function CreativeChallenge2026Page() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl">
                   <Sparkles className="h-5 w-5 text-primary" />
-                  作品展示与投票
+                  作品展示
                 </CardTitle>
               </CardHeader>
                <CardContent>
@@ -966,7 +968,7 @@ export default function CreativeChallenge2026Page() {
               </form>
               ) : (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm leading-7 text-slate-600">
-                  报名和最终提交已截止。当前阶段为“{stageDetails.label}”，请在作品展示区查看和投票。
+                  报名和最终提交已截止。当前阶段为“{stageDetails.label}”，请在作品展示区查看作品。
                 </div>
               )}
             </CardContent>

@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye, MapPin, Clock } from "lucide-react"
-import { useEvents, useDeleteEvent } from "@/lib/api"
+import { useAdminEvents, useDeleteEvent } from "@/lib/api"
 import type { Event } from "@/types"
 
 const colorToType: Record<string, string> = {
@@ -52,7 +52,7 @@ const statusColors: Record<string, string> = {
 export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
-  const eventsData = useEvents()
+  const eventsData = useAdminEvents()
   const deleteEventMutation = useDeleteEvent()
   const events: Event[] = useMemo(() => eventsData || [], [eventsData])
   const { confirm, ConfirmDialog } = useConfirmDialog()
@@ -169,7 +169,9 @@ export default function EventsPage() {
                     <TableCell>
                       <Badge className={statusColors.published}>{statusLabels.published}</Badge>
                     </TableCell>
-                    <TableCell className="text-gray-500">{new Date(event.createdAt).toLocaleDateString("zh-CN")}</TableCell>
+                    <TableCell className="text-gray-500">
+                      {event.createdAt ? new Date(event.createdAt).toLocaleDateString("zh-CN") : "-"}
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

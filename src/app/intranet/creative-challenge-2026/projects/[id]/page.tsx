@@ -80,7 +80,9 @@ export default function ProjectDetailPage() {
     }
   }, [cc2026MyVotes])
 
-  const canVote = settings.stage === "showcase"
+  // AIA removed cc2026.vote; keep project pages read-only until a replacement
+  // voting contract is deployed.
+  const canVote = false
   const demoKind = useMemo(() => classifyDemoUrl(project?.demoUrl), [project?.demoUrl])
   const embedUrl = useMemo(() => (project?.demoUrl ? getEmbeddableVideoUrl(project.demoUrl) : null), [project?.demoUrl])
   const hasVoted = project ? myVotes.includes(project.id) : false

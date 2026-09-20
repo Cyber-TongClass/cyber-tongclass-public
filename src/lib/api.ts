@@ -9,6 +9,7 @@ import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
 import { toOAFormUpsertPayload } from "@/lib/oa-forms"
 import { parsePublicationAuthors, toPublicationAuthorInput } from "@/lib/publication-authors"
+import { useAuth } from "@/lib/hooks/use-auth"
 
 type IdLike =
   | string
@@ -38,11 +39,9 @@ const toIdArg = (input: IdLike) => {
 }
 
 const techdayApi = api as any
-const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
 const sessionAccountRef = makeFunctionReference<"query">("auth:currentUserBySession")
-const currentUserRoleRef = makeFunctionReference<"query">("auth:currentUserRole")
-const isAdminRef = makeFunctionReference<"query">("auth:isAdmin")
-const isSuperAdminRef = makeFunctionReference<"query">("auth:isSuperAdmin")
+const adminEventsRef = makeFunctionReference<"query">("events:adminList")
+const adminEventByIdRef = makeFunctionReference<"query">("events:adminGetById")
 const publicMembersRef = makeFunctionReference<"query">("users:listPublicTongClassMembers")
 const directoryMembersRef = makeFunctionReference<"query">("users:listTongClassDirectoryMembers")
 const publicMemberBySlugRef = makeFunctionReference<"query">("users:getPublicTongClassMemberBySlug")
@@ -57,16 +56,6 @@ const listAdminAcademicExchangeApplicationsRef = makeFunctionReference<"query">(
 const getAdminAcademicExchangeApplicationRef = makeFunctionReference<"query">("academicExchange:getApplicationForSuperAdmin")
 const updateAdminAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:updateApplicationForSuperAdmin")
 const deleteAdminAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:deleteApplicationForSuperAdmin")
-const listTongInitCourseResourcesRef = makeFunctionReference<"query">("tongInitCourseResources:listPublicManifest")
-const listAdminTongInitCourseResourcesRef = makeFunctionReference<"query">("tongInitCourseResources:adminList")
-const beginTongInitCourseUploadRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminBeginUpload")
-const finalizeTongInitCourseUploadRef = makeFunctionReference<"action">("tongInitCourseResources:adminFinalizeUpload")
-const cancelTongInitCourseUploadRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminCancelUpload")
-const saveTongInitCourseDraftMetadataRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminSaveDraftMetadata")
-const publishTongInitCourseResourceRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminPublish")
-const setTongInitCourseResourceArchivedRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminSetArchived")
-const discardTongInitCourseDraftRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminDiscardDraft")
-const seedTongInitCourseLegacyResourcesRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminSeedLegacyResources")
 const listPublishedReimbursementTablesRef = makeFunctionReference<"query">("reimbursementTables:listPublished")
 const getPublishedReimbursementTableRef = makeFunctionReference<"query">("reimbursementTables:getPublishedBySlug")
 const listAdminReimbursementTablesRef = makeFunctionReference<"query">("reimbursementTables:listAdmin")
@@ -164,19 +153,19 @@ export function useTechDayActorArgs() {
 // ==================== 认证相关 ====================
 
 export function useCurrentUser() {
-  return useQuery(currentUserRef)
+  return useAuth().currentUser
 }
 
 export function useCurrentUserRole() {
-  return useQuery(currentUserRoleRef)
+  return useAuth().currentRole
 }
 
 export function useIsAdmin() {
-  return useQuery(isAdminRef)
+  return useAuth().isAdmin
 }
 
 export function useIsSuperAdmin() {
-  return useQuery(isSuperAdminRef)
+  return useAuth().isSuperAdmin
 }
 
 type SignUpInput = {
@@ -202,34 +191,9 @@ type SignUpInput = {
 }
 
 export function useSignUp() {
-  const createUser = useMutation(api.users.create)
-
-  return useCallback(
-    async (input: SignUpInput) => {
-      return createUser({
-        email: input.email,
-        username: input.username,
-        englishName: input.englishName,
-        chineseName: input.chineseName,
-        organization: input.organization,
-        cohort: input.cohort,
-        studentId: input.studentId,
-        password: input.password,
-        personalEmails: input.personalEmails,
-        personalEmail: input.personalEmail,
-        bio: input.bio,
-        researchDirections: input.researchDirections,
-        researchInterests: input.researchInterests,
-        links: input.links,
-        titles: input.titles,
-        scholarUrl: input.scholarUrl,
-        orcidUrl: input.orcidUrl,
-        avatar: input.avatar,
-        isEmailVerified: input.isEmailVerified,
-      } as any)
-    },
-    [createUser]
-  )
+  return useCallback(async (_input: SignUpInput) => {
+    throw new Error("公开注册已停用，请联系管理员创建账户")
+  }, [])
 }
 
 type SignInInput = {
@@ -556,11 +520,24 @@ export function useDeleteFeedbackEntry() {
 // ==================== 活动相关 ====================
 
 export function useEvents(args?: { fromDate?: string; toDate?: string; skip?: number; limit?: number }) {
-  return useQuery(api.events.list, args || {})
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.events.list, { ...(args || {}), ...(sessionToken ? { sessionToken } : {}) } as any)
 }
 
 export function useEventById(id?: string | null) {
-  return useQuery(api.events.getById, id ? ({ id: id as any } as any) : "skip")
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(api.events.getById, id ? ({ id: id as any, ...(sessionToken ? { sessionToken } : {}) } as any) : "skip")
+}
+
+export function useAdminEvents(args?: { skip?: number; limit?: number; disabled?: boolean }) {
+  const sessionToken = useTongClassSessionToken()
+  const { disabled, ...queryArgs } = args || {}
+  return useQuery(adminEventsRef, sessionToken && !disabled ? ({ ...queryArgs, sessionToken } as any) : "skip")
+}
+
+export function useAdminEventById(id?: string | null) {
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(adminEventByIdRef, sessionToken && id ? ({ id: id as any, sessionToken } as any) : "skip")
 }
 
 export function useCreateEvent() {
@@ -737,84 +714,61 @@ export function useDeleteAdminAcademicExchangeApplication() {
 // ==================== ToNG 先导课资源 ====================
 
 export function useTongInitCourseResources() {
-  return useQuery(listTongInitCourseResourcesRef, {})
+  // The AIA deployment removed the tongInitCourseResources module. Public
+  // resources are served from the static manifest in the resource component.
+  return undefined
 }
 
 export function useAdminTongInitCourseResources() {
-  const sessionToken = useTongClassSessionToken()
-  return useQuery(listAdminTongInitCourseResourcesRef, sessionToken ? { sessionToken } : "skip")
+  return undefined
 }
 
 export function useBeginTongInitCourseUpload() {
-  const beginUpload = useMutation(beginTongInitCourseUploadRef)
-  return useCallback((args: Record<string, unknown>) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return beginUpload({ ...args, id: args.id ? args.id as any : undefined, sessionToken } as any)
-  }, [beginUpload])
+  return useCallback(async (_args: Record<string, unknown>) => {
+    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
+  }, [])
 }
 
 export function useFinalizeTongInitCourseUpload() {
-  const finalizeUpload = useAction(finalizeTongInitCourseUploadRef)
-  return useCallback((args: { id: string; storageId: string }) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return finalizeUpload({ ...args, id: args.id as any, sessionToken } as any)
-  }, [finalizeUpload])
+  return useCallback(async (_args: { id: string; storageId: string }) => {
+    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
+  }, [])
 }
 
 export function useCancelTongInitCourseUpload() {
-  const cancelUpload = useMutation(cancelTongInitCourseUploadRef)
-  return useCallback((args: { id: string; storageId: string }) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return cancelUpload({ ...args, id: args.id as any, sessionToken } as any)
-  }, [cancelUpload])
+  return useCallback(async (_args: { id: string; storageId: string }) => {
+    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
+  }, [])
 }
 
 export function useSaveTongInitCourseDraftMetadata() {
-  const saveDraft = useMutation(saveTongInitCourseDraftMetadataRef)
-  return useCallback((args: Record<string, unknown> & { id: string }) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return saveDraft({ ...args, id: args.id as any, sessionToken } as any)
-  }, [saveDraft])
+  return useCallback(async (_args: Record<string, unknown> & { id: string }) => {
+    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
+  }, [])
 }
 
 export function usePublishTongInitCourseResource() {
-  const publish = useMutation(publishTongInitCourseResourceRef)
-  return useCallback((args: { id: string; expectedRevision?: number }) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return publish({ ...args, id: args.id as any, sessionToken } as any)
-  }, [publish])
+  return useCallback(async (_args: { id: string; expectedRevision?: number }) => {
+    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
+  }, [])
 }
 
 export function useSetTongInitCourseResourceArchived() {
-  const setArchived = useMutation(setTongInitCourseResourceArchivedRef)
-  return useCallback((args: { id: string; archived: boolean; expectedRevision?: number }) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return setArchived({ ...args, id: args.id as any, sessionToken } as any)
-  }, [setArchived])
+  return useCallback(async (_args: { id: string; archived: boolean; expectedRevision?: number }) => {
+    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
+  }, [])
 }
 
 export function useDiscardTongInitCourseDraft() {
-  const discard = useMutation(discardTongInitCourseDraftRef)
-  return useCallback((args: { id: string; expectedRevision?: number }) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return discard({ ...args, id: args.id as any, sessionToken } as any)
-  }, [discard])
+  return useCallback(async (_args: { id: string; expectedRevision?: number }) => {
+    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
+  }, [])
 }
 
 export function useSeedTongInitCourseLegacyResources() {
-  const seed = useMutation(seedTongInitCourseLegacyResourcesRef)
-  return useCallback(() => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return seed({ sessionToken })
-  }, [seed])
+  return useCallback(async () => {
+    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
+  }, [])
 }
 
 // ==================== 报销资料表格 ====================
@@ -1088,7 +1042,7 @@ export function useCourseById(id?: string | null) {
 
 export function useCourseByName(name?: string | null) {
   const sessionToken = useTongClassSessionToken()
-  return useQuery(api.courses.getByName, name && sessionToken ? { name, sessionToken } : "skip")
+  return useQuery(api.courses.getByName, name && sessionToken ? ({ name, sessionToken } as any) : "skip")
 }
 
 export function useCreateCourse() {
@@ -1654,10 +1608,7 @@ export function useCC2026RemoveRegistration() {
 }
 
 export function useCC2026Vote() {
-  const vote = useMutation(api.cc2026.vote)
-  return useCallback((projectId: string) => {
-    const sessionToken = getTongClassStoredSessionToken()
-    if (!sessionToken) throw new Error("请先登录")
-    return vote({ projectId, sessionToken } as any)
-  }, [vote])
+  return useCallback((_projectId: string): Promise<{ votes: Record<string, number>; myVotes: string[] }> => {
+    return Promise.reject(new Error("投票功能已随 AIA 后端升级下线"))
+  }, [])
 }

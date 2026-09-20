@@ -321,6 +321,27 @@ export default function AdminTongInitCourseResourcesPage() {
     selectedResource?.pendingUpload && selectedResource.pendingUpload.expiresAt <= Date.now()
   )
 
+  if (!resources) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-extrabold text-gray-900">先导课资源管理</h1>
+          <p className="mt-1 text-gray-500">资源管理接口已随 AIA 后端升级迁移。</p>
+        </div>
+        <Card>
+          <CardContent className="space-y-3 pt-6">
+            <p className="text-sm text-slate-700">
+              当前官网保留静态课程资料展示，但 AIA 已移除 tongInitCourseResources 模块，上传、发布和归档操作暂不可用。
+            </p>
+            <Button asChild variant="outline">
+              <Link href="/resources/tong-init-course">查看课程资料</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
