@@ -63,7 +63,7 @@ function loadModule(path, overrides = {}) {
     if (name === 'next/navigation') return { useRouter: () => ({}) }
     return {}
   }
-  vm.runInNewContext(ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: out, require })
+  vm.runInNewContext(ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: out, require, fetch: async () => ({ ok: identityType === 'undergrad', json: async () => identityType === 'undergrad' ? result : { message: '通班官网仅对本科生开放' } }) })
   return out
 }
 const hooks = loadModule('src/lib/api.ts')

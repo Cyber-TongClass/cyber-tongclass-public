@@ -1,12 +1,12 @@
 "use client"
 
 import { useCallback, useMemo, useSyncExternalStore } from "react"
-import { useQuery, useMutation, useConvex } from "convex/react"
+import { useQuery, useMutation } from "convex/react"
 import { makeFunctionReference } from "convex/server"
 import { api } from "../../convex/_generated/api"
 import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
-import { restrictToUndergraduate, isUndergraduate, verifyUndergraduateLogin } from "@/lib/undergraduate-access"
+import { restrictToUndergraduate, isUndergraduate } from "@/lib/undergraduate-access"
 import { toOAFormUpsertPayload } from "@/lib/oa-forms"
 
 type IdLike =
@@ -297,12 +297,16 @@ export function useDeleteUser() {
 }
 
 export function useSimpleLogin() {
-  const login = useMutation(api.users.simpleLogin)
-  const client = useConvex()
   return useCallback(async (args: { studentId: string; password: string }) => {
-    const result = await login(args)
-    return verifyUndergraduateLogin(result, (sessionToken) => client.query(currentUserBySessionRef, { sessionToken }))
-  }, [login, client])
+    const response = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(args),
+    })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result?.message || "登录失败")
+    return result
+  }, [])
 }
 
 export function useUsersCount(args?: { organization?: "pku" | "thu"; classMembersOnly?: boolean }) {
