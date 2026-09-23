@@ -32,6 +32,7 @@ import { canManageCreativeChallenge } from "@/lib/creative-challenge-2026"
 import { useCC2026List } from "@/lib/api"
 
 const navItems = [
+  { href: "/admin/quiz", label: "课程练习", icon: BookOpen },
   { href: "/admin", label: "仪表盘", icon: LayoutDashboard },
   { href: "/admin/users", label: "用户管理", icon: Users },
   { href: "/admin/reviewers", label: "Reviewer", icon: ShieldCheck },
@@ -133,7 +134,7 @@ export default function AdminLayout({
   const actorArgs = useTechDayActorArgs()
   const techDayPrincipal = useTechDayCurrentPrincipal(actorArgs)
 
-  const adminAllowedPrefixes = ["/admin/news", "/admin/events", "/admin/reviews", "/admin/resources", "/admin/treehole", "/admin/feedback", "/admin/reimbursements", "/admin/forms", "/admin/techday"]
+  const adminAllowedPrefixes = ["/admin/quiz", "/admin/news", "/admin/events", "/admin/reviews", "/admin/resources", "/admin/treehole", "/admin/feedback", "/admin/reimbursements", "/admin/forms", "/admin/techday"]
   const isAdminAllowed =
     isSuperAdmin || adminAllowedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   const isTechDayAdminRoute = pathname === "/admin/techday" || pathname.startsWith("/admin/techday/")

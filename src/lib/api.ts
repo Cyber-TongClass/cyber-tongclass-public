@@ -1625,3 +1625,6 @@ export function useCC2026Vote() {
     return Promise.reject(new Error("投票功能已随 AIA 后端升级下线"))
   }, [])
 }
+
+// Independent quiz backend; preserve the existing AIA client.
+export { useQuizAdmin } from "./quiz-api"

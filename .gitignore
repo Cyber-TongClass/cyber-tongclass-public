@@ -58,3 +58,6 @@ backend-requests.md
 batch-created-users-*.csv
 scripts/batch-create-users*.sh
 public/wenchuang/
+
+# Local dependency symlink in an isolated checkout
+/node_modules
