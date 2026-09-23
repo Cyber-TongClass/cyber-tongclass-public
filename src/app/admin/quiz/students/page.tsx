@@ -83,11 +83,13 @@ export default function Page() {
             }}
           >
             <option value="">仅创建账号</option>
-            {catalog.data?.courses.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.title} · {c.term}
-              </option>
-            ))}
+            {catalog.data?.courses
+              .filter((c) => !c.deletedAt)
+              .map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.title} · {c.term}
+                </option>
+              ))}
           </select>
         </label>
         <div className="flex gap-3">

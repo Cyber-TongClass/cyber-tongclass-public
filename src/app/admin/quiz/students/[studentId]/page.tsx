@@ -106,36 +106,38 @@ export default function Page() {
           </section>
           <section className="space-y-3 rounded-xl border bg-white p-5">
             <h3 className="font-bold">选课权限</h3>
-            {catalog.data?.courses.map((c) => {
-              const active = data.enrollments.some(
-                (e) => e.course === c._id && e.active,
-              );
-              return (
-                <div
-                  key={c._id}
-                  className="flex items-center justify-between gap-4"
-                >
-                  <span>
-                    {c.title} · {c.term}
-                  </span>
-                  <Button
-                    disabled={busy}
-                    variant="outline"
-                    onClick={() =>
-                      void run(() =>
-                        call("enroll", {
-                          student: id,
-                          course: c._id,
-                          active: !active,
-                        }),
-                      )
-                    }
+            {catalog.data?.courses
+              .filter((c) => !c.deletedAt)
+              .map((c) => {
+                const active = data.enrollments.some(
+                  (e) => e.course === c._id && e.active,
+                );
+                return (
+                  <div
+                    key={c._id}
+                    className="flex items-center justify-between gap-4"
                   >
-                    {active ? "取消选课" : "分配课程"}
-                  </Button>
-                </div>
-              );
-            })}
+                    <span>
+                      {c.title} · {c.term}
+                    </span>
+                    <Button
+                      disabled={busy}
+                      variant="outline"
+                      onClick={() =>
+                        void run(() =>
+                          call("enroll", {
+                            student: id,
+                            course: c._id,
+                            active: !active,
+                          }),
+                        )
+                      }
+                    >
+                      {active ? "取消选课" : "分配课程"}
+                    </Button>
+                  </div>
+                );
+              })}
           </section>
           <Button asChild variant="outline">
             <Link

@@ -3,6 +3,7 @@ export interface QuizQuestion {
   id: string;
   type: "single_choice" | "multiple_choice" | "fill_blank";
   stem: string;
+  timeLimitSeconds?: number;
   options?: { id: string; text: string }[];
 }
 export interface QuizStudent {
@@ -30,6 +31,7 @@ export interface QuizLecture {
   title: string;
   order: number;
   bank: string;
+  sampling?: "stratified-334";
   drawCount: number;
   published: boolean;
   progress?: { completed: number; best: number; latest: number } | null;
@@ -46,12 +48,21 @@ export interface QuizCatalog {
   lectures: QuizLecture[];
   banks: QuizBank[];
 }
+export interface QuizVerdict {
+  correct: boolean;
+  answer: string | string[];
+  explanation: string;
+  timedOut: boolean;
+}
 export interface QuizAttempt {
   id: string;
   title: string;
   questions: QuizQuestion[];
   answers: QuizAnswer[];
   revision: number;
+  deadlines: (number | null)[];
+  verdicts: (QuizVerdict | null)[];
+  serverNow: number;
   status: "active" | "submitted";
   score?: number;
 }
@@ -101,4 +112,28 @@ export interface QuizAdminResults {
   beginBank: string;
   chunk: null;
   finishBank: null;
+}
+
+export interface QuizAdminResults {
+  courseState: null;
+  lectureState: null;
+  bankQuestions: import("./quiz-import").ImportedQuizQuestion[];
+}
+export interface QuizCourse {
+  deletedAt?: number;
+}
+export interface QuizLecture {
+  deletedAt?: number;
+}
+
+export interface QuizProgressMatrix {
+  lectures: QuizLecture[];
+  rows: {
+    studentId: string;
+    name: string;
+    cells: Record<string, { completed: number; best: number } | null>;
+  }[];
+}
+export interface QuizAdminResults {
+  progressMatrix: QuizProgressMatrix;
 }

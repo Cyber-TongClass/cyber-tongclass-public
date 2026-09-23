@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { parseQuizImport } from "@/lib/quiz-import";
 import { Button } from "@/components/ui/button";
 import {
   useAdminData,
@@ -23,14 +24,7 @@ export default function Page() {
       if (!(file instanceof File) || file.size > 4_000_000)
         throw new Error("请选择不超过4MB的JSON文件");
       const text = await file.text();
-      const parsed = JSON.parse(text);
-      const questions = Array.isArray(parsed) ? parsed : parsed.questions;
-      if (
-        !Array.isArray(questions) ||
-        questions.length < 1 ||
-        questions.length > 1000
-      )
-        throw new Error("文件须包含1–1000道题");
+      const questions = parseQuizImport(JSON.parse(text));
       const digest = await crypto.subtle.digest(
         "SHA-256",
         new TextEncoder().encode(text),
@@ -84,8 +78,9 @@ export default function Page() {
           />
         </label>
         <p className="text-sm text-slate-500">
-          每题包含 id、type、stem、answer，选择题另含
-          options（id、text）。题型：single_choice、multiple_choice、fill_blank。答案仅用于后端评分，不向学生提供。
+          支持原有 question / choices / correct-ans JSON；新版每题包含
+          id、type、stem、answer，选择题另含
+          options（id、text）。题型：single_choice、multiple_choice、fill_blank。答案由后端评分，学生提交本题后才能查看答案和解析。
         </p>
         <Button disabled={busy}>{busy ? "正在校验导入…" : "上传并校验"}</Button>
       </form>

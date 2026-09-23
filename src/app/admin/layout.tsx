@@ -32,7 +32,6 @@ import { canManageCreativeChallenge } from "@/lib/creative-challenge-2026"
 import { useCC2026List } from "@/lib/api"
 
 const navItems = [
-  { href: "/admin/quiz", label: "课程练习", icon: BookOpen },
   { href: "/admin", label: "仪表盘", icon: LayoutDashboard },
   { href: "/admin/users", label: "用户管理", icon: Users },
   { href: "/admin/reviewers", label: "Reviewer", icon: ShieldCheck },
@@ -48,6 +47,7 @@ const navItems = [
   { href: "/admin/techday/settings", label: "TechDay", icon: Calendar },
   { href: "/admin/treehole", label: "树洞管理", icon: MessageSquare },
   { href: "/admin/feedback", label: "反馈管理", icon: FileText },
+  { href: "/admin/quiz", label: "课程练习", icon: BookOpen },
 ]
 
 type AdminNavItem = (typeof navItems)[number]
