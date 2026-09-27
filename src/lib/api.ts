@@ -56,6 +56,16 @@ const listAdminAcademicExchangeApplicationsRef = makeFunctionReference<"query">(
 const getAdminAcademicExchangeApplicationRef = makeFunctionReference<"query">("academicExchange:getApplicationForSuperAdmin")
 const updateAdminAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:updateApplicationForSuperAdmin")
 const deleteAdminAcademicExchangeApplicationRef = makeFunctionReference<"mutation">("academicExchange:deleteApplicationForSuperAdmin")
+const listTongInitCourseResourcesRef = makeFunctionReference<"query">("tongInitCourseResources:listPublicManifest")
+const listAdminTongInitCourseResourcesRef = makeFunctionReference<"query">("tongInitCourseResources:adminList")
+const beginTongInitCourseUploadRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminBeginUpload")
+const finalizeTongInitCourseUploadRef = makeFunctionReference<"action">("tongInitCourseResources:adminFinalizeUpload")
+const cancelTongInitCourseUploadRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminCancelUpload")
+const saveTongInitCourseDraftMetadataRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminSaveDraftMetadata")
+const publishTongInitCourseResourceRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminPublish")
+const setTongInitCourseResourceArchivedRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminSetArchived")
+const discardTongInitCourseDraftRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminDiscardDraft")
+const seedTongInitCourseLegacyResourcesRef = makeFunctionReference<"mutation">("tongInitCourseResources:adminSeedLegacyResources")
 const listPublishedReimbursementTablesRef = makeFunctionReference<"query">("reimbursementTables:listPublished")
 const getPublishedReimbursementTableRef = makeFunctionReference<"query">("reimbursementTables:getPublishedBySlug")
 const listAdminReimbursementTablesRef = makeFunctionReference<"query">("reimbursementTables:listAdmin")
@@ -727,61 +737,84 @@ export function useDeleteAdminAcademicExchangeApplication() {
 // ==================== ToNG 先导课资源 ====================
 
 export function useTongInitCourseResources() {
-  // The AIA deployment removed the tongInitCourseResources module. Public
-  // resources are served from the static manifest in the resource component.
-  return undefined
+  return useQuery(listTongInitCourseResourcesRef, {})
 }
 
 export function useAdminTongInitCourseResources() {
-  return undefined
+  const sessionToken = useTongClassSessionToken()
+  return useQuery(listAdminTongInitCourseResourcesRef, sessionToken ? { sessionToken } : "skip")
 }
 
 export function useBeginTongInitCourseUpload() {
-  return useCallback(async (_args: Record<string, unknown>) => {
-    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
-  }, [])
+  const beginUpload = useMutation(beginTongInitCourseUploadRef)
+  return useCallback((args: Record<string, unknown>) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return beginUpload({ ...args, id: args.id ? args.id as any : undefined, sessionToken } as any)
+  }, [beginUpload])
 }
 
 export function useFinalizeTongInitCourseUpload() {
-  return useCallback(async (_args: { id: string; storageId: string }) => {
-    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
-  }, [])
+  const finalizeUpload = useAction(finalizeTongInitCourseUploadRef)
+  return useCallback((args: { id: string; storageId: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return finalizeUpload({ ...args, id: args.id as any, sessionToken } as any)
+  }, [finalizeUpload])
 }
 
 export function useCancelTongInitCourseUpload() {
-  return useCallback(async (_args: { id: string; storageId: string }) => {
-    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
-  }, [])
+  const cancelUpload = useMutation(cancelTongInitCourseUploadRef)
+  return useCallback((args: { id: string; storageId: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return cancelUpload({ ...args, id: args.id as any, sessionToken } as any)
+  }, [cancelUpload])
 }
 
 export function useSaveTongInitCourseDraftMetadata() {
-  return useCallback(async (_args: Record<string, unknown> & { id: string }) => {
-    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
-  }, [])
+  const saveDraft = useMutation(saveTongInitCourseDraftMetadataRef)
+  return useCallback((args: Record<string, unknown> & { id: string }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return saveDraft({ ...args, id: args.id as any, sessionToken } as any)
+  }, [saveDraft])
 }
 
 export function usePublishTongInitCourseResource() {
-  return useCallback(async (_args: { id: string; expectedRevision?: number }) => {
-    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
-  }, [])
+  const publish = useMutation(publishTongInitCourseResourceRef)
+  return useCallback((args: { id: string; expectedRevision?: number }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return publish({ ...args, id: args.id as any, sessionToken } as any)
+  }, [publish])
 }
 
 export function useSetTongInitCourseResourceArchived() {
-  return useCallback(async (_args: { id: string; archived: boolean; expectedRevision?: number }) => {
-    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
-  }, [])
+  const setArchived = useMutation(setTongInitCourseResourceArchivedRef)
+  return useCallback((args: { id: string; archived: boolean; expectedRevision?: number }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return setArchived({ ...args, id: args.id as any, sessionToken } as any)
+  }, [setArchived])
 }
 
 export function useDiscardTongInitCourseDraft() {
-  return useCallback(async (_args: { id: string; expectedRevision?: number }) => {
-    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
-  }, [])
+  const discard = useMutation(discardTongInitCourseDraftRef)
+  return useCallback((args: { id: string; expectedRevision?: number }) => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return discard({ ...args, id: args.id as any, sessionToken } as any)
+  }, [discard])
 }
 
 export function useSeedTongInitCourseLegacyResources() {
-  return useCallback(async () => {
-    throw new Error("先导课资源管理已迁移到 AIA，当前官网暂不提供该操作")
-  }, [])
+  const seed = useMutation(seedTongInitCourseLegacyResourcesRef)
+  return useCallback(() => {
+    const sessionToken = getTongClassStoredSessionToken()
+    if (!sessionToken) throw new Error("请先登录")
+    return seed({ sessionToken })
+  }, [seed])
 }
 
 // ==================== 报销资料表格 ====================
