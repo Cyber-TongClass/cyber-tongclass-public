@@ -18,7 +18,7 @@ assert.match(api, /normalized\?\.courseName && sessionToken \? \(\{ \.\.\.normal
 assert.match(api, /export function useCourseListWithReviews\(\)[\s\S]*sessionToken \? \{ sessionToken \} : "skip"/)
 assert.match(api, /export function useCommonReviewTags\(\)[\s\S]*sessionToken \? \{ sessionToken \} : "skip"/)
 assert.doesNotMatch(members, /\.filter\(.*role/)
-assert.match(api, /classMembersOnly: _classMembersOnly/)
+assert.match(api, /cohort: "mascot"/)
 assert.match(page, /useUsers\(\{ limit: 1000, classMembersOnly: true \}\)/)
 assert.match(search, /useCourses\(\{\}\)/)
 assert.match(courses, /useCourses\(\)/)
