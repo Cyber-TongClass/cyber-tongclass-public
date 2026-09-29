@@ -7,6 +7,7 @@ import { api } from "../../convex/_generated/api"
 import type { ReimbursementMaterialTableDraft, UserLink } from "@/types"
 import type { CohortValue } from "@/lib/cohort"
 import { restrictToUndergraduate, isUndergraduate } from "@/lib/undergraduate-access"
+import { isDirectoryAccount, mergeDirectoryMembers } from "@/lib/member-directory"
 import { toOAFormUpsertPayload } from "@/lib/oa-forms"
 
 type IdLike =
@@ -39,6 +40,7 @@ const toIdArg = (input: IdLike) => {
 const techdayApi = api as any
 const currentUserRef = makeFunctionReference<"query">("auth:currentUser")
 const currentUserBySessionRef = makeFunctionReference<"query">("auth:currentUserBySession")
+const directoryMembersRef = makeFunctionReference<"query">("users:listTongClassDirectoryMembers")
 const publicMembersRef = makeFunctionReference<"query">("users:listPublicTongClassMembers")
 const academicExchangeProfileRef = makeFunctionReference<"query">("academicExchange:getStudentFormProfile")
 const upsertAcademicExchangeProfileRef = makeFunctionReference<"mutation">("academicExchange:upsertStudentFormProfile")
@@ -243,18 +245,31 @@ export function useSignIn() {
 
 export function useUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number | boolean; limit?: number; classMembersOnly?: boolean }) {
   const sessionToken = useTongClassSessionToken()
-  const publicOnly = args?.classMembersOnly === true
-  const { skip, classMembersOnly: _classMembersOnly, ...rest } = args || {}
-  const queryArgs = { ...rest, identityType: "undergrad", ...(typeof skip === "number" ? { skip } : {}) }
-  const publicUsers = useQuery(publicMembersRef, publicOnly && skip !== true ? queryArgs : "skip")
-  const accounts = useQuery(api.users.list, !publicOnly && sessionToken && skip !== true ? { ...queryArgs, sessionToken } as any : "skip")
-  return useMemo(() => publicOnly ? publicUsers : accounts?.filter(isUndergraduate), [publicOnly, publicUsers, accounts])
+  const offset = typeof args?.skip === "number" ? args.skip : 0
+  const limit = args?.limit ?? 50
+  const queryArgs = { organization: args?.organization, cohort: args?.cohort, skip: 0, limit: offset + limit, ...(sessionToken ? { sessionToken } : {}) }
+  const ref = sessionToken ? directoryMembersRef : publicMembersRef
+  const students = useQuery(ref, args?.skip === true ? "skip" : { ...queryArgs, identityType: "undergrad" }) as any
+  const includeMascots = args?.cohort === undefined || args.cohort === "mascot"
+  const mascots = useQuery(ref, args?.skip === true || !includeMascots ? "skip" : { ...queryArgs, cohort: "mascot" }) as any
+  return useMemo(() => mergeDirectoryMembers(students, includeMascots ? mascots : [], offset, limit)?.map((user: any) => user.id ? { ...user, _id: user.id } : user), [students, mascots, includeMascots, offset, limit])
+}
+
+export function useAdminUsers(args?: { organization?: "pku" | "thu"; cohort?: CohortValue; skip?: number; limit?: number; classMembersOnly?: boolean }) {
+  const sessionToken = useTongClassSessionToken()
+  const offset = args?.skip ?? 0
+  const limit = args?.limit ?? 50
+  const queryArgs = { ...(args || {}), skip: 0, limit: offset + limit, sessionToken }
+  const students = useQuery(api.users.list, sessionToken ? { ...queryArgs, identityType: "undergrad" } as any : "skip") as any
+  const includeMascots = args?.cohort === undefined || args.cohort === "mascot"
+  const mascots = useQuery(api.users.list, sessionToken && includeMascots ? { ...queryArgs, cohort: "mascot" } as any : "skip") as any
+  return useMemo(() => mergeDirectoryMembers(students?.filter(isDirectoryAccount), includeMascots ? mascots : [], offset, limit)?.map((user: any) => user.id ? { ...user, _id: user.id } : user), [students, mascots, includeMascots, offset, limit])
 }
 
 export function useUserById(id?: string | null) {
   const sessionToken = useTongClassSessionToken()
   const user = useQuery(api.users.getById, id && sessionToken ? ({ id: id as any, sessionToken } as any) : "skip")
-  return restrictToUndergraduate(user)
+  return user === undefined ? undefined : isDirectoryAccount(user) ? user : null
 }
 
 export function useUserByProfileSlug(slug?: string | null) {

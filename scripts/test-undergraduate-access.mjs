@@ -59,6 +59,7 @@ function loadModule(path, overrides = {}) {
     if (name === 'convex/react') return convex
     if (name === 'convex/server') return { makeFunctionReference: x => x }
     if (name.includes('_generated/api')) return { api: apiProxy }
+    if (name === '@/lib/member-directory') return loadModule('src/lib/member-directory.ts')
     if (name === '@/lib/undergraduate-access') return exports
     if (name === 'next/navigation') return { useRouter: () => ({}) }
     return {}

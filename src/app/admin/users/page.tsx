@@ -23,7 +23,7 @@ import { MemberVisibilityToggle } from "@/components/admin/member-visibility-tog
 import { Badge } from "@/components/ui/badge"
 import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import { MoreHorizontal, Plus, Search, Filter, Trash2, Edit, Eye } from "lucide-react"
-import { useUsers, useDeleteUser } from "@/lib/api"
+import { useAdminUsers, useDeleteUser } from "@/lib/api"
 import type { User } from "@/types"
 import { getCohortLabel } from "@/lib/cohort"
 
@@ -50,7 +50,7 @@ export default function UsersPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog()
 
   // Fetch users from Convex
-  const usersData = useUsers({ limit: 1000 })
+  const usersData = useAdminUsers({ limit: 1000 })
   const users = ((usersData || []) as (User & { id?: string })[]).map(user => ({ ...user, _id: user.id || user._id }))
   const deleteUserMutation = useDeleteUser()
 
