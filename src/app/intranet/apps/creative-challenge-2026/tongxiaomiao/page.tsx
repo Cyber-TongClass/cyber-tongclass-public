@@ -9,10 +9,10 @@ export const metadata: Metadata = {
 
 export default function TongxiaomiaoShowcasePage() {
   return (
-    <div className="min-h-screen bg-[#f5f2eb] px-5 py-8 text-[#193f63] sm:px-8 sm:py-12 lg:px-12">
+    <div className="min-h-screen bg-[hsl(211,30%,97%)] px-4 py-8 text-slate-900 sm:px-6 sm:py-12 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-5 flex items-center justify-between text-sm text-[#193f63]">
-          <Link href="/intranet/apps/creative-challenge-2026" className="underline decoration-[#193f63]/40 underline-offset-4 hover:decoration-[#193f63]">
+        <div className="mb-5 flex items-center justify-between text-sm text-primary">
+          <Link href="/intranet/apps/creative-challenge-2026" className="underline decoration-primary/40 underline-offset-4 hover:decoration-primary">
             返回内网
           </Link>
         </div>

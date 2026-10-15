@@ -88,23 +88,24 @@ const filters = ["全部", "有动作参考", "文字描述"] as const
 type GalleryFilter = (typeof filters)[number]
 
 const galleryStyle = {
-  "--gallery-paper": "#f5f2eb",
-  "--gallery-ink": "#193f63",
-  "--gallery-muted": "#586475",
-  "--gallery-line": "#d5d8d9",
+  "--gallery-paper": "hsl(211, 30%, 97%)",
+  "--gallery-ink": "hsl(222.2, 84%, 4.9%)",
+  "--gallery-muted": "hsl(215.4, 16.3%, 46.9%)",
+  "--gallery-line": "hsl(214.3, 31.8%, 91.4%)",
+  "--gallery-primary": "hsl(211, 54%, 28%)",
 } as CSSProperties
 
-const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gallery-ink)] focus-visible:ring-offset-4"
+const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gallery-primary)] focus-visible:ring-offset-2"
 
 function CaseDetails({ item }: { item: GalleryCase }) {
   return (
     <DialogContent
       style={galleryStyle}
-      className="max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-5xl overflow-y-auto rounded-sm border-[var(--gallery-line)] bg-[var(--gallery-paper)] p-5 text-[var(--gallery-ink)] sm:rounded-sm sm:p-8 motion-reduce:animate-none"
+      className="max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-5xl overflow-y-auto rounded-lg border-[var(--gallery-line)] bg-white p-5 text-[var(--gallery-ink)] sm:p-8 motion-reduce:animate-none"
     >
       <div className="border-b border-[var(--gallery-line)] pb-5 pr-8">
         <p className="mb-2 font-mono text-xs tracking-widest text-[var(--gallery-muted)]">通小喵 / {item.number}</p>
-        <DialogTitle className="font-serif text-2xl leading-tight sm:text-3xl">{item.title}</DialogTitle>
+        <DialogTitle className="text-2xl font-extrabold leading-tight sm:text-3xl">{item.title}</DialogTitle>
         <DialogDescription className="mt-2 text-sm leading-6 text-[var(--gallery-muted)]">
           {item.reference ? "角色图 + 动作参考" : "角色图 + 文字描述"}
         </DialogDescription>
@@ -153,7 +154,7 @@ function CaseDetails({ item }: { item: GalleryCase }) {
             ) : null}
           </div>
           <section aria-labelledby={`prompt-${item.number}`}>
-            <h3 id={`prompt-${item.number}`} className="text-sm font-semibold">提示词</h3>
+            <h3 id={`prompt-${item.number}`} className="text-sm font-semibold text-[var(--gallery-primary)]">提示词</h3>
             <p className="mt-3 text-sm leading-7 text-[var(--gallery-muted)]">{item.prompt}</p>
           </section>
           <details className="group border-t border-[var(--gallery-line)] pt-4">
@@ -190,7 +191,7 @@ export function TongxiaomiaoGallery({ project }: { project: GalleryProject | nul
     <section style={galleryStyle} aria-labelledby="tongxiaomiao-gallery-title" className="bg-[var(--gallery-paper)] px-4 py-6 text-[var(--gallery-ink)] sm:px-7 sm:py-8">
       <header className="flex flex-col gap-4 border-b border-[var(--gallery-line)] pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 id="tongxiaomiao-gallery-title" className="font-serif text-3xl leading-tight sm:text-4xl">通小喵案例画廊</h2>
+          <h2 id="tongxiaomiao-gallery-title" className="text-3xl font-extrabold leading-tight sm:text-4xl">通小喵案例画廊</h2>
           <p className="mt-3 max-w-xl text-sm leading-7 text-[var(--gallery-muted)]">点击成图，查看参考图与提示词，也可以下载原图。</p>
         </div>
       </header>
@@ -203,7 +204,7 @@ export function TongxiaomiaoGallery({ project }: { project: GalleryProject | nul
               type="button"
               aria-pressed={activeFilter === filter}
               onClick={() => setActiveFilter(filter)}
-              className={`min-h-11 border-b-2 px-3 py-2 text-sm transition-colors motion-reduce:transition-none ${focusClass} ${activeFilter === filter ? "border-[var(--gallery-ink)] font-semibold text-[var(--gallery-ink)]" : "border-transparent text-[var(--gallery-muted)] hover:border-[var(--gallery-line)] hover:text-[var(--gallery-ink)]"}`}
+              className={`min-h-11 border-b-2 px-3 py-2 text-sm transition-colors motion-reduce:transition-none ${focusClass} ${activeFilter === filter ? "border-[var(--gallery-primary)] font-semibold text-[var(--gallery-primary)]" : "border-transparent text-[var(--gallery-muted)] hover:border-[var(--gallery-line)] hover:text-[var(--gallery-primary)]"}`}
             >
               {filter}
             </button>
@@ -229,7 +230,7 @@ export function TongxiaomiaoGallery({ project }: { project: GalleryProject | nul
             <figcaption className="flex items-start gap-3 pt-4">
               <span className="pt-1 font-mono text-xs text-[var(--gallery-muted)]">{item.number}</span>
               <div>
-                <h3 className="font-serif text-xl leading-7">{item.title}</h3>
+                <h3 className="text-xl font-semibold leading-7">{item.title}</h3>
                 <p className="mt-1 text-xs leading-5 text-[var(--gallery-muted)]">{item.reference ? "角色图 + 动作参考" : "角色图 + 文字描述"}</p>
               </div>
             </figcaption>
