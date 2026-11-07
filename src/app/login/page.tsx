@@ -65,6 +65,18 @@ function LoginForm() {
           </Link>
         </div>
 
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+          <p className="font-semibold">官网已更新</p>
+          <p className="mt-1 leading-6">
+            旧登录入口暂时不可用，请前往 AIA 官网入口登录：
+          </p>
+          <Button asChild className="mt-3 w-full bg-amber-600 hover:bg-amber-700">
+            <a href="https://aiagora.pku.edu.cn/tong-class" target="_blank" rel="noreferrer">
+              前往 AIA 官网入口登录
+            </a>
+          </Button>
+        </div>
+
         <Card>
           <CardHeader>
             <CardTitle>登录</CardTitle>
