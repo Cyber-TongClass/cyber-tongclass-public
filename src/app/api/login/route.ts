@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } })
   } catch {
-    return NextResponse.json({ message: "账号或密码错误，或登录服务暂不可用" }, { status: 401 })
+    return NextResponse.json(
+      { message: "旧登录入口已停用，请前往 AIA 官网入口（https://aiagora.pku.edu.cn/tong-class）登录" },
+      { status: 401 }
+    )
   }
 }
